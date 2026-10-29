@@ -7,6 +7,9 @@ export const metadata: Metadata = {
   title: "Free Website Design & Conversion Check · CaseLoad Select",
   description:
     "See how your law firm's website scores on typography, contrast, forms, mobile usability, and authority signals, plus a ranked list of specific fixes. Free, no account required.",
+  alternates: {
+    canonical: "https://caseloadselect.ca/tools/website-design-check",
+  },
   openGraph: {
     title: "Free Website Design & Conversion Check · CaseLoad Select",
     description: "See how your law firm's website scores on design and conversion craft, plus a ranked list of specific fixes. Free, no account required.",

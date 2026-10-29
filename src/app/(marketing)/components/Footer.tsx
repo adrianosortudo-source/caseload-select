@@ -26,10 +26,10 @@ export default function Footer() {
         <div className="cls-footer-col">
           <p className="cls-footer-heading">Site</p>
           <ul className="cls-footer-links">
-            <li><a href="/home">Home</a></li>
-            <li><a href="/screen-demo">Try the Screen</a></li>
-            <li><a href="/case-studies/drg-law">DRG Law case study</a></li>
-            <li><a href="/tools/seo-check">Free SEO check</a></li>
+            <li><a href="https://caseloadselect.ca/">Home</a></li>
+            <li><a href="https://caseloadselect.ca/screen.html">Screen</a></li>
+            <li><a href="https://caseloadselect.ca/work/drg-law.html">DRG Law case study</a></li>
+            <li><a href="https://caseloadselect.ca/tools/seo-check.html">Free SEO check</a></li>
           </ul>
         </div>
 
