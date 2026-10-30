@@ -434,6 +434,7 @@ export async function POST(req: NextRequest) {
     let homeTtfbMs = 0;
     let resolved = false;
     let homeErrorResponse: NextResponse | null = null;
+    let lastHomepageFailure: unknown;
     // Remember the last HTTP status a host actually returned, so a live-but-
     // access-restricted site (field case ganganilaw.com: Squarespace serves a
     // 401 site-wide password page on both apex and www) is reported honestly
@@ -480,6 +481,7 @@ export async function POST(req: NextRequest) {
         resolved = true;
         break;
       } catch (fetchErr: unknown) {
+        lastHomepageFailure = fetchErr;
         const msg = fetchErr instanceof Error ? fetchErr.message : "unknown";
         if (msg === "ssrf_blocked") homeErrorResponse = NextResponse.json({ error: "That domain cannot be checked." }, { status: 400 });
         // Any other failure (TLS, DNS, timeout) just moves on to the next host.
@@ -504,6 +506,10 @@ export async function POST(req: NextRequest) {
       if (lastHttpStatus > 0) {
         return NextResponse.json({ error: `${domain} responded with HTTP ${lastHttpStatus}, so no page could be scanned.` }, { status: 422 });
       }
+      console.error("seo_check_homepage_connection_failed", {
+        stage: "homepage",
+        category: classifyHomepageFailure(lastHomepageFailure),
+      });
       return NextResponse.json({ error: `The scanner could not connect to ${domain}. The website may still be publicly reachable. Try again later or contact CaseLoad Select for help.` }, { status: 422 });
     }
     const homeUrl = `https://${originHost}`;
