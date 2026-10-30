@@ -166,6 +166,25 @@ describe('source provisioning and contact controls', () => {
     expect(validateProvisionProspectSourceRecordInput({ ...provision, canonical_person_id: '33333333-3333-4333-8333-333333333333' })).toBeNull();
   });
 
+  it('accepts the contact-control form payload for eligible and unknown contacts', () => {
+    for (const contactability of ['eligible', 'unknown'] as const) {
+      expect(validateProspectConversationContactControlsInput({
+        contactability,
+        suppression_reason: null,
+        next_action: null,
+        next_action_due: null,
+      })).toEqual({
+        contactability,
+        suppression_reason: null,
+        next_action: null,
+        next_action_due: null,
+      });
+    }
+    expect(validateProspectConversationContactControlsInput({
+      contactability: 'suppressed', suppression_reason: null,
+    })).toBeNull();
+  });
+
   it('allows controls but never a direct conversation status or unreasoned suppression', () => {
     expect(validateProspectConversationContactControlsInput({ next_action: 'Follow up Friday' })).toEqual({ next_action: 'Follow up Friday' });
     expect(validateProspectConversationContactControlsInput({ contactability: 'suppressed' })).toBeNull();
