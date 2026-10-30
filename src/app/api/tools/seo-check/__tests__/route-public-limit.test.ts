@@ -14,7 +14,7 @@ vi.mock("undici", async (importOriginal) => {
 });
 
 import { NextRequest } from "next/server";
-import { Agent, fetch as undiciFetch, Response as UndiciResponse } from "undici";
+import { Agent, fetch as undiciFetch, Headers as UndiciHeaders, Response as UndiciResponse } from "undici";
 import { POST } from "../route";
 
 afterEach(() => {
@@ -63,10 +63,10 @@ function installMockSite(onDispatch?: (init: Parameters<typeof undiciFetch>[1]) 
     }
     if (pathname === "/llms.txt") return new UndiciResponse("", { status: 404 });
     if (pathname === "/") {
-      return new UndiciResponse(pageHtml("Example Law"), {
-        status: 200,
-        headers: [["content-type", "text/html; charset=utf-8"], ...homepageHeaders],
-      });
+      const headers = new UndiciHeaders();
+      headers.set("content-type", "text/html; charset=utf-8");
+      for (const [name, value] of homepageHeaders) headers.append(name, value);
+      return new UndiciResponse(pageHtml("Example Law"), { status: 200, headers });
     }
 
     const page = pathname.match(/^\/public-page-(\d+)$/);
