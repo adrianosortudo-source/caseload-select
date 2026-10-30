@@ -27,6 +27,11 @@ function stubUndiciFetch(implementation: typeof undiciFetch) {
   vi.mocked(undiciFetch).mockImplementation(implementation);
 }
 
+function requestUrl(input: Parameters<typeof undiciFetch>[0]): string {
+  if (typeof input === "string") return input;
+  return "href" in input ? input.href : input.url;
+}
+
 const pageHtml = (title: string) =>
   `<!doctype html><html><head><title>${title} | Example Law</title><meta name="description" content="Useful public information for clients." /><link rel="canonical" href="https://example.com/" /></head><body><h1>${title}</h1><p>Our lawyers explain legal options, service boundaries and useful next steps for people looking for help.</p></body></html>`;
 
@@ -40,7 +45,7 @@ function installMockSite(onDispatch?: (init: Parameters<typeof undiciFetch>[1]) 
 
   stubUndiciFetch(vi.fn(async (input: Parameters<typeof undiciFetch>[0], init?: Parameters<typeof undiciFetch>[1]) => {
     onDispatch?.(init);
-    const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+    const url = requestUrl(input);
     requestedUrls.push(url);
     const pathname = new URL(url).pathname;
 
@@ -90,7 +95,7 @@ async function runPublicScan(body: Record<string, unknown>) {
 function installSitemapSite(options: { robotsSitemap?: string; rootSitemap?: string; childResponses?: Record<string, { body: string; status: number }> } = {}) {
   const requestedUrls: string[] = [];
   stubUndiciFetch(vi.fn(async (input: Parameters<typeof undiciFetch>[0], init?: Parameters<typeof undiciFetch>[1]) => {
-    const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+    const url = requestUrl(input);
     requestedUrls.push(url);
     const pathname = new URL(url).pathname;
     if (pathname === "/robots.txt") {
@@ -260,7 +265,7 @@ describe("public SEO scan page limit", () => {
     const requestedUrls: string[] = [];
     const log = vi.spyOn(console, "error").mockImplementation(() => {});
     stubUndiciFetch(vi.fn(async (input: Parameters<typeof undiciFetch>[0], init?: Parameters<typeof undiciFetch>[1]) => {
-      const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+      const url = requestUrl(input);
       requestedUrls.push(url);
       throw failures[requestedUrls.length - 1];
     }));
@@ -369,7 +374,7 @@ describe("public SEO scan page limit", () => {
     const log = vi.spyOn(console, "error").mockImplementation(() => {});
     const fallbackUrls: string[] = [];
     stubUndiciFetch(vi.fn(async (input: Parameters<typeof undiciFetch>[0], init?: Parameters<typeof undiciFetch>[1]) => {
-      const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+      const url = requestUrl(input);
       fallbackUrls.push(url);
       if (url === "https://example.com") throw new Error("primary host unavailable");
       const pathname = new URL(url).pathname;
