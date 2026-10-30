@@ -469,8 +469,9 @@ export function buildSeoReportModel(input: ReportInput): SeoReportModel {
       for (const category of page.categories.filter((item) => item.name === "AI Visibility")) {
         for (const item of category.items) {
           if (item.scored !== false || !pageLevelAiLabels.has(item.label)) continue;
-          const key = JSON.stringify([item.label, item.detail]);
-          const group = pageObservationGroups.get(key) ?? { label: item.label, detail: item.detail, pageUrls: [] };
+          const label = item.label === "Authoritative citations" ? "External links matching selected domains" : item.label;
+          const key = JSON.stringify([label, item.detail]);
+          const group = pageObservationGroups.get(key) ?? { label, detail: item.detail, pageUrls: [] };
           if (!group.pageUrls.includes(page.url)) group.pageUrls.push(page.url);
           pageObservationGroups.set(key, group);
         }
