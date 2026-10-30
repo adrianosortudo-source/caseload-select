@@ -267,8 +267,18 @@ describe("public SEO scan page limit", () => {
       { category: "timeout", error: Object.assign(new Error("private"), { name: "AbortError" }) },
       { category: "connection", error: Object.assign(new Error("private"), { cause: Object.assign(new Error("private"), { code: "ECONNREFUSED" }) }) },
       { category: "connection", error: Object.assign(new Error("private"), { cause: Object.assign(new Error("private"), { code: "UND_ERR_SOCKET" }) }) },
-      { category: "redirect_request_setup", error: Object.assign(new Error("private"), { cause: Object.assign(new Error("private"), { code: "ERR_INVALID_URL" }) }) },
-      { category: "redirect_request_setup", error: new Error("too_many_redirects") },
+      {
+        category: "redirect_request_setup.invalid_url",
+        error: Object.assign(new Error("RAW_REDIRECT_SECRET https://private.invalid/path?token=secret"), {
+          cause: Object.assign(new Error("private"), { code: "ERR_INVALID_URL" }),
+        }),
+      },
+      { category: "redirect_request_setup.invalid_argument", error: Object.assign(new Error("private"), { code: "ERR_INVALID_ARG_TYPE" }) },
+      { category: "redirect_request_setup.invalid_argument", error: Object.assign(new Error("private"), { cause: Object.assign(new Error("private"), { code: "UND_ERR_INVALID_ARG" }) }) },
+      { category: "redirect_request_setup.unsupported_protocol", error: Object.assign(new Error("private"), { cause: Object.assign(new Error("private"), { code: "ERR_INVALID_PROTOCOL" }) }) },
+      { category: "redirect_request_setup.unsupported_protocol", error: new Error("unsupported_protocol") },
+      { category: "redirect_request_setup.redirect_missing_location", error: new Error("redirect_without_location") },
+      { category: "redirect_request_setup.redirect_limit", error: new Error("too_many_redirects") },
       { category: "unknown", error: Object.assign(new Error("too_many_redirects additional details"), { code: "PRIVATE_UNMAPPED_CODE" }) },
     ];
     const log = vi.spyOn(console, "error").mockImplementation(() => {});
@@ -290,8 +300,39 @@ describe("public SEO scan page limit", () => {
         stage: "homepage",
         categories: Array(4).fill(fixture.category),
       });
-      expect(JSON.stringify(log.mock.calls)).not.toContain("PRIVATE_UNMAPPED_CODE");
+      const logged = JSON.stringify(log.mock.calls);
+      for (const privateValue of ["RAW_REDIRECT_SECRET", "private.invalid", "token=secret", "example.com", "ERR_INVALID_URL", "PRIVATE_UNMAPPED_CODE"]) {
+        expect(logged).not.toContain(privateValue);
+      }
     }
+  });
+
+  it("classifies malformed error access as unknown without changing the 422 response", async () => {
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    const malformedFailure = new Proxy(new Error("MALFORMED_PRIVATE_MESSAGE"), {
+      get(target, property, receiver) {
+        if (property === "message" || property === "cause" || property === "code" || property === "name") {
+          throw new Error("MALFORMED_PRIVATE_MESSAGE");
+        }
+        return Reflect.get(target, property, receiver);
+      },
+    });
+    vi.stubGlobal("fetch", vi.fn(async () => {
+      throw malformedFailure;
+    }));
+
+    const { response, result } = await runPublicScan({ maxPages: 1 });
+
+    expect(response.status).toBe(422);
+    expect(result.error).toBe(
+      "The scanner could not connect to example.com. The website may still be publicly reachable. Try again later or contact CaseLoad Select for help."
+    );
+    expect(log).toHaveBeenCalledTimes(1);
+    expect(log).toHaveBeenCalledWith("seo_check_homepage_connection_failed", {
+      stage: "homepage",
+      categories: Array(4).fill("unknown"),
+    });
+    expect(JSON.stringify(log.mock.calls)).not.toContain("MALFORMED_PRIVATE_MESSAGE");
   });
 
   it("does not emit the homepage connection diagnostic when fallback succeeds or on HTTP and SSRF responses", async () => {

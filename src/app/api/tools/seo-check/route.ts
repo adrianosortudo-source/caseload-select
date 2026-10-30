@@ -111,9 +111,16 @@ interface SafeFetchResult {
   cleanup: () => void;
 }
 
-type HomepageFailureCategory = "dns" | "tls" | "timeout" | "connection" | "redirect_request_setup" | "unknown";
+type TransportFailureCategory = "dns" | "tls" | "timeout" | "connection";
+type RedirectRequestSetupCategory =
+  | "redirect_request_setup.invalid_url"
+  | "redirect_request_setup.invalid_argument"
+  | "redirect_request_setup.unsupported_protocol"
+  | "redirect_request_setup.redirect_missing_location"
+  | "redirect_request_setup.redirect_limit";
+type HomepageFailureCategory = TransportFailureCategory | RedirectRequestSetupCategory | "unknown";
 
-const HOMEPAGE_FAILURE_CODES: Record<Exclude<HomepageFailureCategory, "unknown">, ReadonlySet<string>> = {
+const HOMEPAGE_FAILURE_CODES: Record<TransportFailureCategory, ReadonlySet<string>> = {
   dns: new Set(["ENOTFOUND", "EAI_AGAIN", "EAI_FAIL", "EAI_NODATA", "ENODATA", "ESERVFAIL"]),
   tls: new Set([
     "CERT_HAS_EXPIRED",
@@ -127,10 +134,20 @@ const HOMEPAGE_FAILURE_CODES: Record<Exclude<HomepageFailureCategory, "unknown">
   ]),
   timeout: new Set(["ETIMEDOUT", "UND_ERR_CONNECT_TIMEOUT", "UND_ERR_HEADERS_TIMEOUT", "UND_ERR_BODY_TIMEOUT", "ABORT_ERR", "ERR_ABORTED"]),
   connection: new Set(["ECONNREFUSED", "ECONNRESET", "EHOSTUNREACH", "ENETUNREACH", "EPIPE", "ECONNABORTED", "UND_ERR_SOCKET"]),
-  redirect_request_setup: new Set(["ERR_INVALID_URL", "ERR_INVALID_ARG_TYPE", "ERR_INVALID_PROTOCOL", "UND_ERR_INVALID_ARG"]),
 };
 
-const INTERNAL_REDIRECT_ERRORS = new Set(["too_many_redirects", "redirect_without_location", "unsupported_protocol"]);
+const REDIRECT_REQUEST_SETUP_CODES = new Map<string, RedirectRequestSetupCategory>([
+  ["ERR_INVALID_URL", "redirect_request_setup.invalid_url"],
+  ["ERR_INVALID_ARG_TYPE", "redirect_request_setup.invalid_argument"],
+  ["UND_ERR_INVALID_ARG", "redirect_request_setup.invalid_argument"],
+  ["ERR_INVALID_PROTOCOL", "redirect_request_setup.unsupported_protocol"],
+]);
+
+const INTERNAL_REDIRECT_FAILURES = new Map<string, RedirectRequestSetupCategory>([
+  ["unsupported_protocol", "redirect_request_setup.unsupported_protocol"],
+  ["redirect_without_location", "redirect_request_setup.redirect_missing_location"],
+  ["too_many_redirects", "redirect_request_setup.redirect_limit"],
+]);
 
 function classifyHomepageFailure(error: unknown): HomepageFailureCategory {
   try {
@@ -141,14 +158,17 @@ function classifyHomepageFailure(error: unknown): HomepageFailureCategory {
       : undefined;
     const codes = [candidate.code, cause?.code].filter((code): code is string => typeof code === "string");
 
-    for (const category of ["dns", "tls", "timeout", "connection", "redirect_request_setup"] as const) {
+    for (const category of ["dns", "tls", "timeout", "connection"] as const) {
       if (codes.some((code) => HOMEPAGE_FAILURE_CODES[category].has(code))) return category;
     }
-    if (
-      (typeof candidate.message === "string" && INTERNAL_REDIRECT_ERRORS.has(candidate.message)) ||
-      (typeof cause?.message === "string" && INTERNAL_REDIRECT_ERRORS.has(cause.message))
-    ) {
-      return "redirect_request_setup";
+    for (const code of codes) {
+      const category = REDIRECT_REQUEST_SETUP_CODES.get(code);
+      if (category) return category;
+    }
+    for (const message of [candidate.message, cause?.message]) {
+      if (typeof message !== "string") continue;
+      const category = INTERNAL_REDIRECT_FAILURES.get(message);
+      if (category) return category;
     }
     if (candidate.name === "AbortError" || candidate.name === "TimeoutError" || cause?.name === "AbortError" || cause?.name === "TimeoutError") {
       return "timeout";
