@@ -368,6 +368,51 @@ describe("buildSeoReportModel", () => {
     expect(model.coverage.partial).toBe(true);
     expect(model.limitations).toContain("The scan is incomplete. Findings apply only to inspected pages.");
   });
+
+  it("exposes only v5 unscored AI Visibility observations with their inspected page URLs", () => {
+    const pages = [
+      {
+        ...base.pages![0],
+        categories: [{
+          name: "AI Visibility",
+          score: 0,
+          maxScore: 0,
+          items: [
+            { label: "Question-format headings", status: "pass" as const, detail: "2 headings matched the pattern.", scored: false },
+            { label: "Answer quality", status: "pass" as const, detail: "Must not appear.", scored: true },
+            { label: "Legacy item", status: "pass" as const, detail: "Must not appear." },
+          ],
+        }],
+      },
+      { ...base.pages![1], categories: [] },
+    ];
+    const model = buildSeoReportModel({ ...base, pages });
+
+    expect(model.aiPageObservations).toEqual([{
+      url: "https://example.com/",
+      items: [{ label: "Question-format headings", detail: "2 headings matched the pattern." }],
+    }]);
+    expect(model.scoreExplanation).toMatchObject({ score: 74, assessed: true });
+  });
+
+  it("does not reinterpret historical or missing page observations", () => {
+    const v4 = buildSeoReportModel({
+      ...base,
+      methodologyVersion: 4,
+      pages: [{
+        ...base.pages![0],
+        categories: [{ name: "AI Visibility", score: 0, maxScore: 0, items: [
+          { label: "Question-format headings", status: "pass", detail: "Historical observation.", scored: false },
+        ] }],
+      }],
+    });
+    const missing = buildSeoReportModel({ ...base, pages: [{ ...base.pages![0], categories: [] }] });
+
+    expect(v4.aiPageObservations).toEqual([]);
+    expect(missing.aiPageObservations).toEqual([]);
+    expect(v4.methodology.label).toBe("Historical score");
+  });
+
 });
 
 describe("getDisplayedCategoryWeights", () => {
