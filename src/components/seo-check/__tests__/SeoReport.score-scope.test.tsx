@@ -281,13 +281,13 @@ describe("SeoReport score scope", () => {
     render(<SeoReport result={{ ...result, pagesScanned: 1, pages: [page] }} onReset={vi.fn()} hideCta />);
 
     const aiSection = within(screen.getByRole("region", { name: "AI and page content" }));
-    const summary = screen.getByText("Page-level AEO and AI observations (1 observation groups)");
+    const summary = screen.getByText("Page-level AEO and AI observations (1 observation group)");
     fireEvent.click(summary);
 
     expect(aiSection.getByText(/2 headings matched this question-format pattern in initial HTML/)).toBeTruthy();
     expect(aiSection.getByRole("link", { name: "/services/" }).getAttribute("href")).toBe(pageUrl);
     expect(aiSection.getByText(/These unscored observations report selected patterns/)).toBeTruthy();
-    expect(aiSection.getByText(/As a human prompt, consider whether key service pages/)).toBeTruthy();
+    expect(aiSection.getByText(/For a closer review, consider whether key service pages/)).toBeTruthy();
     expect(aiSection.queryByText("Root-only robots policy detail.")).toBeNull();
     expect(aiSection.queryByText("Site-level crawler policy detail.")).toBeNull();
     expect(aiSection.queryByText("Site-level llms.txt detail.")).toBeNull();
