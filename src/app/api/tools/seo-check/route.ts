@@ -135,7 +135,7 @@ const INTERNAL_REDIRECT_ERRORS = new Set(["too_many_redirects", "redirect_withou
 function classifyHomepageFailure(error: unknown): HomepageFailureCategory {
   try {
     if (!error || typeof error !== "object") return "unknown";
-    const candidate = error as { code?: unknown; message?: unknown; cause?: unknown };
+    const candidate = error as { code?: unknown; message?: unknown; name?: unknown; cause?: unknown };
     const cause = candidate.cause && typeof candidate.cause === "object"
       ? candidate.cause as { code?: unknown; message?: unknown; name?: unknown }
       : undefined;
