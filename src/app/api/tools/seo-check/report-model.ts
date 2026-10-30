@@ -164,6 +164,7 @@ export interface SeoReportModel {
   priorityActions: ReportAction[];
   strengths: string[];
   aiObservations: string[];
+  aiPageObservations: Array<{ url: string; items: Array<{ label: string; detail: string }> }>;
   crawlerPolicies: Array<{
     token: string;
     name: string;
@@ -453,6 +454,16 @@ export function buildSeoReportModel(input: ReportInput): SeoReportModel {
   const aiObservations: string[] = crawlerPolicies.length
     ? ["The list below describes crawler purposes, robots.txt rules and documented behavior. A rule does not prove access or use."]
     : ["This scan did not assess provider-specific crawler policy or actual AI service access."];
+  const aiPageObservations = version === 5
+    ? pages.flatMap((page) => {
+      const items = page.categories
+        .filter((category) => category.name === "AI Visibility")
+        .flatMap((category) => category.items)
+        .filter((item) => item.scored === false)
+        .map(({ label, detail }) => ({ label, detail }));
+      return items.length ? [{ url: page.url, items }] : [];
+    })
+    : [];
 
   const scoreCategories = input.categories ?? [];
   const contributingCategories = scoreCategories.filter((category) =>
@@ -510,6 +521,7 @@ export function buildSeoReportModel(input: ReportInput): SeoReportModel {
     priorityActions,
     strengths: strengths.slice(0, 3),
     aiObservations,
+    aiPageObservations,
     crawlerPolicies,
     limitations,
     findingGroups: reportIssues.map((issue) => ({ category: issue.category, title: issue.title, detail: issue.detail, affectedUrls: issue.affectedUrls, status: issue.status })),
