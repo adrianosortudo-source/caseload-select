@@ -164,7 +164,7 @@ export interface SeoReportModel {
   priorityActions: ReportAction[];
   strengths: string[];
   aiObservations: string[];
-  aiPageObservations: Array<{ url: string; items: Array<{ label: string; detail: string }> }>;
+  aiPageObservations: Array<{ label: string; detail: string; pageUrls: string[] }>;
   crawlerPolicies: Array<{
     token: string;
     name: string;
@@ -454,16 +454,30 @@ export function buildSeoReportModel(input: ReportInput): SeoReportModel {
   const aiObservations: string[] = crawlerPolicies.length
     ? ["The list below describes crawler purposes, robots.txt rules and documented behavior. A rule does not prove access or use."]
     : ["This scan did not assess provider-specific crawler policy or actual AI service access."];
-  const aiPageObservations = version === 5
-    ? pages.flatMap((page) => {
-      const items = page.categories
-        .filter((category) => category.name === "AI Visibility")
-        .flatMap((category) => category.items)
-        .filter((item) => item.scored === false)
-        .map(({ label, detail }) => ({ label, detail }));
-      return items.length ? [{ url: page.url, items }] : [];
-    })
-    : [];
+  const pageLevelAiLabels = new Set([
+    "Entity description",
+    "Attorney / person schema",
+    "Question-format headings",
+    "Direct-answer sentences",
+    "Authoritative citations",
+    "Author / reviewer signals",
+    "Semantic HTML structure",
+  ]);
+  const pageObservationGroups = new Map<string, { label: string; detail: string; pageUrls: string[] }>();
+  if (version === 5) {
+    for (const page of pages) {
+      for (const category of page.categories.filter((item) => item.name === "AI Visibility")) {
+        for (const item of category.items) {
+          if (item.scored !== false || !pageLevelAiLabels.has(item.label)) continue;
+          const key = JSON.stringify([item.label, item.detail]);
+          const group = pageObservationGroups.get(key) ?? { label: item.label, detail: item.detail, pageUrls: [] };
+          if (!group.pageUrls.includes(page.url)) group.pageUrls.push(page.url);
+          pageObservationGroups.set(key, group);
+        }
+      }
+    }
+  }
+  const aiPageObservations = [...pageObservationGroups.values()];
 
   const scoreCategories = input.categories ?? [];
   const contributingCategories = scoreCategories.filter((category) =>
