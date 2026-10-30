@@ -14,7 +14,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { lookup as dnsLookup } from "node:dns";
-import { Agent } from "undici";
+import { Agent, fetch as undiciFetch, Response as UndiciResponse } from "undici";
 
 import {
   type AiBotStatus,
@@ -105,7 +105,7 @@ const MAX_HTML_BYTES = 5 * 1024 * 1024;
 const MAX_RESOURCE_BYTES = 2 * 1024 * 1024;
 
 interface SafeFetchResult {
-  res: Response;
+  res: UndiciResponse;
   finalUrl: string;
   redirectHops: number;
   cleanup: () => void;
@@ -190,9 +190,9 @@ async function safeFetch(startUrl: string, timeoutMs: number): Promise<SafeFetch
 
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
-    let res: Response;
+    let res: UndiciResponse;
     try {
-      res = await fetch(currentUrl, {
+      res = await undiciFetch(currentUrl, {
         signal: controller.signal,
         headers: { "User-Agent": UA, Accept: "text/html,application/xhtml+xml,text/plain,*/*" },
         redirect: "manual",
@@ -222,7 +222,7 @@ type CappedRead =
   | { ok: true; text: string }
   | { ok: false; reason: "too_large" | "read_failed" };
 
-async function readCappedText(res: Response, maxBytes: number): Promise<CappedRead> {
+async function readCappedText(res: UndiciResponse, maxBytes: number): Promise<CappedRead> {
   if (!res.body) {
     try {
       const buf = Buffer.from(await res.arrayBuffer());
@@ -349,7 +349,7 @@ async function scanPage(
     if (!ct.includes("html") && !ct.includes("xhtml")) return null;
     const read = await readCappedText(res, MAX_HTML_BYTES);
     if (!read.ok) return null;
-    const page = buildPageResult(read.text, finalUrl, url, res.headers, ttfb, redirectHops, domain, parsedRobots, llmsTxt, sitemapSet, intent, sitemapComplete);
+    const page = buildPageResult(read.text, finalUrl, url, new Headers(res.headers), ttfb, redirectHops, domain, parsedRobots, llmsTxt, sitemapSet, intent, sitemapComplete);
     return { page, html: read.text };
   } catch { return null; }
   finally { handle?.cleanup(); }
@@ -500,7 +500,7 @@ export async function POST(req: NextRequest) {
           continue;
         }
         originHost = h;
-        homeHeaders = res.headers;
+        homeHeaders = new Headers(res.headers);
         homeHtml = read.text;
         homeFinalUrl = finalUrl;
         homeRedirectHops = redirectHops;
