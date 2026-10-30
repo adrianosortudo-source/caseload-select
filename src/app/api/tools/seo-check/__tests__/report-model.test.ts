@@ -446,7 +446,7 @@ describe("buildSeoReportModel", () => {
             { label: "Direct-answer sentences", status: "warn", detail: "Unknown.", scored: false, applicability: "unknown", evidence: htmlEvidence("not-assessed", "unknown") },
             { label: "Entity description", status: "warn", detail: "Not assessed.", scored: false, evidence: htmlEvidence("not-assessed") },
             { label: "Attorney / person schema", status: "pass", detail: "Pending source review.", scored: false, disposition: "pending-review", evidence: htmlEvidence("observed") },
-            { label: "Author / reviewer signals", status: "pass", detail: "Not applicable.", scored: false, applicability: "not-applicable", evidence: htmlEvidence("not-applicable", "not-applicable") },
+            { label: "Author / reviewer signals", status: "pass", detail: "Not applicable.", scored: false, applicability: "not-applicable", evidence: htmlEvidence("not-assessed", "not-applicable") },
           ],
         }],
       }],
