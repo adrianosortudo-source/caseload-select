@@ -300,4 +300,25 @@ describe("public SEO scan page limit", () => {
     expect(ssrfFailure.result.error).toBe("That domain cannot be checked.");
     expect(log.mock.calls.filter(([event]) => event === "seo_check_homepage_connection_failed")).toHaveLength(0);
   });
+
+  it("keeps the generic response when malformed failures or the console logger throw", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {
+      throw new Error("LOGGER_PRIVATE_MESSAGE");
+    });
+    const malformedFailure = new Proxy({}, {
+      get() {
+        throw new Error("MALFORMED_PRIVATE_MESSAGE");
+      },
+    });
+    vi.stubGlobal("fetch", vi.fn(async () => {
+      throw malformedFailure;
+    }));
+
+    const { response, result } = await runPublicScan({ maxPages: 1 });
+
+    expect(response.status).toBe(422);
+    expect(result.error).toBe(
+      "The scanner could not connect to example.com. The website may still be publicly reachable. Try again later or contact CaseLoad Select for help."
+    );
+  });
 });
