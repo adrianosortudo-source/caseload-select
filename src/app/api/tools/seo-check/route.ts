@@ -489,7 +489,12 @@ export async function POST(req: NextRequest) {
         break;
       } catch (fetchErr: unknown) {
         homepageFailureCategories.push(classifyHomepageFailure(fetchErr));
-        const msg = fetchErr instanceof Error ? fetchErr.message : "unknown";
+        let msg = "unknown";
+        try {
+          if (fetchErr instanceof Error && typeof fetchErr.message === "string") msg = fetchErr.message;
+        } catch {
+          // Malformed errors remain unknown and must not interrupt the bounded fallback.
+        }
         if (msg === "ssrf_blocked") homeErrorResponse = NextResponse.json({ error: "That domain cannot be checked." }, { status: 400 });
         // Any other failure (TLS, DNS, timeout) just moves on to the next host.
       } finally {
