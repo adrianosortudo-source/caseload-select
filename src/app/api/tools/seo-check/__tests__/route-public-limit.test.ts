@@ -294,11 +294,22 @@ describe("public SEO scan page limit", () => {
     }
   });
 
-  it("does not emit the homepage connection diagnostic on success or HTTP and SSRF responses", async () => {
+  it("does not emit the homepage connection diagnostic when fallback succeeds or on HTTP and SSRF responses", async () => {
     const log = vi.spyOn(console, "error").mockImplementation(() => {});
-    installSitemapSite();
-    const success = await runPublicScan({ maxPages: 1 });
-    expect(success.response.status).toBe(200);
+    const fallbackUrls: string[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+      fallbackUrls.push(url);
+      if (url === "https://example.com") throw new Error("primary host unavailable");
+      const pathname = new URL(url).pathname;
+      if (pathname === "/robots.txt") return new Response("User-agent: *\\nAllow: /\\n", { status: 200 });
+      if (pathname === "/llms.txt" || pathname === "/sitemap.xml") return new Response("", { status: 404 });
+      if (pathname === "/") return new Response(pageHtml("Example Law"), { status: 200, headers: { "content-type": "text/html; charset=utf-8" } });
+      return new Response("", { status: 404 });
+    }));
+    const fallbackSuccess = await runPublicScan({ maxPages: 1 });
+    expect(fallbackUrls.slice(0, 2)).toEqual(["https://example.com", "https://www.example.com"]);
+    expect(fallbackSuccess.response.status).toBe(200);
 
     vi.stubGlobal("fetch", vi.fn(async () => new Response("", { status: 503 })));
     const httpFailure = await runPublicScan({ maxPages: 1 });
