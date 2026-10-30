@@ -35,7 +35,7 @@ function requestUrl(input: Parameters<typeof undiciFetch>[0]): string {
 const pageHtml = (title: string) =>
   `<!doctype html><html><head><title>${title} | Example Law</title><meta name="description" content="Useful public information for clients." /><link rel="canonical" href="https://example.com/" /></head><body><h1>${title}</h1><p>Our lawyers explain legal options, service boundaries and useful next steps for people looking for help.</p></body></html>`;
 
-function installMockSite(onDispatch?: (init: Parameters<typeof undiciFetch>[1]) => void) {
+function installMockSite(onDispatch?: (init: Parameters<typeof undiciFetch>[1]) => void, homepageHeaders: Array<[string, string]> = []) {
   const requestedUrls: string[] = [];
   const urls = Array.from(
     { length: 40 },
@@ -65,7 +65,7 @@ function installMockSite(onDispatch?: (init: Parameters<typeof undiciFetch>[1]) 
     if (pathname === "/") {
       return new UndiciResponse(pageHtml("Example Law"), {
         status: 200,
-        headers: { "content-type": "text/html; charset=utf-8" },
+        headers: [["content-type", "text/html; charset=utf-8"], ...homepageHeaders],
       });
     }
 
@@ -133,6 +133,35 @@ describe("public SEO scan page limit", () => {
     expect(dispatchers.length).toBeGreaterThan(0);
     expect(dispatchers.every((dispatcher) => dispatcher instanceof Agent)).toBe(true);
     expect(new Set(dispatchers).size).toBe(1);
+  });
+
+  it("preserves duplicate X-Robots-Tag headers as Google indexability observations", async () => {
+    installMockSite(undefined, [
+      ["x-robots-tag", "noindex"],
+      ["x-robots-tag", "nofollow"],
+    ]);
+
+    const { response, result } = await runPublicScan({ maxPages: 1 });
+    const homepage = (result.pages as Array<Record<string, unknown>>).find(
+      (page) => new URL(String(page.url)).pathname === "/"
+    );
+    expect(response.status).toBe(200);
+    expect(homepage).toBeDefined();
+    const indexability = (homepage?.categories as Array<Record<string, unknown>>).find(
+      (category) => category.name === "Indexability"
+    );
+    const items = indexability?.items as Array<Record<string, unknown>>;
+    const indexable = items.find((item) => item.label === "Indexable");
+    const followable = items.find((item) => item.label === "Followable links");
+
+    expect(indexable).toMatchObject({
+      status: "fail",
+      detail: expect.stringContaining("noindex instruction addressed to Google"),
+    });
+    expect(followable).toMatchObject({
+      status: "warn",
+      detail: expect.stringContaining("nofollow directive was observed in X-Robots-Tag"),
+    });
   });
 
   it("does not call an optional missing default sitemap incomplete", async () => {
