@@ -111,6 +111,54 @@ interface SafeFetchResult {
   cleanup: () => void;
 }
 
+type HomepageFailureCategory = "dns" | "tls" | "timeout" | "connection" | "redirect_request_setup" | "unknown";
+
+const HOMEPAGE_FAILURE_CODES: Record<Exclude<HomepageFailureCategory, "unknown">, ReadonlySet<string>> = {
+  dns: new Set(["ENOTFOUND", "EAI_AGAIN", "EAI_FAIL", "EAI_NODATA", "ENODATA", "ESERVFAIL"]),
+  tls: new Set([
+    "CERT_HAS_EXPIRED",
+    "ERR_TLS_CERT_ALTNAME_INVALID",
+    "DEPTH_ZERO_SELF_SIGNED_CERT",
+    "SELF_SIGNED_CERT_IN_CHAIN",
+    "UNABLE_TO_VERIFY_LEAF_SIGNATURE",
+    "ERR_TLS_HANDSHAKE_TIMEOUT",
+    "ERR_SSL_WRONG_VERSION_NUMBER",
+    "ERR_SSL_PROTOCOL_ERROR",
+  ]),
+  timeout: new Set(["ETIMEDOUT", "UND_ERR_CONNECT_TIMEOUT", "UND_ERR_HEADERS_TIMEOUT", "UND_ERR_BODY_TIMEOUT", "ABORT_ERR", "ERR_ABORTED"]),
+  connection: new Set(["ECONNREFUSED", "ECONNRESET", "EHOSTUNREACH", "ENETUNREACH", "EPIPE", "ECONNABORTED", "UND_ERR_SOCKET"]),
+  redirect_request_setup: new Set(["ERR_INVALID_URL", "ERR_INVALID_ARG_TYPE", "ERR_INVALID_PROTOCOL", "UND_ERR_INVALID_ARG"]),
+};
+
+const INTERNAL_REDIRECT_ERRORS = new Set(["too_many_redirects", "redirect_without_location", "unsupported_protocol"]);
+
+function classifyHomepageFailure(error: unknown): HomepageFailureCategory {
+  try {
+    if (!error || typeof error !== "object") return "unknown";
+    const candidate = error as { code?: unknown; message?: unknown; name?: unknown; cause?: unknown };
+    const cause = candidate.cause && typeof candidate.cause === "object"
+      ? candidate.cause as { code?: unknown; message?: unknown; name?: unknown }
+      : undefined;
+    const codes = [candidate.code, cause?.code].filter((code): code is string => typeof code === "string");
+
+    for (const category of ["dns", "tls", "timeout", "connection", "redirect_request_setup"] as const) {
+      if (codes.some((code) => HOMEPAGE_FAILURE_CODES[category].has(code))) return category;
+    }
+    if (
+      (typeof candidate.message === "string" && INTERNAL_REDIRECT_ERRORS.has(candidate.message)) ||
+      (typeof cause?.message === "string" && INTERNAL_REDIRECT_ERRORS.has(cause.message))
+    ) {
+      return "redirect_request_setup";
+    }
+    if (candidate.name === "AbortError" || candidate.name === "TimeoutError" || cause?.name === "AbortError" || cause?.name === "TimeoutError") {
+      return "timeout";
+    }
+    return "unknown";
+  } catch {
+    return "unknown";
+  }
+}
+
 async function safeFetch(startUrl: string, timeoutMs: number): Promise<SafeFetchResult> {
   let currentUrl = startUrl;
   for (let hop = 0; hop <= 5; hop++) {
@@ -393,6 +441,7 @@ export async function POST(req: NextRequest) {
     let homeTtfbMs = 0;
     let resolved = false;
     let homeErrorResponse: NextResponse | null = null;
+    const homepageFailureCategories: HomepageFailureCategory[] = [];
     // Remember the last HTTP status a host actually returned, so a live-but-
     // access-restricted site (field case ganganilaw.com: Squarespace serves a
     // 401 site-wide password page on both apex and www) is reported honestly
@@ -439,7 +488,13 @@ export async function POST(req: NextRequest) {
         resolved = true;
         break;
       } catch (fetchErr: unknown) {
-        const msg = fetchErr instanceof Error ? fetchErr.message : "unknown";
+        homepageFailureCategories.push(classifyHomepageFailure(fetchErr));
+        let msg = "unknown";
+        try {
+          if (fetchErr instanceof Error && typeof fetchErr.message === "string") msg = fetchErr.message;
+        } catch {
+          // Malformed errors remain unknown and must not interrupt the bounded fallback.
+        }
         if (msg === "ssrf_blocked") homeErrorResponse = NextResponse.json({ error: "That domain cannot be checked." }, { status: 400 });
         // Any other failure (TLS, DNS, timeout) just moves on to the next host.
       } finally {
@@ -463,7 +518,15 @@ export async function POST(req: NextRequest) {
       if (lastHttpStatus > 0) {
         return NextResponse.json({ error: `${domain} responded with HTTP ${lastHttpStatus}, so no page could be scanned.` }, { status: 422 });
       }
-      return NextResponse.json({ error: `Could not connect to ${domain}. Verify the domain is correct and the site is live.` }, { status: 422 });
+      try {
+        console.error("seo_check_homepage_connection_failed", {
+          stage: "homepage",
+          categories: homepageFailureCategories,
+        });
+      } catch {
+        // Diagnostics must not change the generic connection-failure response.
+      }
+      return NextResponse.json({ error: `The scanner could not connect to ${domain}. The website may still be publicly reachable. Try again later or contact CaseLoad Select for help.` }, { status: 422 });
     }
     const homeUrl = `https://${originHost}`;
 
