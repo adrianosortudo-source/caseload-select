@@ -369,7 +369,8 @@ describe("buildSeoReportModel", () => {
     expect(model.limitations).toContain("The scan is incomplete. Findings apply only to inspected pages.");
   });
 
-  it("exposes only v5 unscored AI Visibility observations with their inspected page URLs", () => {
+  it("groups only allowlisted v5 page HTML observations and keeps their page associations", () => {
+    const question = { label: "Question-format headings", status: "pass" as const, detail: "2 headings matched the pattern.", scored: false };
     const pages = [
       {
         ...base.pages![0],
@@ -378,24 +379,44 @@ describe("buildSeoReportModel", () => {
           score: 0,
           maxScore: 0,
           items: [
-            { label: "Question-format headings", status: "pass" as const, detail: "2 headings matched the pattern.", scored: false },
+            question,
+            { label: "Direct-answer sentences", status: "pass" as const, detail: "1 sentence matched the pattern.", scored: false },
+            { label: "AI search bot access", status: "pass" as const, detail: "Root policy only.", scored: false },
+            { label: "AI training bot control", status: "pass" as const, detail: "Root policy only.", scored: false },
+            { label: "llms.txt file", status: "pass" as const, detail: "Site-level file observation.", scored: false },
             { label: "Answer quality", status: "pass" as const, detail: "Must not appear.", scored: true },
             { label: "Legacy item", status: "pass" as const, detail: "Must not appear." },
           ],
         }],
       },
-      { ...base.pages![1], categories: [] },
+      {
+        ...base.pages![1],
+        categories: [{
+          name: "AI Visibility",
+          score: 0,
+          maxScore: 0,
+          items: [question],
+        }],
+      },
     ];
     const model = buildSeoReportModel({ ...base, pages });
 
-    expect(model.aiPageObservations).toEqual([{
-      url: "https://example.com/",
-      items: [{ label: "Question-format headings", detail: "2 headings matched the pattern." }],
-    }]);
+    expect(model.aiPageObservations).toEqual([
+      {
+        label: "Question-format headings",
+        detail: "2 headings matched the pattern.",
+        pageUrls: ["https://example.com/", "https://example.com/services/"],
+      },
+      {
+        label: "Direct-answer sentences",
+        detail: "1 sentence matched the pattern.",
+        pageUrls: ["https://example.com/"],
+      },
+    ]);
     expect(model.scoreExplanation).toMatchObject({ score: 74, assessed: true });
   });
 
-  it("does not reinterpret historical or missing page observations", () => {
+  it("leaves historical methods and missing page observations empty", () => {
     const v4 = buildSeoReportModel({
       ...base,
       methodologyVersion: 4,
@@ -406,10 +427,12 @@ describe("buildSeoReportModel", () => {
         ] }],
       }],
     });
-    const missing = buildSeoReportModel({ ...base, pages: [{ ...base.pages![0], categories: [] }] });
+    const missingCategory = buildSeoReportModel({ ...base, pages: [{ ...base.pages![0], categories: [] }] });
+    const missingPages = buildSeoReportModel({ ...base, pages: [] });
 
     expect(v4.aiPageObservations).toEqual([]);
-    expect(missing.aiPageObservations).toEqual([]);
+    expect(missingCategory.aiPageObservations).toEqual([]);
+    expect(missingPages.aiPageObservations).toEqual([]);
     expect(v4.methodology.label).toBe("Historical score");
   });
 
