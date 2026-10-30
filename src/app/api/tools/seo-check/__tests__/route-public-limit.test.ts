@@ -331,9 +331,12 @@ describe("public SEO scan page limit", () => {
     vi.spyOn(console, "error").mockImplementation(() => {
       throw new Error("LOGGER_PRIVATE_MESSAGE");
     });
-    const malformedFailure = new Proxy({}, {
-      get() {
-        throw new Error("MALFORMED_PRIVATE_MESSAGE");
+    const malformedFailure = new Proxy(new Error("MALFORMED_PRIVATE_MESSAGE"), {
+      get(target, property, receiver) {
+        if (property === "message" || property === "cause" || property === "code" || property === "name") {
+          throw new Error("MALFORMED_PRIVATE_MESSAGE");
+        }
+        return Reflect.get(target, property, receiver);
       },
     });
     vi.stubGlobal("fetch", vi.fn(async () => {
