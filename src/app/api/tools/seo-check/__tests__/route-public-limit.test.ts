@@ -302,7 +302,7 @@ describe("public SEO scan page limit", () => {
       fallbackUrls.push(url);
       if (url === "https://example.com") throw new Error("primary host unavailable");
       const pathname = new URL(url).pathname;
-      if (pathname === "/robots.txt") return new Response("User-agent: *\\nAllow: /\\n", { status: 200 });
+      if (pathname === "/robots.txt") return new Response("User-agent: *\nAllow: /\n", { status: 200 });
       if (pathname === "/llms.txt" || pathname === "/sitemap.xml") return new Response("", { status: 404 });
       if (pathname === "/") return new Response(pageHtml("Example Law"), { status: 200, headers: { "content-type": "text/html; charset=utf-8" } });
       return new Response("", { status: 404 });
