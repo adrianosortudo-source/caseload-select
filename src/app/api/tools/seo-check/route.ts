@@ -197,7 +197,7 @@ async function safeFetch(startUrl: string, timeoutMs: number): Promise<SafeFetch
         headers: { "User-Agent": UA, Accept: "text/html,application/xhtml+xml,text/plain,*/*" },
         redirect: "manual",
         dispatcher: ssrfAgent,
-      } as RequestInit & { dispatcher: Agent });
+      });
     } catch (e) {
       clearTimeout(timer);
       const code = (e as { cause?: { code?: string } })?.cause?.code;
