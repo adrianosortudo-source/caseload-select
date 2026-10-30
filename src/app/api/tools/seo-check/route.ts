@@ -463,7 +463,7 @@ export async function POST(req: NextRequest) {
       if (lastHttpStatus > 0) {
         return NextResponse.json({ error: `${domain} responded with HTTP ${lastHttpStatus}, so no page could be scanned.` }, { status: 422 });
       }
-      return NextResponse.json({ error: `Could not connect to ${domain}. Verify the domain is correct and the site is live.` }, { status: 422 });
+      return NextResponse.json({ error: `The scanner could not connect to ${domain}. The website may still be publicly reachable. Try again later or contact CaseLoad Select for help.` }, { status: 422 });
     }
     const homeUrl = `https://${originHost}`;
 
