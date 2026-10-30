@@ -164,6 +164,7 @@ export interface SeoReportModel {
   priorityActions: ReportAction[];
   strengths: string[];
   aiObservations: string[];
+  aiPageObservations: Array<{ label: string; detail: string; pageUrls: string[] }>;
   crawlerPolicies: Array<{
     token: string;
     name: string;
@@ -453,6 +454,40 @@ export function buildSeoReportModel(input: ReportInput): SeoReportModel {
   const aiObservations: string[] = crawlerPolicies.length
     ? ["The list below describes crawler purposes, robots.txt rules and documented behavior. A rule does not prove access or use."]
     : ["This scan did not assess provider-specific crawler policy or actual AI service access."];
+  const pageLevelAiLabels = new Set([
+    "Entity description",
+    "Attorney / person schema",
+    "Question-format headings",
+    "Direct-answer sentences",
+    "Authoritative citations",
+    "Author / reviewer signals",
+    "Semantic HTML structure",
+  ]);
+  const pageObservationGroups = new Map<string, { label: string; detail: string; pageUrls: string[] }>();
+  if (version === 5) {
+    for (const page of pages) {
+      for (const category of page.categories.filter((item) => item.name === "AI Visibility")) {
+        for (const item of category.items) {
+          if (
+            item.scored !== false ||
+            !pageLevelAiLabels.has(item.label) ||
+            item.applicability === "unknown" ||
+            item.applicability === "not-applicable" ||
+            item.evidence?.applicability === "unknown" ||
+            item.evidence?.applicability === "not-applicable" ||
+            item.evidence?.coverage === "not-assessed" ||
+            item.disposition === "pending-review"
+          ) continue;
+          const label = item.label === "Authoritative citations" ? "External links matching selected domains" : item.label;
+          const key = JSON.stringify([label, item.detail]);
+          const group = pageObservationGroups.get(key) ?? { label, detail: item.detail, pageUrls: [] };
+          if (!group.pageUrls.includes(page.url)) group.pageUrls.push(page.url);
+          pageObservationGroups.set(key, group);
+        }
+      }
+    }
+  }
+  const aiPageObservations = [...pageObservationGroups.values()];
 
   const scoreCategories = input.categories ?? [];
   const contributingCategories = scoreCategories.filter((category) =>
@@ -510,6 +545,7 @@ export function buildSeoReportModel(input: ReportInput): SeoReportModel {
     priorityActions,
     strengths: strengths.slice(0, 3),
     aiObservations,
+    aiPageObservations,
     crawlerPolicies,
     limitations,
     findingGroups: reportIssues.map((issue) => ({ category: issue.category, title: issue.title, detail: issue.detail, affectedUrls: issue.affectedUrls, status: issue.status })),
