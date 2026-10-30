@@ -218,4 +218,17 @@ describe("public SEO scan page limit", () => {
     expect(crawledPages).toHaveLength(24);
     expect(crawledPages.some((path) => Number(path.match(/\d+$/)?.[0]) >= 25)).toBe(false);
   });
+
+  it("does not imply the website is unreachable when homepage connection attempts fail", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => {
+      throw new TypeError("connection failed");
+    }));
+
+    const { response, result } = await runPublicScan({ maxPages: 1 });
+
+    expect(response.status).toBe(422);
+    expect(result.error).toBe(
+      "The scanner could not connect to example.com. The website may still be publicly reachable. Try again later or contact CaseLoad Select for help."
+    );
+  });
 });
