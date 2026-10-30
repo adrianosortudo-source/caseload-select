@@ -111,6 +111,12 @@ interface SafeFetchResult {
   cleanup: () => void;
 }
 
+function toWebHeaders(source: UndiciResponse["headers"]): Headers {
+  const headers = new Headers();
+  for (const [name, value] of source.entries()) headers.append(name, value);
+  return headers;
+}
+
 type TransportFailureCategory = "dns" | "tls" | "timeout" | "connection";
 type RedirectRequestSetupCategory =
   | "redirect_request_setup.invalid_url"
@@ -349,7 +355,7 @@ async function scanPage(
     if (!ct.includes("html") && !ct.includes("xhtml")) return null;
     const read = await readCappedText(res, MAX_HTML_BYTES);
     if (!read.ok) return null;
-    const page = buildPageResult(read.text, finalUrl, url, new Headers(res.headers), ttfb, redirectHops, domain, parsedRobots, llmsTxt, sitemapSet, intent, sitemapComplete);
+    const page = buildPageResult(read.text, finalUrl, url, toWebHeaders(res.headers), ttfb, redirectHops, domain, parsedRobots, llmsTxt, sitemapSet, intent, sitemapComplete);
     return { page, html: read.text };
   } catch { return null; }
   finally { handle?.cleanup(); }
@@ -500,7 +506,7 @@ export async function POST(req: NextRequest) {
           continue;
         }
         originHost = h;
-        homeHeaders = new Headers(res.headers);
+        homeHeaders = toWebHeaders(res.headers);
         homeHtml = read.text;
         homeFinalUrl = finalUrl;
         homeRedirectHops = redirectHops;
