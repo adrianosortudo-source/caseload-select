@@ -286,7 +286,7 @@ describe("SeoReport score scope", () => {
 
     expect(aiSection.getByText(/2 headings matched this question-format pattern in initial HTML/)).toBeTruthy();
     expect(aiSection.getByRole("link", { name: "/services/" }).getAttribute("href")).toBe(pageUrl);
-    expect(aiSection.getByText(/These unscored observations report selected patterns/)).toBeTruthy();
+    expect(aiSection.getByText(/These unscored observations describe selected patterns checked/)).toBeTruthy();
     expect(aiSection.getByText(/For a closer review, consider whether key service pages/)).toBeTruthy();
     expect(aiSection.queryByText("Root-only robots policy detail.")).toBeNull();
     expect(aiSection.queryByText("Site-level crawler policy detail.")).toBeNull();
