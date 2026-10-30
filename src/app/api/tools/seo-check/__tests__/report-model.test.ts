@@ -381,6 +381,7 @@ describe("buildSeoReportModel", () => {
           items: [
             question,
             { label: "Direct-answer sentences", status: "pass" as const, detail: "1 sentence matched the pattern.", scored: false },
+            { label: "Authoritative citations", status: "pass" as const, detail: "2 external links matched selected domain patterns.", scored: false },
             { label: "AI search bot access", status: "pass" as const, detail: "Root policy only.", scored: false },
             { label: "AI training bot control", status: "pass" as const, detail: "Root policy only.", scored: false },
             { label: "llms.txt file", status: "pass" as const, detail: "Site-level file observation.", scored: false },
@@ -410,6 +411,11 @@ describe("buildSeoReportModel", () => {
       {
         label: "Direct-answer sentences",
         detail: "1 sentence matched the pattern.",
+        pageUrls: ["https://example.com/"],
+      },
+      {
+        label: "External links matching selected domains",
+        detail: "2 external links matched selected domain patterns.",
         pageUrls: ["https://example.com/"],
       },
     ]);
