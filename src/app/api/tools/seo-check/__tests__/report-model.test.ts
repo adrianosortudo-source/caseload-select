@@ -443,10 +443,10 @@ describe("buildSeoReportModel", () => {
           items: [
             { label: "Question-format headings", status: "pass", detail: "A question pattern was observed.", scored: false, applicability: "applicable", evidence: htmlEvidence("observed") },
             { label: "Semantic HTML structure", status: "pass", detail: "No listed semantic element type was observed.", scored: false, applicability: "applicable", evidence: htmlEvidence("not-observed") },
-            { label: "Direct-answer sentences", status: "warn", detail: "Unknown.", scored: false, applicability: "unknown", evidence: htmlEvidence("not-assessed", "unknown") },
+            { label: "Direct-answer sentences", status: "warn", detail: "Unknown.", scored: false, applicability: "unknown", evidence: htmlEvidence("observed", "unknown") },
             { label: "Entity description", status: "warn", detail: "Not assessed.", scored: false, evidence: htmlEvidence("not-assessed") },
             { label: "Attorney / person schema", status: "pass", detail: "Pending source review.", scored: false, disposition: "pending-review", evidence: htmlEvidence("observed") },
-            { label: "Author / reviewer signals", status: "pass", detail: "Not applicable.", scored: false, applicability: "not-applicable", evidence: htmlEvidence("not-assessed", "not-applicable") },
+            { label: "Author / reviewer signals", status: "pass", detail: "Not applicable.", scored: false, applicability: "not-applicable", evidence: htmlEvidence("observed", "not-applicable") },
           ],
         }],
       }],
