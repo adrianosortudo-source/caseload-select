@@ -111,6 +111,47 @@ interface SafeFetchResult {
   cleanup: () => void;
 }
 
+type HomepageFailureCategory = "dns" | "tls" | "timeout" | "connection" | "redirect_request_setup" | "unknown";
+
+const HOMEPAGE_FAILURE_CODES: Record<Exclude<HomepageFailureCategory, "unknown">, ReadonlySet<string>> = {
+  dns: new Set(["ENOTFOUND", "EAI_AGAIN", "EAI_FAIL", "EAI_NODATA", "ENODATA", "ESERVFAIL"]),
+  tls: new Set([
+    "CERT_HAS_EXPIRED",
+    "ERR_TLS_CERT_ALTNAME_INVALID",
+    "DEPTH_ZERO_SELF_SIGNED_CERT",
+    "SELF_SIGNED_CERT_IN_CHAIN",
+    "UNABLE_TO_VERIFY_LEAF_SIGNATURE",
+    "ERR_TLS_HANDSHAKE_TIMEOUT",
+    "ERR_SSL_WRONG_VERSION_NUMBER",
+    "ERR_SSL_PROTOCOL_ERROR",
+  ]),
+  timeout: new Set(["ETIMEDOUT", "UND_ERR_CONNECT_TIMEOUT", "UND_ERR_HEADERS_TIMEOUT", "UND_ERR_BODY_TIMEOUT", "ABORT_ERR", "ERR_ABORTED"]),
+  connection: new Set(["ECONNREFUSED", "ECONNRESET", "EHOSTUNREACH", "ENETUNREACH", "EPIPE", "ECONNABORTED"]),
+  redirect_request_setup: new Set(["ERR_INVALID_URL", "ERR_INVALID_ARG_TYPE", "ERR_INVALID_PROTOCOL", "UND_ERR_INVALID_ARG"]),
+};
+
+const INTERNAL_REDIRECT_ERRORS = new Set(["too_many_redirects", "redirect_without_location", "unsupported_protocol"]);
+
+function classifyHomepageFailure(error: unknown): HomepageFailureCategory {
+  if (!error || typeof error !== "object") return "unknown";
+  const candidate = error as { code?: unknown; message?: unknown; cause?: unknown };
+  const cause = candidate.cause && typeof candidate.cause === "object"
+    ? candidate.cause as { code?: unknown; message?: unknown }
+    : undefined;
+  const codes = [candidate.code, cause?.code].filter((code): code is string => typeof code === "string");
+
+  for (const category of ["dns", "tls", "timeout", "connection", "redirect_request_setup"] as const) {
+    if (codes.some((code) => HOMEPAGE_FAILURE_CODES[category].has(code))) return category;
+  }
+  if (
+    (typeof candidate.message === "string" && INTERNAL_REDIRECT_ERRORS.has(candidate.message)) ||
+    (typeof cause?.message === "string" && INTERNAL_REDIRECT_ERRORS.has(cause.message))
+  ) {
+    return "redirect_request_setup";
+  }
+  return "unknown";
+}
+
 async function safeFetch(startUrl: string, timeoutMs: number): Promise<SafeFetchResult> {
   let currentUrl = startUrl;
   for (let hop = 0; hop <= 5; hop++) {
