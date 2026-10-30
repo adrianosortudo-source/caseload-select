@@ -126,7 +126,7 @@ const HOMEPAGE_FAILURE_CODES: Record<Exclude<HomepageFailureCategory, "unknown">
     "ERR_SSL_PROTOCOL_ERROR",
   ]),
   timeout: new Set(["ETIMEDOUT", "UND_ERR_CONNECT_TIMEOUT", "UND_ERR_HEADERS_TIMEOUT", "UND_ERR_BODY_TIMEOUT", "ABORT_ERR", "ERR_ABORTED"]),
-  connection: new Set(["ECONNREFUSED", "ECONNRESET", "EHOSTUNREACH", "ENETUNREACH", "EPIPE", "ECONNABORTED"]),
+  connection: new Set(["ECONNREFUSED", "ECONNRESET", "EHOSTUNREACH", "ENETUNREACH", "EPIPE", "ECONNABORTED", "UND_ERR_SOCKET"]),
   redirect_request_setup: new Set(["ERR_INVALID_URL", "ERR_INVALID_ARG_TYPE", "ERR_INVALID_PROTOCOL", "UND_ERR_INVALID_ARG"]),
 };
 
@@ -137,7 +137,7 @@ function classifyHomepageFailure(error: unknown): HomepageFailureCategory {
     if (!error || typeof error !== "object") return "unknown";
     const candidate = error as { code?: unknown; message?: unknown; cause?: unknown };
     const cause = candidate.cause && typeof candidate.cause === "object"
-      ? candidate.cause as { code?: unknown; message?: unknown }
+      ? candidate.cause as { code?: unknown; message?: unknown; name?: unknown }
       : undefined;
     const codes = [candidate.code, cause?.code].filter((code): code is string => typeof code === "string");
 
@@ -149,6 +149,9 @@ function classifyHomepageFailure(error: unknown): HomepageFailureCategory {
       (typeof cause?.message === "string" && INTERNAL_REDIRECT_ERRORS.has(cause.message))
     ) {
       return "redirect_request_setup";
+    }
+    if (candidate.name === "AbortError" || candidate.name === "TimeoutError" || cause?.name === "AbortError" || cause?.name === "TimeoutError") {
+      return "timeout";
     }
     return "unknown";
   } catch {
@@ -438,7 +441,7 @@ export async function POST(req: NextRequest) {
     let homeTtfbMs = 0;
     let resolved = false;
     let homeErrorResponse: NextResponse | null = null;
-    let lastHomepageFailure: unknown;
+    const homepageFailureCategories: HomepageFailureCategory[] = [];
     // Remember the last HTTP status a host actually returned, so a live-but-
     // access-restricted site (field case ganganilaw.com: Squarespace serves a
     // 401 site-wide password page on both apex and www) is reported honestly
@@ -485,7 +488,7 @@ export async function POST(req: NextRequest) {
         resolved = true;
         break;
       } catch (fetchErr: unknown) {
-        lastHomepageFailure = fetchErr;
+        homepageFailureCategories.push(classifyHomepageFailure(fetchErr));
         const msg = fetchErr instanceof Error ? fetchErr.message : "unknown";
         if (msg === "ssrf_blocked") homeErrorResponse = NextResponse.json({ error: "That domain cannot be checked." }, { status: 400 });
         // Any other failure (TLS, DNS, timeout) just moves on to the next host.
@@ -513,7 +516,7 @@ export async function POST(req: NextRequest) {
       try {
         console.error("seo_check_homepage_connection_failed", {
           stage: "homepage",
-          category: classifyHomepageFailure(lastHomepageFailure),
+          categories: homepageFailureCategories,
         });
       } catch {
         // Diagnostics must not change the generic connection-failure response.
