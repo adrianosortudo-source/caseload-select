@@ -133,23 +133,27 @@ const HOMEPAGE_FAILURE_CODES: Record<Exclude<HomepageFailureCategory, "unknown">
 const INTERNAL_REDIRECT_ERRORS = new Set(["too_many_redirects", "redirect_without_location", "unsupported_protocol"]);
 
 function classifyHomepageFailure(error: unknown): HomepageFailureCategory {
-  if (!error || typeof error !== "object") return "unknown";
-  const candidate = error as { code?: unknown; message?: unknown; cause?: unknown };
-  const cause = candidate.cause && typeof candidate.cause === "object"
-    ? candidate.cause as { code?: unknown; message?: unknown }
-    : undefined;
-  const codes = [candidate.code, cause?.code].filter((code): code is string => typeof code === "string");
+  try {
+    if (!error || typeof error !== "object") return "unknown";
+    const candidate = error as { code?: unknown; message?: unknown; cause?: unknown };
+    const cause = candidate.cause && typeof candidate.cause === "object"
+      ? candidate.cause as { code?: unknown; message?: unknown }
+      : undefined;
+    const codes = [candidate.code, cause?.code].filter((code): code is string => typeof code === "string");
 
-  for (const category of ["dns", "tls", "timeout", "connection", "redirect_request_setup"] as const) {
-    if (codes.some((code) => HOMEPAGE_FAILURE_CODES[category].has(code))) return category;
+    for (const category of ["dns", "tls", "timeout", "connection", "redirect_request_setup"] as const) {
+      if (codes.some((code) => HOMEPAGE_FAILURE_CODES[category].has(code))) return category;
+    }
+    if (
+      (typeof candidate.message === "string" && INTERNAL_REDIRECT_ERRORS.has(candidate.message)) ||
+      (typeof cause?.message === "string" && INTERNAL_REDIRECT_ERRORS.has(cause.message))
+    ) {
+      return "redirect_request_setup";
+    }
+    return "unknown";
+  } catch {
+    return "unknown";
   }
-  if (
-    (typeof candidate.message === "string" && INTERNAL_REDIRECT_ERRORS.has(candidate.message)) ||
-    (typeof cause?.message === "string" && INTERNAL_REDIRECT_ERRORS.has(cause.message))
-  ) {
-    return "redirect_request_setup";
-  }
-  return "unknown";
 }
 
 async function safeFetch(startUrl: string, timeoutMs: number): Promise<SafeFetchResult> {
@@ -506,10 +510,14 @@ export async function POST(req: NextRequest) {
       if (lastHttpStatus > 0) {
         return NextResponse.json({ error: `${domain} responded with HTTP ${lastHttpStatus}, so no page could be scanned.` }, { status: 422 });
       }
-      console.error("seo_check_homepage_connection_failed", {
-        stage: "homepage",
-        category: classifyHomepageFailure(lastHomepageFailure),
-      });
+      try {
+        console.error("seo_check_homepage_connection_failed", {
+          stage: "homepage",
+          category: classifyHomepageFailure(lastHomepageFailure),
+        });
+      } catch {
+        // Diagnostics must not change the generic connection-failure response.
+      }
       return NextResponse.json({ error: `The scanner could not connect to ${domain}. The website may still be publicly reachable. Try again later or contact CaseLoad Select for help.` }, { status: 422 });
     }
     const homeUrl = `https://${originHost}`;
