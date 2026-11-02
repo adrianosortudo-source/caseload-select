@@ -459,7 +459,6 @@ export function buildSeoReportModel(input: ReportInput): SeoReportModel {
     "Attorney / person schema",
     "Question-format headings",
     "Direct-answer sentences",
-    "Authoritative citations",
     "Author / reviewer signals",
     "Semantic HTML structure",
   ]);
@@ -478,7 +477,7 @@ export function buildSeoReportModel(input: ReportInput): SeoReportModel {
             item.evidence?.coverage === "not-assessed" ||
             item.disposition === "pending-review"
           ) continue;
-          const label = item.label === "Authoritative citations" ? "External links matching selected domains" : item.label;
+          const label = item.label;
           const key = JSON.stringify([label, item.detail]);
           const group = pageObservationGroups.get(key) ?? { label, detail: item.detail, pageUrls: [] };
           if (!group.pageUrls.includes(page.url)) group.pageUrls.push(page.url);
