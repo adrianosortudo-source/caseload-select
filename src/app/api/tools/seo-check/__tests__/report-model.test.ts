@@ -369,6 +369,28 @@ describe("buildSeoReportModel", () => {
     expect(model.limitations).toContain("The scan is incomplete. Findings apply only to inspected pages.");
   });
 
+  it("explains recognized AEO observations without changing the recorded evidence or score", () => {
+    const raw = [
+      { label: "Attorney / person schema", status: "pass" as const, scored: false, detail: "Attorney or Person schema was observed in the inspected HTML." },
+      { label: "Question-format headings", status: "pass" as const, scored: false, detail: "1 headings matched this question-format pattern in initial HTML. This is a formatting observation; no question format is required by this check." },
+      { label: "Direct-answer sentences", status: "pass" as const, scored: false, detail: "2 sentences matched a broad wording pattern in initial HTML. This is not an assessment of answer quality or AI visibility." },
+      { label: "Semantic HTML structure", status: "pass" as const, scored: false, detail: "4 of this check's listed semantic element types were observed in initial HTML. This structural observation is not a measure of AI visibility." },
+      { label: "Entity description", status: "pass" as const, scored: false, detail: "No named entity was found in the inspected JSON-LD. Other formats and rendered markup were not assessed." },
+      { label: "Author / reviewer signals", status: "pass" as const, scored: false, detail: "An author meta tag or Person/Attorney JSON-LD was observed. Identity, qualifications, and other page content were not assessed." },
+    ];
+    const snapshot = JSON.stringify(raw);
+    const model = buildSeoReportModel({ ...base, pages: [{ ...base.pages![0], categories: [{ name: "AI Visibility", score: 0, maxScore: 0, items: raw }] }] });
+    expect(model.aiPageObservations.map(item => item.label)).toEqual(["Person information", "Question headings", "Answer wording", "Page structure", "Firm information", "Author information"]);
+    expect(model.aiPageObservations[0].detail).toContain("does not verify the person's identity or qualifications");
+    expect(model.aiPageObservations[1].detail).toContain("1 heading matched");
+    expect(model.aiPageObservations[2].detail).toContain("2 sentences matched");
+    expect(model.aiPageObservations[3].detail).toContain("includes 4 of the structure types");
+    expect(model.aiPageObservations[4].detail).toContain("Other formats and visible content were not checked");
+    expect(model.aiPageObservations[5].detail).toContain("did not verify authorship or qualifications");
+    expect(JSON.stringify(raw)).toBe(snapshot);
+    expect(model.scoreExplanation.score).toBe(74);
+  });
+
   it("groups only allowlisted v5 page HTML observations and keeps their page associations", () => {
     const question = { label: "Question-format headings", status: "pass" as const, detail: "2 headings matched the pattern.", scored: false };
     const pages = [
