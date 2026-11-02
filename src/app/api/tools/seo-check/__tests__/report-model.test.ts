@@ -413,12 +413,14 @@ describe("buildSeoReportModel", () => {
         detail: "1 sentence matched the pattern.",
         pageUrls: ["https://example.com/"],
       },
-      {
-        label: "External links matching selected domains",
-        detail: "2 external links matched selected domain patterns.",
-        pageUrls: ["https://example.com/"],
-      },
     ]);
+    expect(model.aiPageObservations.some((item) => /citations|selected domains/i.test(item.label))).toBe(false);
+    expect(pages[0].categories[0].items).toContainEqual({
+      label: "Authoritative citations",
+      status: "pass",
+      detail: "2 external links matched selected domain patterns.",
+      scored: false,
+    });
     expect(model.scoreExplanation).toMatchObject({ score: 74, assessed: true });
   });
 
