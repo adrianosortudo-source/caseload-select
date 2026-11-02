@@ -164,7 +164,7 @@ export function validateProspectConversationContactControlsInput(
     ? cleanText(row.suppression_reason as string | null | undefined, 2_000)
     : undefined;
   if (row.contactability === 'suppressed' && !suppressionReason) return null;
-  if (has('suppression_reason') && row.contactability !== 'suppressed') return null;
+  if (has('suppression_reason') && row.contactability !== 'suppressed' && row.suppression_reason !== null) return null;
 
   const normalized: UpdateProspectConversationContactControlsInput = {};
   if (isProspectContactabilityState(row.contactability)) normalized.contactability = row.contactability;
