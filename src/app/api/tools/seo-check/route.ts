@@ -14,7 +14,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { lookup as dnsLookup } from "node:dns";
-import { Agent } from "undici";
+import { Agent, fetch as undiciFetch, Response as UndiciResponse } from "undici";
 
 import {
   type AiBotStatus,
@@ -105,10 +105,16 @@ const MAX_HTML_BYTES = 5 * 1024 * 1024;
 const MAX_RESOURCE_BYTES = 2 * 1024 * 1024;
 
 interface SafeFetchResult {
-  res: Response;
+  res: UndiciResponse;
   finalUrl: string;
   redirectHops: number;
   cleanup: () => void;
+}
+
+function toWebHeaders(source: UndiciResponse["headers"]): Headers {
+  const headers = new Headers();
+  for (const [name, value] of source.entries()) headers.append(name, value);
+  return headers;
 }
 
 async function safeFetch(startUrl: string, timeoutMs: number): Promise<SafeFetchResult> {
@@ -122,14 +128,14 @@ async function safeFetch(startUrl: string, timeoutMs: number): Promise<SafeFetch
 
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
-    let res: Response;
+    let res: UndiciResponse;
     try {
-      res = await fetch(currentUrl, {
+      res = await undiciFetch(currentUrl, {
         signal: controller.signal,
         headers: { "User-Agent": UA, Accept: "text/html,application/xhtml+xml,text/plain,*/*" },
         redirect: "manual",
         dispatcher: ssrfAgent,
-      } as RequestInit & { dispatcher: Agent });
+      });
     } catch (e) {
       clearTimeout(timer);
       const code = (e as { cause?: { code?: string } })?.cause?.code;
@@ -154,7 +160,7 @@ type CappedRead =
   | { ok: true; text: string }
   | { ok: false; reason: "too_large" | "read_failed" };
 
-async function readCappedText(res: Response, maxBytes: number): Promise<CappedRead> {
+async function readCappedText(res: UndiciResponse, maxBytes: number): Promise<CappedRead> {
   if (!res.body) {
     try {
       const buf = Buffer.from(await res.arrayBuffer());
@@ -281,7 +287,7 @@ async function scanPage(
     if (!ct.includes("html") && !ct.includes("xhtml")) return null;
     const read = await readCappedText(res, MAX_HTML_BYTES);
     if (!read.ok) return null;
-    const page = buildPageResult(read.text, finalUrl, url, res.headers, ttfb, redirectHops, domain, parsedRobots, llmsTxt, sitemapSet, intent, sitemapComplete);
+    const page = buildPageResult(read.text, finalUrl, url, toWebHeaders(res.headers), ttfb, redirectHops, domain, parsedRobots, llmsTxt, sitemapSet, intent, sitemapComplete);
     return { page, html: read.text };
   } catch { return null; }
   finally { handle?.cleanup(); }
@@ -431,7 +437,7 @@ export async function POST(req: NextRequest) {
           continue;
         }
         originHost = h;
-        homeHeaders = res.headers;
+        homeHeaders = toWebHeaders(res.headers);
         homeHtml = read.text;
         homeFinalUrl = finalUrl;
         homeRedirectHops = redirectHops;
@@ -439,7 +445,12 @@ export async function POST(req: NextRequest) {
         resolved = true;
         break;
       } catch (fetchErr: unknown) {
-        const msg = fetchErr instanceof Error ? fetchErr.message : "unknown";
+        let msg = "unknown";
+        try {
+          if (fetchErr instanceof Error && typeof fetchErr.message === "string") msg = fetchErr.message;
+        } catch {
+          // Malformed errors remain unknown and must not interrupt the bounded fallback.
+        }
         if (msg === "ssrf_blocked") homeErrorResponse = NextResponse.json({ error: "That domain cannot be checked." }, { status: 400 });
         // Any other failure (TLS, DNS, timeout) just moves on to the next host.
       } finally {
@@ -463,7 +474,7 @@ export async function POST(req: NextRequest) {
       if (lastHttpStatus > 0) {
         return NextResponse.json({ error: `${domain} responded with HTTP ${lastHttpStatus}, so no page could be scanned.` }, { status: 422 });
       }
-      return NextResponse.json({ error: `Could not connect to ${domain}. Verify the domain is correct and the site is live.` }, { status: 422 });
+      return NextResponse.json({ error: `The scanner could not connect to ${domain}. The website may still be publicly reachable. Try again later or contact CaseLoad Select for help.` }, { status: 422 });
     }
     const homeUrl = `https://${originHost}`;
 
