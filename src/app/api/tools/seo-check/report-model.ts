@@ -191,6 +191,37 @@ export interface SeoReportModel {
   cta: { heading: string; body: string; linkLabel: string; href: string };
 }
 
+
+function describeAeoPageObservation(label: string, detail: string): { label: string; detail: string } {
+  const exact: Record<string, { label: string; detail: string }> = {
+    "A named business entity was observed in structured data.": { label: "Firm information", detail: "A business name was found in the page data read by this check. Its accuracy was not verified." },
+    "A meta description was observed; no named entity was found in the inspected JSON-LD. Other formats and rendered markup were not assessed.": { label: "Firm information", detail: "A short page description was found, but no business name was found in the structured data inspected. Other formats and visible content were not checked." },
+    "No named entity was found in the inspected JSON-LD. Other formats and rendered markup were not assessed.": { label: "Firm information", detail: "No business name was found in the structured data inspected. Other formats and visible content were not checked." },
+    "Attorney or Person schema was observed in the inspected HTML.": { label: "Person information", detail: "The page code includes a person or lawyer data type. This does not verify the person's identity or qualifications." },
+    "No Attorney or Person JSON-LD type was observed. Its absence is optional and does not establish whether lawyer details appear elsewhere.": { label: "Person information", detail: "No person or lawyer data type was found in the inspected page code. This does not mean the page lacks lawyer information." },
+    "An author meta tag or Person/Attorney JSON-LD was observed. Identity, qualifications, and other page content were not assessed.": { label: "Author information", detail: "An author field or person data type was found in the page code. The scan did not verify authorship or qualifications." },
+    "No author meta tag or Person/Attorney JSON-LD was observed. Other formats and content were not assessed.": { label: "Author information", detail: "No author field or person data type was found in the page code inspected. Other formats and content were not checked." },
+  };
+  const expectedLabels: Record<string, string> = {
+    "Entity description": "Firm information",
+    "Attorney / person schema": "Person information",
+    "Author / reviewer signals": "Author information",
+  };
+  const known = exact[detail];
+  if (known && expectedLabels[label] === known.label) return known;
+  let match: RegExpMatchArray | null;
+  if (label === "Question-format headings" && (match = detail.match(/^(\d+) headings matched this question-format pattern in initial HTML\. This is a formatting observation; no question format is required by this check\.$/))) {
+    return { label: "Question headings", detail: match[1] + (match[1] === "1" ? " heading matched" : " headings matched") + " a question wording pattern. This format is optional and does not show whether client questions are answered." };
+  }
+  if (label === "Direct-answer sentences" && (match = detail.match(/^(\d+) sentences matched a broad wording pattern in initial HTML\. This is not an assessment of answer quality or AI visibility\.$/))) {
+    return { label: "Answer wording", detail: match[1] + (match[1] === "1" ? " sentence matched" : " sentences matched") + " a broad wording pattern. The scan did not assess whether they provide useful answers." };
+  }
+  if (label === "Semantic HTML structure" && (match = detail.match(/^(\d+) of this check's listed semantic element types were observed in initial HTML\. This structural observation is not a measure of AI visibility\.$/))) {
+    return { label: "Page structure", detail: "The page code includes " + match[1] + " of the structure types this check looks for. This does not measure how clearly the content reads." };
+  }
+  return { label, detail };
+}
+
 const METHOD_NOTE = "This saved scan used an earlier scoring method. Run a new scan for the current report. Scores from different methods should not be compared.";
 const UNSUPPORTED_METHOD_NOTE = "This saved scan records a scoring method this report does not interpret. Run a new scan for the current report.";
 const SCORE_NOTE = "Not a whole-site grade or ranking prediction.";
@@ -479,7 +510,7 @@ export function buildSeoReportModel(input: ReportInput): SeoReportModel {
           ) continue;
           const label = item.label;
           const key = JSON.stringify([label, item.detail]);
-          const group = pageObservationGroups.get(key) ?? { label, detail: item.detail, pageUrls: [] };
+          const group = pageObservationGroups.get(key) ?? { ...describeAeoPageObservation(label, item.detail), pageUrls: [] };
           if (!group.pageUrls.includes(page.url)) group.pageUrls.push(page.url);
           pageObservationGroups.set(key, group);
         }
