@@ -386,7 +386,7 @@ describe("buildSeoReportModel", () => {
     expect(model.aiPageObservations[2].detail).toContain("2 sentences matched");
     expect(model.aiPageObservations[3].detail).toContain("includes 4 of the structure types");
     expect(model.aiPageObservations[4].detail).toContain("Other formats and visible content were not checked");
-    expect(model.aiPageObservations[5].detail).toContain("did not verify authorship or qualifications");
+    expect(model.aiPageObservations[5].detail).toContain("Authorship and credentials were not verified");
     expect(JSON.stringify(raw)).toBe(snapshot);
     expect(model.scoreExplanation.score).toBe(74);
   });
