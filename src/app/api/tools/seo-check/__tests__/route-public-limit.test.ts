@@ -8,19 +8,34 @@ vi.mock("@/lib/rate-limit", () => ({
   ipFromRequest: vi.fn(() => "198.51.100.25"),
   rateLimitHeaders: vi.fn(() => new Headers()),
 }));
+vi.mock("undici", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("undici")>();
+  return { ...actual, fetch: vi.fn() };
+});
 
 import { NextRequest } from "next/server";
+import { Agent, fetch as undiciFetch, Headers as UndiciHeaders, Response as UndiciResponse } from "undici";
 import { POST } from "../route";
 
 afterEach(() => {
+  vi.mocked(undiciFetch).mockReset();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });
 
+function stubUndiciFetch(implementation: typeof undiciFetch) {
+  vi.mocked(undiciFetch).mockImplementation(implementation);
+}
+
+function requestUrl(input: Parameters<typeof undiciFetch>[0]): string {
+  if (typeof input === "string") return input;
+  return "href" in input ? input.href : input.url;
+}
+
 const pageHtml = (title: string) =>
   `<!doctype html><html><head><title>${title} | Example Law</title><meta name="description" content="Useful public information for clients." /><link rel="canonical" href="https://example.com/" /></head><body><h1>${title}</h1><p>Our lawyers explain legal options, service boundaries and useful next steps for people looking for help.</p></body></html>`;
 
-function installMockSite() {
+function installMockSite(onDispatch?: (init: Parameters<typeof undiciFetch>[1]) => void, homepageHeaders: Array<[string, string]> = []) {
   const requestedUrls: string[] = [];
   const urls = Array.from(
     { length: 40 },
@@ -28,39 +43,40 @@ function installMockSite() {
   );
   const sitemap = `<urlset>${urls.map((url) => `<url><loc>${url}</loc></url>`).join("")}</urlset>`;
 
-  vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
-    const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+  stubUndiciFetch(vi.fn(async (input: Parameters<typeof undiciFetch>[0], init?: Parameters<typeof undiciFetch>[1]) => {
+    onDispatch?.(init);
+    const url = requestUrl(input);
     requestedUrls.push(url);
     const pathname = new URL(url).pathname;
 
     if (pathname === "/robots.txt") {
-      return new Response("User-agent: *\nAllow: /\n", {
+      return new UndiciResponse("User-agent: *\nAllow: /\n", {
         status: 200,
         headers: { "content-type": "text/plain" },
       });
     }
     if (pathname === "/sitemap.xml") {
-      return new Response(sitemap, {
+      return new UndiciResponse(sitemap, {
         status: 200,
         headers: { "content-type": "application/xml" },
       });
     }
-    if (pathname === "/llms.txt") return new Response("", { status: 404 });
+    if (pathname === "/llms.txt") return new UndiciResponse("", { status: 404 });
     if (pathname === "/") {
-      return new Response(pageHtml("Example Law"), {
-        status: 200,
-        headers: { "content-type": "text/html; charset=utf-8" },
-      });
+      const headers = new UndiciHeaders();
+      headers.set("content-type", "text/html; charset=utf-8");
+      for (const [name, value] of homepageHeaders) headers.append(name, value);
+      return new UndiciResponse(pageHtml("Example Law"), { status: 200, headers });
     }
 
     const page = pathname.match(/^\/public-page-(\d+)$/);
     if (page) {
-      return new Response(pageHtml(`Public page ${page[1]}`), {
+      return new UndiciResponse(pageHtml(`Public page ${page[1]}`), {
         status: 200,
         headers: { "content-type": "text/html; charset=utf-8" },
       });
     }
-    return new Response("", { status: 404 });
+    return new UndiciResponse("", { status: 404 });
   }));
 
   return requestedUrls;
@@ -78,28 +94,76 @@ async function runPublicScan(body: Record<string, unknown>) {
 
 function installSitemapSite(options: { robotsSitemap?: string; rootSitemap?: string; childResponses?: Record<string, { body: string; status: number }> } = {}) {
   const requestedUrls: string[] = [];
-  vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
-    const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+  stubUndiciFetch(vi.fn(async (input: Parameters<typeof undiciFetch>[0], init?: Parameters<typeof undiciFetch>[1]) => {
+    const url = requestUrl(input);
     requestedUrls.push(url);
     const pathname = new URL(url).pathname;
     if (pathname === "/robots.txt") {
       const declared = options.robotsSitemap ? `Sitemap: ${options.robotsSitemap}\n` : "";
-      return new Response(`User-agent: *\nAllow: /\n${declared}`, { status: 200 });
+      return new UndiciResponse(`User-agent: *\nAllow: /\n${declared}`, { status: 200 });
     }
-    if (pathname === "/llms.txt") return new Response("", { status: 404 });
+    if (pathname === "/llms.txt") return new UndiciResponse("", { status: 404 });
     if (pathname === "/sitemap.xml") return options.rootSitemap
-      ? new Response(options.rootSitemap, { status: 200, headers: { "content-type": "application/xml" } })
-      : new Response("", { status: 404 });
+      ? new UndiciResponse(options.rootSitemap, { status: 200, headers: { "content-type": "application/xml" } })
+      : new UndiciResponse("", { status: 404 });
     const child = options.childResponses?.[pathname];
-    if (child) return new Response(child.body, { status: child.status, headers: { "content-type": "application/xml" } });
-    if (pathname === "/") return new Response(pageHtml("Example Law"), { status: 200, headers: { "content-type": "text/html; charset=utf-8" } });
-    if (pathname === "/listed-page") return new Response(pageHtml("Listed page"), { status: 200, headers: { "content-type": "text/html; charset=utf-8" } });
-    return new Response("", { status: 404 });
+    if (child) return new UndiciResponse(child.body, { status: child.status, headers: { "content-type": "application/xml" } });
+    if (pathname === "/") return new UndiciResponse(pageHtml("Example Law"), { status: 200, headers: { "content-type": "text/html; charset=utf-8" } });
+    if (pathname === "/listed-page") return new UndiciResponse(pageHtml("Listed page"), { status: 200, headers: { "content-type": "text/html; charset=utf-8" } });
+    return new UndiciResponse("", { status: 404 });
   }));
   return requestedUrls;
 }
 
 describe("public SEO scan page limit", () => {
+  it("uses Undici fetch with the matching SSRF Agent and reads its response stream", async () => {
+    const dispatchers: Array<NonNullable<Parameters<typeof undiciFetch>[1]>["dispatcher"]> = [];
+    const globalFetch = vi.fn(async () => { throw new Error("Unexpected global fetch"); });
+    vi.stubGlobal("fetch", globalFetch);
+    const requestedUrls = installMockSite((init) => {
+      if (init?.dispatcher) dispatchers.push(init.dispatcher);
+    });
+
+    const { response } = await runPublicScan({ maxPages: 1 });
+
+    expect(response.status).toBe(200);
+    expect(requestedUrls).toContain("https://example.com");
+    expect(undiciFetch).toHaveBeenCalled();
+    expect(globalFetch).not.toHaveBeenCalled();
+    expect(dispatchers.length).toBeGreaterThan(0);
+    expect(dispatchers.every((dispatcher) => dispatcher instanceof Agent)).toBe(true);
+    expect(new Set(dispatchers).size).toBe(1);
+  });
+
+  it("preserves duplicate X-Robots-Tag headers as Google indexability observations", async () => {
+    installMockSite(undefined, [
+      ["x-robots-tag", "noindex"],
+      ["x-robots-tag", "nofollow"],
+    ]);
+
+    const { response, result } = await runPublicScan({ maxPages: 1 });
+    const homepage = (result.pages as Array<Record<string, unknown>>).find(
+      (page) => new URL(String(page.url)).pathname === "/"
+    );
+    expect(response.status).toBe(200);
+    expect(homepage).toBeDefined();
+    const indexability = (homepage?.categories as Array<Record<string, unknown>>).find(
+      (category) => category.name === "Indexability"
+    );
+    const items = indexability?.items as Array<Record<string, unknown>>;
+    const indexable = items.find((item) => item.label === "Indexable");
+    const followable = items.find((item) => item.label === "Followable links");
+
+    expect(indexable).toMatchObject({
+      status: "fail",
+      detail: expect.stringContaining("noindex instruction addressed to Google"),
+    });
+    expect(followable).toMatchObject({
+      status: "warn",
+      detail: expect.stringContaining("nofollow directive was observed in X-Robots-Tag"),
+    });
+  });
+
   it("does not call an optional missing default sitemap incomplete", async () => {
     installSitemapSite();
     const { response, result } = await runPublicScan({ maxPages: 1 });
@@ -220,7 +284,7 @@ describe("public SEO scan page limit", () => {
     expect(crawledPages.some((path) => Number(path.match(/\d+$/)?.[0]) >= 25)).toBe(false);
   });
 
-  it("logs one safe category array across all homepage connection attempts and preserves the public error", async () => {
+  it("preserves the public error across all homepage connection attempts without diagnostic logging", async () => {
     const failures = [
       Object.assign(new TypeError("RAW_MESSAGE_SECRET https://private.invalid/path"), { code: "EAI_AGAIN" }),
       Object.assign(new Error("RAW_TLS_SECRET"), { code: "CERT_HAS_EXPIRED" }),
@@ -229,8 +293,8 @@ describe("public SEO scan page limit", () => {
     ];
     const requestedUrls: string[] = [];
     const log = vi.spyOn(console, "error").mockImplementation(() => {});
-    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
-      const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+    stubUndiciFetch(vi.fn(async (input: Parameters<typeof undiciFetch>[0], init?: Parameters<typeof undiciFetch>[1]) => {
+      const url = requestUrl(input);
       requestedUrls.push(url);
       throw failures[requestedUrls.length - 1];
     }));
@@ -248,89 +312,11 @@ describe("public SEO scan page limit", () => {
     expect(result.error).toBe(
       "The scanner could not connect to example.com. The website may still be publicly reachable. Try again later or contact CaseLoad Select for help."
     );
-    expect(log).toHaveBeenCalledTimes(1);
-    expect(log).toHaveBeenCalledWith("seo_check_homepage_connection_failed", {
-      stage: "homepage",
-      categories: ["dns", "tls", "timeout", "connection"],
-    });
-    const logged = JSON.stringify(log.mock.calls);
-    for (const privateValue of ["RAW_MESSAGE_SECRET", "RAW_TLS_SECRET", "RAW_TIMEOUT_SECRET", "RAW_CAUSE_SECRET", "private.invalid", "example.com", "EAI_AGAIN", "ECONNRESET"]) {
-      expect(logged).not.toContain(privateValue);
-    }
+    expect(log).not.toHaveBeenCalled();
   });
 
-  it("classifies only allowlisted homepage failure codes and exact internal redirect errors", async () => {
-    const cases: Array<{ category: string; error: Error }> = [
-      { category: "dns", error: Object.assign(new Error("private"), { code: "ENOTFOUND" }) },
-      { category: "tls", error: Object.assign(new Error("private"), { cause: Object.assign(new Error("private"), { code: "CERT_HAS_EXPIRED" }) }) },
-      { category: "timeout", error: Object.assign(new Error("private"), { cause: Object.assign(new Error("private"), { code: "UND_ERR_HEADERS_TIMEOUT" }) }) },
-      { category: "timeout", error: Object.assign(new Error("private"), { name: "AbortError" }) },
-      { category: "connection", error: Object.assign(new Error("private"), { cause: Object.assign(new Error("private"), { code: "ECONNREFUSED" }) }) },
-      { category: "connection", error: Object.assign(new Error("private"), { cause: Object.assign(new Error("private"), { code: "UND_ERR_SOCKET" }) }) },
-      { category: "redirect_request_setup", error: Object.assign(new Error("private"), { cause: Object.assign(new Error("private"), { code: "ERR_INVALID_URL" }) }) },
-      { category: "redirect_request_setup", error: new Error("too_many_redirects") },
-      { category: "unknown", error: Object.assign(new Error("too_many_redirects additional details"), { code: "PRIVATE_UNMAPPED_CODE" }) },
-    ];
+  it("handles malformed error access without logging or changing the 422 response", async () => {
     const log = vi.spyOn(console, "error").mockImplementation(() => {});
-
-    for (const fixture of cases) {
-      log.mockClear();
-      vi.stubGlobal("fetch", vi.fn(async () => {
-        throw fixture.error;
-      }));
-
-      const { response, result } = await runPublicScan({ maxPages: 1 });
-
-      expect(response.status).toBe(422);
-      expect(result.error).toBe(
-        "The scanner could not connect to example.com. The website may still be publicly reachable. Try again later or contact CaseLoad Select for help."
-      );
-      expect(log).toHaveBeenCalledTimes(1);
-      expect(log).toHaveBeenCalledWith("seo_check_homepage_connection_failed", {
-        stage: "homepage",
-        categories: Array(4).fill(fixture.category),
-      });
-      expect(JSON.stringify(log.mock.calls)).not.toContain("PRIVATE_UNMAPPED_CODE");
-    }
-  });
-
-  it("does not emit the homepage connection diagnostic when fallback succeeds or on HTTP and SSRF responses", async () => {
-    const log = vi.spyOn(console, "error").mockImplementation(() => {});
-    const fallbackUrls: string[] = [];
-    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
-      const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
-      fallbackUrls.push(url);
-      if (url === "https://example.com") throw new Error("primary host unavailable");
-      const pathname = new URL(url).pathname;
-      if (pathname === "/robots.txt") return new Response("User-agent: *\nAllow: /\n", { status: 200 });
-      if (pathname === "/llms.txt" || pathname === "/sitemap.xml") return new Response("", { status: 404 });
-      if (pathname === "/") return new Response(pageHtml("Example Law"), { status: 200, headers: { "content-type": "text/html; charset=utf-8" } });
-      return new Response("", { status: 404 });
-    }));
-    const fallbackSuccess = await runPublicScan({ maxPages: 1 });
-    expect(fallbackUrls.slice(0, 2)).toEqual(["https://example.com", "https://www.example.com"]);
-    expect(fallbackSuccess.response.status).toBe(200);
-
-    vi.stubGlobal("fetch", vi.fn(async () => new Response("", { status: 503 })));
-    const httpFailure = await runPublicScan({ maxPages: 1 });
-    expect(httpFailure.response.status).toBe(422);
-    expect(httpFailure.result.error).toBe(
-      "example.com is up but returned HTTP 503 to the scanner. The host may be temporarily unavailable or blocking automated access (common on Squarespace, Wix, and Cloudflare). Confirm the site loads for you, then try again later."
-    );
-
-    vi.stubGlobal("fetch", vi.fn(async () => {
-      throw new Error("ssrf_blocked");
-    }));
-    const ssrfFailure = await runPublicScan({ maxPages: 1 });
-    expect(ssrfFailure.response.status).toBe(400);
-    expect(ssrfFailure.result.error).toBe("That domain cannot be checked.");
-    expect(log.mock.calls.filter(([event]) => event === "seo_check_homepage_connection_failed")).toHaveLength(0);
-  });
-
-  it("keeps the generic response when malformed failures or the console logger throw", async () => {
-    vi.spyOn(console, "error").mockImplementation(() => {
-      throw new Error("LOGGER_PRIVATE_MESSAGE");
-    });
     const malformedFailure = new Proxy(new Error("MALFORMED_PRIVATE_MESSAGE"), {
       get(target, property, receiver) {
         if (property === "message" || property === "cause" || property === "code" || property === "name") {
@@ -339,7 +325,7 @@ describe("public SEO scan page limit", () => {
         return Reflect.get(target, property, receiver);
       },
     });
-    vi.stubGlobal("fetch", vi.fn(async () => {
+    stubUndiciFetch(vi.fn(async () => {
       throw malformedFailure;
     }));
 
@@ -349,5 +335,39 @@ describe("public SEO scan page limit", () => {
     expect(result.error).toBe(
       "The scanner could not connect to example.com. The website may still be publicly reachable. Try again later or contact CaseLoad Select for help."
     );
+    expect(log).not.toHaveBeenCalled();
+  });
+
+  it("preserves host fallback and HTTP and SSRF error responses without diagnostic logging", async () => {
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    const fallbackUrls: string[] = [];
+    stubUndiciFetch(vi.fn(async (input: Parameters<typeof undiciFetch>[0], init?: Parameters<typeof undiciFetch>[1]) => {
+      const url = requestUrl(input);
+      fallbackUrls.push(url);
+      if (url === "https://example.com") throw new Error("primary host unavailable");
+      const pathname = new URL(url).pathname;
+      if (pathname === "/robots.txt") return new UndiciResponse("User-agent: *\nAllow: /\n", { status: 200 });
+      if (pathname === "/llms.txt" || pathname === "/sitemap.xml") return new UndiciResponse("", { status: 404 });
+      if (pathname === "/") return new UndiciResponse(pageHtml("Example Law"), { status: 200, headers: { "content-type": "text/html; charset=utf-8" } });
+      return new UndiciResponse("", { status: 404 });
+    }));
+    const fallbackSuccess = await runPublicScan({ maxPages: 1 });
+    expect(fallbackUrls.slice(0, 2)).toEqual(["https://example.com", "https://www.example.com"]);
+    expect(fallbackSuccess.response.status).toBe(200);
+
+    stubUndiciFetch(vi.fn(async () => new UndiciResponse("", { status: 503 })));
+    const httpFailure = await runPublicScan({ maxPages: 1 });
+    expect(httpFailure.response.status).toBe(422);
+    expect(httpFailure.result.error).toBe(
+      "example.com is up but returned HTTP 503 to the scanner. The host may be temporarily unavailable or blocking automated access (common on Squarespace, Wix, and Cloudflare). Confirm the site loads for you, then try again later."
+    );
+
+    stubUndiciFetch(vi.fn(async () => {
+      throw new Error("ssrf_blocked");
+    }));
+    const ssrfFailure = await runPublicScan({ maxPages: 1 });
+    expect(ssrfFailure.response.status).toBe(400);
+    expect(ssrfFailure.result.error).toBe("That domain cannot be checked.");
+    expect(log).not.toHaveBeenCalled();
   });
 });
