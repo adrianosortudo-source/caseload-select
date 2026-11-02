@@ -368,6 +368,148 @@ describe("buildSeoReportModel", () => {
     expect(model.coverage.partial).toBe(true);
     expect(model.limitations).toContain("The scan is incomplete. Findings apply only to inspected pages.");
   });
+
+  it("explains recognized AEO observations without changing the recorded evidence or score", () => {
+    const raw = [
+      { label: "Attorney / person schema", status: "pass" as const, scored: false, detail: "Attorney or Person schema was observed in the inspected HTML." },
+      { label: "Question-format headings", status: "pass" as const, scored: false, detail: "1 headings matched this question-format pattern in initial HTML. This is a formatting observation; no question format is required by this check." },
+      { label: "Direct-answer sentences", status: "pass" as const, scored: false, detail: "2 sentences matched a broad wording pattern in initial HTML. This is not an assessment of answer quality or AI visibility." },
+      { label: "Semantic HTML structure", status: "pass" as const, scored: false, detail: "4 of this check's listed semantic element types were observed in initial HTML. This structural observation is not a measure of AI visibility." },
+      { label: "Entity description", status: "pass" as const, scored: false, detail: "No named entity was found in the inspected JSON-LD. Other formats and rendered markup were not assessed." },
+      { label: "Author / reviewer signals", status: "pass" as const, scored: false, detail: "An author meta tag or Person/Attorney JSON-LD was observed. Identity, qualifications, and other page content were not assessed." },
+    ];
+    const snapshot = JSON.stringify(raw);
+    const model = buildSeoReportModel({ ...base, pages: [{ ...base.pages![0], categories: [{ name: "AI Visibility", score: 0, maxScore: 0, items: raw }] }] });
+    expect(model.aiPageObservations.map(item => item.label)).toEqual(["Person information", "Question headings", "Answer wording", "Page structure", "Firm information", "Author information"]);
+    expect(model.aiPageObservations[0].detail).toContain("No identity or qualifications were verified");
+    expect(model.aiPageObservations[1].detail).toContain("1 heading looks like a question");
+    expect(model.aiPageObservations[2].detail).toContain("2 sentences matched");
+    expect(model.aiPageObservations[3].detail).toContain("includes 4 of the structure types");
+    expect(model.aiPageObservations[4].detail).toContain("Other formats and visible content were not checked");
+    expect(model.aiPageObservations[5].detail).toContain("Authorship and credentials were not verified");
+    expect(JSON.stringify(raw)).toBe(snapshot);
+    expect(model.scoreExplanation.score).toBe(74);
+  });
+
+  it("groups only allowlisted v5 page HTML observations and keeps their page associations", () => {
+    const question = { label: "Question-format headings", status: "pass" as const, detail: "2 headings matched the pattern.", scored: false };
+    const pages = [
+      {
+        ...base.pages![0],
+        categories: [{
+          name: "AI Visibility",
+          score: 0,
+          maxScore: 0,
+          items: [
+            question,
+            { label: "Direct-answer sentences", status: "pass" as const, detail: "1 sentence matched the pattern.", scored: false },
+            { label: "Authoritative citations", status: "pass" as const, detail: "2 external links matched selected domain patterns.", scored: false },
+            { label: "AI search bot access", status: "pass" as const, detail: "Root policy only.", scored: false },
+            { label: "AI training bot control", status: "pass" as const, detail: "Root policy only.", scored: false },
+            { label: "llms.txt file", status: "pass" as const, detail: "Site-level file observation.", scored: false },
+            { label: "Answer quality", status: "pass" as const, detail: "Must not appear.", scored: true },
+            { label: "Legacy item", status: "pass" as const, detail: "Must not appear." },
+          ],
+        }],
+      },
+      {
+        ...base.pages![1],
+        categories: [{
+          name: "AI Visibility",
+          score: 0,
+          maxScore: 0,
+          items: [question],
+        }],
+      },
+    ];
+    const model = buildSeoReportModel({ ...base, pages });
+
+    expect(model.aiPageObservations).toEqual([
+      {
+        label: "Question-format headings",
+        detail: "2 headings matched the pattern.",
+        pageUrls: ["https://example.com/", "https://example.com/services/"],
+      },
+      {
+        label: "Direct-answer sentences",
+        detail: "1 sentence matched the pattern.",
+        pageUrls: ["https://example.com/"],
+      },
+    ]);
+    expect(model.aiPageObservations.some((item) => /citations|selected domains/i.test(item.label))).toBe(false);
+    expect(pages[0].categories[0].items).toContainEqual({
+      label: "Authoritative citations",
+      status: "pass",
+      detail: "2 external links matched selected domain patterns.",
+      scored: false,
+    });
+    expect(model.scoreExplanation).toMatchObject({ score: 74, assessed: true });
+  });
+
+  it("excludes unknown and unassessed page items but retains observed and not-observed evidence", () => {
+    const pageUrl = "https://example.com/services/";
+    const htmlEvidence = (coverage: "observed" | "not-observed" | "not-assessed", applicability: "applicable" | "unknown" | "not-applicable" = "applicable") => ({
+      kind: "initial-html-pattern",
+      assessedUrl: pageUrl,
+      applicability,
+      coverage,
+      detail: "Synthetic evidence state.",
+    });
+    const model = buildSeoReportModel({
+      ...base,
+      pages: [{
+        ...base.pages![0],
+        url: pageUrl,
+        categories: [{
+          name: "AI Visibility",
+          score: 0,
+          maxScore: 0,
+          items: [
+            { label: "Question-format headings", status: "pass", detail: "A question pattern was observed.", scored: false, applicability: "applicable", evidence: htmlEvidence("observed") },
+            { label: "Semantic HTML structure", status: "pass", detail: "No listed semantic element type was observed.", scored: false, applicability: "applicable", evidence: htmlEvidence("not-observed") },
+            { label: "Direct-answer sentences", status: "warn", detail: "Unknown.", scored: false, applicability: "unknown", evidence: htmlEvidence("observed", "unknown") },
+            { label: "Entity description", status: "warn", detail: "Not assessed.", scored: false, evidence: htmlEvidence("not-assessed") },
+            { label: "Attorney / person schema", status: "pass", detail: "Pending source review.", scored: false, disposition: "pending-review", evidence: htmlEvidence("observed") },
+            { label: "Author / reviewer signals", status: "pass", detail: "Not applicable.", scored: false, applicability: "not-applicable", evidence: htmlEvidence("observed", "not-applicable") },
+          ],
+        }],
+      }],
+    });
+
+    expect(model.aiPageObservations).toEqual([
+      {
+        label: "Question-format headings",
+        detail: "A question pattern was observed.",
+        pageUrls: [pageUrl],
+      },
+      {
+        label: "Semantic HTML structure",
+        detail: "No listed semantic element type was observed.",
+        pageUrls: [pageUrl],
+      },
+    ]);
+  });
+
+  it("leaves historical methods and missing page observations empty", () => {
+    const v4 = buildSeoReportModel({
+      ...base,
+      methodologyVersion: 4,
+      pages: [{
+        ...base.pages![0],
+        categories: [{ name: "AI Visibility", score: 0, maxScore: 0, items: [
+          { label: "Question-format headings", status: "pass", detail: "Historical observation.", scored: false },
+        ] }],
+      }],
+    });
+    const missingCategory = buildSeoReportModel({ ...base, pages: [{ ...base.pages![0], categories: [] }] });
+    const missingPages = buildSeoReportModel({ ...base, pages: [] });
+
+    expect(v4.aiPageObservations).toEqual([]);
+    expect(missingCategory.aiPageObservations).toEqual([]);
+    expect(missingPages.aiPageObservations).toEqual([]);
+    expect(v4.methodology.label).toBe("Historical score");
+  });
+
 });
 
 describe("getDisplayedCategoryWeights", () => {

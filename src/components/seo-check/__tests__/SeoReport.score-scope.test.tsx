@@ -252,4 +252,86 @@ describe("SeoReport score scope", () => {
     expect(screen.getByText("Historical noindex status not assessed")).toBeTruthy();
     expect(screen.getByText("No noindex instruction observed")).toBeTruthy();
   });
+  it("shows only page-level AEO patterns with linked pages and cautious review guidance", () => {
+    const pageUrl = "https://example.com/services/";
+    const page: NonNullable<SeoCheckResult["pages"]>[number] = {
+      url: pageUrl,
+      title: "Services",
+      pageType: "practice-area",
+      pageScore: null,
+      pageGrade: "Not assessed",
+      aiVisibilityScore: null,
+      categories: [{
+        name: "AI Visibility",
+        score: 0,
+        maxScore: 0,
+        items: [
+          { label: "Question-format headings", status: "pass", detail: "2 headings matched this question-format pattern in initial HTML. This is a formatting observation; no question format is required by this check.", scored: false },
+          { label: "AI search bot access", status: "pass", detail: "Root-only robots policy detail.", scored: false },
+          { label: "AI training bot control", status: "pass", detail: "Site-level crawler policy detail.", scored: false },
+          { label: "llms.txt file", status: "pass", detail: "Site-level llms.txt detail.", scored: false },
+        ],
+      }],
+      failCount: 0,
+      warnCount: 0,
+      httpStatus: 200,
+      indexable: true,
+      indexability: { metaNoindex: false, headerNoindex: false, indexable: true },
+    };
+    render(<SeoReport result={{ ...result, pagesScanned: 1, pages: [page] }} onReset={vi.fn()} hideCta />);
+
+    const aiSection = within(screen.getByRole("region", { name: "AI and page content" }));
+    const summary = screen.getByText("Page-level AEO and AI observations (1 observation group)");
+    fireEvent.click(summary);
+
+    expect(aiSection.getByText(/2 headings look like questions/)).toBeTruthy();
+    expect(aiSection.getByRole("link", { name: "/services/" }).getAttribute("href")).toBe(pageUrl);
+    expect(aiSection.getByText(/These notes describe patterns found in the page code/)).toBeTruthy();
+    expect(aiSection.getByText(/Discuss the listed pages with your web provider/)).toBeTruthy();
+    expect(aiSection.queryByText("Root-only robots policy detail.")).toBeNull();
+    expect(aiSection.queryByText("Site-level crawler policy detail.")).toBeNull();
+    expect(aiSection.queryByText("Site-level llms.txt detail.")).toBeNull();
+    expect(aiSection.queryByText(/All AI observations passed|No AEO issues/i)).toBeNull();
+  });
+
+  it("withholds the unverified link heuristic from current report presentation while preserving the saved input", () => {
+    const legacy = { label: "Authoritative citations", status: "pass" as const, scored: false, detail: "0 external links matched this check's list of government, court, or legal organization domains. This list does not assess source quality or completeness." };
+    const input = {
+      ...result,
+      categories: [{ name: "AI Visibility", score: 0, maxScore: 0, items: [legacy, { label: "Context observation", status: "pass" as const, scored: false, detail: "Context retained." }] }],
+      scoring: { unscoredLabels: ["Authoritative citations", "Context observation"] },
+    };
+    render(<SeoReport result={input} onReset={vi.fn()} hideCta />);
+    fireEvent.click(screen.getByText("Check categories"));
+    expect(screen.queryByText("Authoritative citations")).toBeNull();
+    expect(screen.queryByText(/external links matched this check/)).toBeNull();
+    expect(screen.getByText(/0 applicable page checks.*1 unscored or not assessed/)).toBeTruthy();
+    expect(input.categories[0].items).toContain(legacy);
+    fireEvent.click(screen.getByText("Score method and coverage"));
+    expect(screen.getByText("Unscored observations: Context observation.")).toBeTruthy();
+  });
+
+  it("does not present missing page observations as an AEO pass", () => {
+    const page: NonNullable<SeoCheckResult["pages"]>[number] = {
+      url: "https://example.com/",
+      title: "Home",
+      pageType: "homepage",
+      pageScore: null,
+      pageGrade: "Not assessed",
+      aiVisibilityScore: null,
+      categories: [],
+      failCount: 0,
+      warnCount: 0,
+      httpStatus: 200,
+      indexable: null,
+      indexability: { metaNoindex: null, headerNoindex: null, indexable: null },
+    };
+    render(<SeoReport result={{ ...result, pagesScanned: 1, pages: [page] }} onReset={vi.fn()} hideCta />);
+
+    const aiSection = within(screen.getByRole("region", { name: "AI and page content" }));
+    expect(aiSection.queryByText(/Page-level AEO and AI observations/)).toBeNull();
+    expect(aiSection.getByText(/This scan did not assess provider-specific crawler policy or actual AI service access/)).toBeTruthy();
+    expect(aiSection.queryByText(/All AI observations passed|No AEO issues/i)).toBeNull();
+  });
+
 });
