@@ -284,7 +284,7 @@ describe("public SEO scan page limit", () => {
     expect(crawledPages.some((path) => Number(path.match(/\d+$/)?.[0]) >= 25)).toBe(false);
   });
 
-  it("logs one safe category array across all homepage connection attempts and preserves the public error", async () => {
+  it("preserves the public error across all homepage connection attempts without diagnostic logging", async () => {
     const failures = [
       Object.assign(new TypeError("RAW_MESSAGE_SECRET https://private.invalid/path"), { code: "EAI_AGAIN" }),
       Object.assign(new Error("RAW_TLS_SECRET"), { code: "CERT_HAS_EXPIRED" }),
@@ -312,66 +312,10 @@ describe("public SEO scan page limit", () => {
     expect(result.error).toBe(
       "The scanner could not connect to example.com. The website may still be publicly reachable. Try again later or contact CaseLoad Select for help."
     );
-    expect(log).toHaveBeenCalledTimes(1);
-    expect(log).toHaveBeenCalledWith("seo_check_homepage_connection_failed", {
-      stage: "homepage",
-      categories: ["dns", "tls", "timeout", "connection"],
-    });
-    const logged = JSON.stringify(log.mock.calls);
-    for (const privateValue of ["RAW_MESSAGE_SECRET", "RAW_TLS_SECRET", "RAW_TIMEOUT_SECRET", "RAW_CAUSE_SECRET", "private.invalid", "example.com", "EAI_AGAIN", "ECONNRESET"]) {
-      expect(logged).not.toContain(privateValue);
-    }
+    expect(log).not.toHaveBeenCalled();
   });
 
-  it("classifies only allowlisted homepage failure codes and exact internal redirect errors", async () => {
-    const cases: Array<{ category: string; error: Error }> = [
-      { category: "dns", error: Object.assign(new Error("private"), { code: "ENOTFOUND" }) },
-      { category: "tls", error: Object.assign(new Error("private"), { cause: Object.assign(new Error("private"), { code: "CERT_HAS_EXPIRED" }) }) },
-      { category: "timeout", error: Object.assign(new Error("private"), { cause: Object.assign(new Error("private"), { code: "UND_ERR_HEADERS_TIMEOUT" }) }) },
-      { category: "timeout", error: Object.assign(new Error("private"), { name: "AbortError" }) },
-      { category: "connection", error: Object.assign(new Error("private"), { cause: Object.assign(new Error("private"), { code: "ECONNREFUSED" }) }) },
-      { category: "connection", error: Object.assign(new Error("private"), { cause: Object.assign(new Error("private"), { code: "UND_ERR_SOCKET" }) }) },
-      {
-        category: "redirect_request_setup.invalid_url",
-        error: Object.assign(new Error("RAW_REDIRECT_SECRET https://private.invalid/path?token=secret"), {
-          cause: Object.assign(new Error("private"), { code: "ERR_INVALID_URL" }),
-        }),
-      },
-      { category: "redirect_request_setup.invalid_argument", error: Object.assign(new Error("private"), { code: "ERR_INVALID_ARG_TYPE" }) },
-      { category: "redirect_request_setup.invalid_argument", error: Object.assign(new Error("private"), { cause: Object.assign(new Error("private"), { code: "UND_ERR_INVALID_ARG" }) }) },
-      { category: "redirect_request_setup.unsupported_protocol", error: Object.assign(new Error("private"), { cause: Object.assign(new Error("private"), { code: "ERR_INVALID_PROTOCOL" }) }) },
-      { category: "redirect_request_setup.unsupported_protocol", error: new Error("unsupported_protocol") },
-      { category: "redirect_request_setup.redirect_missing_location", error: new Error("redirect_without_location") },
-      { category: "redirect_request_setup.redirect_limit", error: new Error("too_many_redirects") },
-      { category: "unknown", error: Object.assign(new Error("too_many_redirects additional details"), { code: "PRIVATE_UNMAPPED_CODE" }) },
-    ];
-    const log = vi.spyOn(console, "error").mockImplementation(() => {});
-
-    for (const fixture of cases) {
-      log.mockClear();
-      stubUndiciFetch(vi.fn(async () => {
-        throw fixture.error;
-      }));
-
-      const { response, result } = await runPublicScan({ maxPages: 1 });
-
-      expect(response.status).toBe(422);
-      expect(result.error).toBe(
-        "The scanner could not connect to example.com. The website may still be publicly reachable. Try again later or contact CaseLoad Select for help."
-      );
-      expect(log).toHaveBeenCalledTimes(1);
-      expect(log).toHaveBeenCalledWith("seo_check_homepage_connection_failed", {
-        stage: "homepage",
-        categories: Array(4).fill(fixture.category),
-      });
-      const logged = JSON.stringify(log.mock.calls);
-      for (const privateValue of ["RAW_REDIRECT_SECRET", "private.invalid", "token=secret", "example.com", "ERR_INVALID_URL", "PRIVATE_UNMAPPED_CODE"]) {
-        expect(logged).not.toContain(privateValue);
-      }
-    }
-  });
-
-  it("classifies malformed error access as unknown without changing the 422 response", async () => {
+  it("handles malformed error access without logging or changing the 422 response", async () => {
     const log = vi.spyOn(console, "error").mockImplementation(() => {});
     const malformedFailure = new Proxy(new Error("MALFORMED_PRIVATE_MESSAGE"), {
       get(target, property, receiver) {
@@ -391,15 +335,10 @@ describe("public SEO scan page limit", () => {
     expect(result.error).toBe(
       "The scanner could not connect to example.com. The website may still be publicly reachable. Try again later or contact CaseLoad Select for help."
     );
-    expect(log).toHaveBeenCalledTimes(1);
-    expect(log).toHaveBeenCalledWith("seo_check_homepage_connection_failed", {
-      stage: "homepage",
-      categories: Array(4).fill("unknown"),
-    });
-    expect(JSON.stringify(log.mock.calls)).not.toContain("MALFORMED_PRIVATE_MESSAGE");
+    expect(log).not.toHaveBeenCalled();
   });
 
-  it("does not emit the homepage connection diagnostic when fallback succeeds or on HTTP and SSRF responses", async () => {
+  it("preserves host fallback and HTTP and SSRF error responses without diagnostic logging", async () => {
     const log = vi.spyOn(console, "error").mockImplementation(() => {});
     const fallbackUrls: string[] = [];
     stubUndiciFetch(vi.fn(async (input: Parameters<typeof undiciFetch>[0], init?: Parameters<typeof undiciFetch>[1]) => {
@@ -429,30 +368,6 @@ describe("public SEO scan page limit", () => {
     const ssrfFailure = await runPublicScan({ maxPages: 1 });
     expect(ssrfFailure.response.status).toBe(400);
     expect(ssrfFailure.result.error).toBe("That domain cannot be checked.");
-    expect(log.mock.calls.filter(([event]) => event === "seo_check_homepage_connection_failed")).toHaveLength(0);
-  });
-
-  it("keeps the generic response when malformed failures or the console logger throw", async () => {
-    vi.spyOn(console, "error").mockImplementation(() => {
-      throw new Error("LOGGER_PRIVATE_MESSAGE");
-    });
-    const malformedFailure = new Proxy(new Error("MALFORMED_PRIVATE_MESSAGE"), {
-      get(target, property, receiver) {
-        if (property === "message" || property === "cause" || property === "code" || property === "name") {
-          throw new Error("MALFORMED_PRIVATE_MESSAGE");
-        }
-        return Reflect.get(target, property, receiver);
-      },
-    });
-    stubUndiciFetch(vi.fn(async () => {
-      throw malformedFailure;
-    }));
-
-    const { response, result } = await runPublicScan({ maxPages: 1 });
-
-    expect(response.status).toBe(422);
-    expect(result.error).toBe(
-      "The scanner could not connect to example.com. The website may still be publicly reachable. Try again later or contact CaseLoad Select for help."
-    );
+    expect(log).not.toHaveBeenCalled();
   });
 });
