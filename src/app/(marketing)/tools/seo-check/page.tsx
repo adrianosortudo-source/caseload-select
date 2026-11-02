@@ -9,13 +9,13 @@ import SeoCheckTool from "@/components/seo-check/SeoCheckTool";
 
 export const metadata: Metadata = {
   robots: { index: false, follow: false },
-  title: "Free Law Firm SEO Check · CaseLoad Select",
+  title: "Free Law Firm SEO and AEO Check · CaseLoad Select",
   description:
-    "Review public website signals across up to 25 pages. See affected-page evidence and prioritized next steps. AI-related observations do not grade visibility or predict citations.",
+    "Review public SEO signals and unscored AEO observations across up to 25 pages. See affected-page evidence and next steps. The scan does not grade AI visibility or predict citations.",
   openGraph: {
-    title: "Free Law Firm SEO Check · CaseLoad Select",
+    title: "Free Law Firm SEO and AEO Check · CaseLoad Select",
     description:
-      "Review public website signals across up to 25 pages, with affected-page evidence and prioritized next steps. AI observations do not predict citations.",
+      "Review public SEO signals and unscored AEO observations across up to 25 pages, with affected-page evidence and next steps. The scan does not grade AI visibility or predict citations.",
     type: "website",
     locale: "en_CA",
   },
@@ -48,7 +48,7 @@ export default async function SeoCheckPage({ searchParams }: PageProps) {
         <section className="seo-hero">
           <div className="seo-hero-eyebrow">Free tool · Multi-page scan · No account</div>
           <h1 className="seo-hero-title">
-            Law Firm SEO Check<span className="ts" />
+            Law Firm SEO and AEO Check<span className="ts" />
           </h1>
           <p className="seo-hero-sub">
             Review public website signals across up to 25 pages. Findings show affected pages, why they may matter, and general next steps. AI observations are not a visibility grade or citation prediction.
