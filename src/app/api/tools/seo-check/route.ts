@@ -117,74 +117,6 @@ function toWebHeaders(source: UndiciResponse["headers"]): Headers {
   return headers;
 }
 
-type TransportFailureCategory = "dns" | "tls" | "timeout" | "connection";
-type RedirectRequestSetupCategory =
-  | "redirect_request_setup.invalid_url"
-  | "redirect_request_setup.invalid_argument"
-  | "redirect_request_setup.unsupported_protocol"
-  | "redirect_request_setup.redirect_missing_location"
-  | "redirect_request_setup.redirect_limit";
-type HomepageFailureCategory = TransportFailureCategory | RedirectRequestSetupCategory | "unknown";
-
-const HOMEPAGE_FAILURE_CODES: Record<TransportFailureCategory, ReadonlySet<string>> = {
-  dns: new Set(["ENOTFOUND", "EAI_AGAIN", "EAI_FAIL", "EAI_NODATA", "ENODATA", "ESERVFAIL"]),
-  tls: new Set([
-    "CERT_HAS_EXPIRED",
-    "ERR_TLS_CERT_ALTNAME_INVALID",
-    "DEPTH_ZERO_SELF_SIGNED_CERT",
-    "SELF_SIGNED_CERT_IN_CHAIN",
-    "UNABLE_TO_VERIFY_LEAF_SIGNATURE",
-    "ERR_TLS_HANDSHAKE_TIMEOUT",
-    "ERR_SSL_WRONG_VERSION_NUMBER",
-    "ERR_SSL_PROTOCOL_ERROR",
-  ]),
-  timeout: new Set(["ETIMEDOUT", "UND_ERR_CONNECT_TIMEOUT", "UND_ERR_HEADERS_TIMEOUT", "UND_ERR_BODY_TIMEOUT", "ABORT_ERR", "ERR_ABORTED"]),
-  connection: new Set(["ECONNREFUSED", "ECONNRESET", "EHOSTUNREACH", "ENETUNREACH", "EPIPE", "ECONNABORTED", "UND_ERR_SOCKET"]),
-};
-
-const REDIRECT_REQUEST_SETUP_CODES = new Map<string, RedirectRequestSetupCategory>([
-  ["ERR_INVALID_URL", "redirect_request_setup.invalid_url"],
-  ["ERR_INVALID_ARG_TYPE", "redirect_request_setup.invalid_argument"],
-  ["UND_ERR_INVALID_ARG", "redirect_request_setup.invalid_argument"],
-  ["ERR_INVALID_PROTOCOL", "redirect_request_setup.unsupported_protocol"],
-]);
-
-const INTERNAL_REDIRECT_FAILURES = new Map<string, RedirectRequestSetupCategory>([
-  ["unsupported_protocol", "redirect_request_setup.unsupported_protocol"],
-  ["redirect_without_location", "redirect_request_setup.redirect_missing_location"],
-  ["too_many_redirects", "redirect_request_setup.redirect_limit"],
-]);
-
-function classifyHomepageFailure(error: unknown): HomepageFailureCategory {
-  try {
-    if (!error || typeof error !== "object") return "unknown";
-    const candidate = error as { code?: unknown; message?: unknown; name?: unknown; cause?: unknown };
-    const cause = candidate.cause && typeof candidate.cause === "object"
-      ? candidate.cause as { code?: unknown; message?: unknown; name?: unknown }
-      : undefined;
-    const codes = [candidate.code, cause?.code].filter((code): code is string => typeof code === "string");
-
-    for (const category of ["dns", "tls", "timeout", "connection"] as const) {
-      if (codes.some((code) => HOMEPAGE_FAILURE_CODES[category].has(code))) return category;
-    }
-    for (const code of codes) {
-      const category = REDIRECT_REQUEST_SETUP_CODES.get(code);
-      if (category) return category;
-    }
-    for (const message of [candidate.message, cause?.message]) {
-      if (typeof message !== "string") continue;
-      const category = INTERNAL_REDIRECT_FAILURES.get(message);
-      if (category) return category;
-    }
-    if (candidate.name === "AbortError" || candidate.name === "TimeoutError" || cause?.name === "AbortError" || cause?.name === "TimeoutError") {
-      return "timeout";
-    }
-    return "unknown";
-  } catch {
-    return "unknown";
-  }
-}
-
 async function safeFetch(startUrl: string, timeoutMs: number): Promise<SafeFetchResult> {
   let currentUrl = startUrl;
   for (let hop = 0; hop <= 5; hop++) {
@@ -467,7 +399,6 @@ export async function POST(req: NextRequest) {
     let homeTtfbMs = 0;
     let resolved = false;
     let homeErrorResponse: NextResponse | null = null;
-    const homepageFailureCategories: HomepageFailureCategory[] = [];
     // Remember the last HTTP status a host actually returned, so a live-but-
     // access-restricted site (field case ganganilaw.com: Squarespace serves a
     // 401 site-wide password page on both apex and www) is reported honestly
@@ -514,7 +445,6 @@ export async function POST(req: NextRequest) {
         resolved = true;
         break;
       } catch (fetchErr: unknown) {
-        homepageFailureCategories.push(classifyHomepageFailure(fetchErr));
         let msg = "unknown";
         try {
           if (fetchErr instanceof Error && typeof fetchErr.message === "string") msg = fetchErr.message;
@@ -543,14 +473,6 @@ export async function POST(req: NextRequest) {
       }
       if (lastHttpStatus > 0) {
         return NextResponse.json({ error: `${domain} responded with HTTP ${lastHttpStatus}, so no page could be scanned.` }, { status: 422 });
-      }
-      try {
-        console.error("seo_check_homepage_connection_failed", {
-          stage: "homepage",
-          categories: homepageFailureCategories,
-        });
-      } catch {
-        // Diagnostics must not change the generic connection-failure response.
       }
       return NextResponse.json({ error: `The scanner could not connect to ${domain}. The website may still be publicly reachable. Try again later or contact CaseLoad Select for help.` }, { status: 422 });
     }
