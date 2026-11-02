@@ -284,14 +284,31 @@ describe("SeoReport score scope", () => {
     const summary = screen.getByText("Page-level AEO and AI observations (1 observation group)");
     fireEvent.click(summary);
 
-    expect(aiSection.getByText(/2 headings matched this question-format pattern in initial HTML/)).toBeTruthy();
+    expect(aiSection.getByText(/2 headings matched a question wording pattern/)).toBeTruthy();
     expect(aiSection.getByRole("link", { name: "/services/" }).getAttribute("href")).toBe(pageUrl);
-    expect(aiSection.getByText(/These unscored notes describe patterns in the page code/)).toBeTruthy();
+    expect(aiSection.getByText(/These notes describe patterns found in the page code/)).toBeTruthy();
     expect(aiSection.getByText(/Discuss the listed pages with your web provider/)).toBeTruthy();
     expect(aiSection.queryByText("Root-only robots policy detail.")).toBeNull();
     expect(aiSection.queryByText("Site-level crawler policy detail.")).toBeNull();
     expect(aiSection.queryByText("Site-level llms.txt detail.")).toBeNull();
     expect(aiSection.queryByText(/All AI observations passed|No AEO issues/i)).toBeNull();
+  });
+
+  it("withholds the unverified link heuristic from current report presentation while preserving the saved input", () => {
+    const legacy = { label: "Authoritative citations", status: "pass" as const, scored: false, detail: "0 external links matched this check's list of government, court, or legal organization domains. This list does not assess source quality or completeness." };
+    const input = {
+      ...result,
+      categories: [{ name: "AI Visibility", score: 0, maxScore: 0, items: [legacy, { label: "Context observation", status: "pass" as const, scored: false, detail: "Context retained." }] }],
+      scoring: { unscoredLabels: ["Authoritative citations", "Context observation"] },
+    };
+    render(<SeoReport result={input} onReset={vi.fn()} hideCta />);
+    fireEvent.click(screen.getByText("Check categories"));
+    expect(screen.queryByText("Authoritative citations")).toBeNull();
+    expect(screen.queryByText(/external links matched this check/)).toBeNull();
+    expect(screen.getByText(/0 applicable page checks.*1 unscored or not assessed/)).toBeTruthy();
+    expect(input.categories[0].items).toContain(legacy);
+    fireEvent.click(screen.getByText("Score method and coverage"));
+    expect(screen.getByText("Unscored observations: Context observation.")).toBeTruthy();
   });
 
   it("does not present missing page observations as an AEO pass", () => {
