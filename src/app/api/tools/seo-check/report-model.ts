@@ -164,6 +164,7 @@ export interface SeoReportModel {
   priorityActions: ReportAction[];
   strengths: string[];
   aiObservations: string[];
+  aiPageObservations: Array<{ label: string; detail: string; pageUrls: string[] }>;
   crawlerPolicies: Array<{
     token: string;
     name: string;
@@ -188,6 +189,37 @@ export interface SeoReportModel {
     totalCategoryCount: number;
   };
   cta: { heading: string; body: string; linkLabel: string; href: string };
+}
+
+
+function describeAeoPageObservation(label: string, detail: string): { label: string; detail: string } {
+  const exact: Record<string, { label: string; detail: string }> = {
+    "A named business entity was observed in structured data.": { label: "Firm information", detail: "A business name was found in the page data read by this check. Its accuracy was not verified." },
+    "A meta description was observed; no named entity was found in the inspected JSON-LD. Other formats and rendered markup were not assessed.": { label: "Firm information", detail: "A short page description was found, but no business name was found in the structured data inspected. Other formats and visible content were not checked." },
+    "No named entity was found in the inspected JSON-LD. Other formats and rendered markup were not assessed.": { label: "Firm information", detail: "No business name was found in the structured data inspected. Other formats and visible content were not checked." },
+    "Attorney or Person schema was observed in the inspected HTML.": { label: "Person information", detail: "The page code contains a person or lawyer data type. No identity or qualifications were verified." },
+    "No Attorney or Person JSON-LD type was observed. Its absence is optional and does not establish whether lawyer details appear elsewhere.": { label: "Person information", detail: "No person or lawyer data type was found in the inspected page code. This does not mean the page lacks lawyer information." },
+    "An author meta tag or Person/Attorney JSON-LD was observed. Identity, qualifications, and other page content were not assessed.": { label: "Author information", detail: "An author field or person data type was found in the page code. Authorship and credentials were not verified." },
+    "No author meta tag or Person/Attorney JSON-LD was observed. Other formats and content were not assessed.": { label: "Author information", detail: "No author field or person data type was found in the page code inspected. Other formats and content were not checked." },
+  };
+  const expectedLabels: Record<string, string> = {
+    "Entity description": "Firm information",
+    "Attorney / person schema": "Person information",
+    "Author / reviewer signals": "Author information",
+  };
+  const known = exact[detail];
+  if (known && expectedLabels[label] === known.label) return known;
+  let match: RegExpMatchArray | null;
+  if (label === "Question-format headings" && (match = detail.match(/^(\d+) headings matched this question-format pattern in initial HTML\. This is a formatting observation; no question format is required by this check\.$/))) {
+    return { label: "Question headings", detail: match[1] + (match[1] === "1" ? " heading looks like a question" : " headings look like questions") + " to this check. That format is optional. The scan does not judge how well the page answers client questions." };
+  }
+  if (label === "Direct-answer sentences" && (match = detail.match(/^(\d+) sentences matched a broad wording pattern in initial HTML\. This is not an assessment of answer quality or AI visibility\.$/))) {
+    return { label: "Answer wording", detail: match[1] + (match[1] === "1" ? " sentence matched" : " sentences matched") + " a broad wording pattern. The scan did not assess whether they provide useful answers." };
+  }
+  if (label === "Semantic HTML structure" && (match = detail.match(/^(\d+) of this check's listed semantic element types were observed in initial HTML\. This structural observation is not a measure of AI visibility\.$/))) {
+    return { label: "Page structure", detail: "The page code includes " + match[1] + " of the structure types this check looks for. This does not measure how clearly the content reads." };
+  }
+  return { label, detail };
 }
 
 const METHOD_NOTE = "This saved scan used an earlier scoring method. Run a new scan for the current report. Scores from different methods should not be compared.";
@@ -453,6 +485,39 @@ export function buildSeoReportModel(input: ReportInput): SeoReportModel {
   const aiObservations: string[] = crawlerPolicies.length
     ? ["The list below describes crawler purposes, robots.txt rules and documented behavior. A rule does not prove access or use."]
     : ["This scan did not assess provider-specific crawler policy or actual AI service access."];
+  const pageLevelAiLabels = new Set([
+    "Entity description",
+    "Attorney / person schema",
+    "Question-format headings",
+    "Direct-answer sentences",
+    "Author / reviewer signals",
+    "Semantic HTML structure",
+  ]);
+  const pageObservationGroups = new Map<string, { label: string; detail: string; pageUrls: string[] }>();
+  if (version === 5) {
+    for (const page of pages) {
+      for (const category of page.categories.filter((item) => item.name === "AI Visibility")) {
+        for (const item of category.items) {
+          if (
+            item.scored !== false ||
+            !pageLevelAiLabels.has(item.label) ||
+            item.applicability === "unknown" ||
+            item.applicability === "not-applicable" ||
+            item.evidence?.applicability === "unknown" ||
+            item.evidence?.applicability === "not-applicable" ||
+            item.evidence?.coverage === "not-assessed" ||
+            item.disposition === "pending-review"
+          ) continue;
+          const label = item.label;
+          const key = JSON.stringify([label, item.detail]);
+          const group = pageObservationGroups.get(key) ?? { ...describeAeoPageObservation(label, item.detail), pageUrls: [] };
+          if (!group.pageUrls.includes(page.url)) group.pageUrls.push(page.url);
+          pageObservationGroups.set(key, group);
+        }
+      }
+    }
+  }
+  const aiPageObservations = [...pageObservationGroups.values()];
 
   const scoreCategories = input.categories ?? [];
   const contributingCategories = scoreCategories.filter((category) =>
@@ -510,6 +575,7 @@ export function buildSeoReportModel(input: ReportInput): SeoReportModel {
     priorityActions,
     strengths: strengths.slice(0, 3),
     aiObservations,
+    aiPageObservations,
     crawlerPolicies,
     limitations,
     findingGroups: reportIssues.map((issue) => ({ category: issue.category, title: issue.title, detail: issue.detail, affectedUrls: issue.affectedUrls, status: issue.status })),
