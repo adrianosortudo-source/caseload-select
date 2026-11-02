@@ -284,7 +284,7 @@ describe("SeoReport score scope", () => {
     const summary = screen.getByText("Page-level AEO and AI observations (1 observation group)");
     fireEvent.click(summary);
 
-    expect(aiSection.getByText(/2 headings matched a question wording pattern/)).toBeTruthy();
+    expect(aiSection.getByText(/2 headings look like questions/)).toBeTruthy();
     expect(aiSection.getByRole("link", { name: "/services/" }).getAttribute("href")).toBe(pageUrl);
     expect(aiSection.getByText(/These notes describe patterns found in the page code/)).toBeTruthy();
     expect(aiSection.getByText(/Discuss the listed pages with your web provider/)).toBeTruthy();
