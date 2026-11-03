@@ -260,7 +260,7 @@ export default function SeoCheckTool({
           <p className="seo-input-hint">
             {isOperator
               ? "Internal diagnostic. Runs a bounded crawl and reviews the available website categories per page. The score reflects five limited check types, not a whole-site SEO grade. If we cannot tell whether a page tells Google not to index it, that check is not scored. The report includes a prospecting summary and outreach angles for internal use."
-              : "Enter any law firm website. This scan checks public SEO, AI crawler settings, structured data, local details, and technical delivery. The report introduces what is working, where to focus and the next decision for the firm. It does not assign an overall SEO grade or verify rankings or AI citations."}
+              : "Enter any public law firm website. Review what is working, where to focus and what to discuss next, with supporting SEO and AI observations. No overall SEO or AI grade is assigned."}
           </p>
         </div>
       )}
@@ -345,8 +345,7 @@ export default function SeoCheckTool({
             <div className="seo-email-form">
               <h3 className="seo-email-title">Enter your email to view the report</h3>
               <p className="seo-email-sub">
-                See the pages checked, what the scan observed, why a finding may matter, and general next steps.
-                The overview introduces what is working, where to focus and the next step for your firm. Supporting evidence is included below. AI observations do not verify citations or recommendations.
+                See what is working, where to focus and the next decision for your firm. The report includes page evidence and separate AI observations.
               </p>
               <div className="seo-email-row">
                 <input
@@ -468,6 +467,7 @@ export default function SeoCheckTool({
           margin: var(--sp-2) 0 0;
         }
         .seo-input-hint {
+          text-wrap: pretty;
           font-size: 12.5px;
           color: var(--text-muted);
           margin: var(--sp-3) 0 0;
@@ -713,6 +713,7 @@ export default function SeoCheckTool({
           margin: 0 0 var(--sp-2);
         }
         .seo-email-sub {
+          text-wrap: pretty;
           font-size: 13.5px;
           color: var(--text-muted);
           line-height: 1.55;

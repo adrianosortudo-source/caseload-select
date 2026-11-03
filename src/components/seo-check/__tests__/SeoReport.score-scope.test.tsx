@@ -38,8 +38,8 @@ const result: SeoCheckResult = {
 describe("SeoReport score scope", () => {
   it("states the evidence-led public report scope", () => {
     render(<SeoCheckTool />);
-    expect(screen.getByText(/report introduces what is working, where to focus and the next decision for the firm/i)).toBeTruthy();
-    expect(screen.getByText(/does not assign an overall SEO grade/i)).toBeTruthy();
+    expect(screen.getByText(/Review what is working, where to focus and what to discuss next/i)).toBeTruthy();
+    expect(screen.getByText(/No overall SEO or AI grade is assigned/i)).toBeTruthy();
   });
 
   it("uses the same plain-language Google indexability limit in operator mode", () => {
@@ -172,7 +172,7 @@ describe("SeoReport score scope", () => {
 
     expect(categoriesIntro?.textContent).toContain("The report uses five core check types");
     expect(categoriesIntro?.textContent).toContain("It does not assign an overall SEO or AI grade.");
-    expect(screen.getByText(/Performance observations, when available.*do not measure the experience of real visitors/i)).toBeTruthy();
+    expect(screen.getByText(/Performance notes describe this scan.*rather than the experience of real visitors/i)).toBeTruthy();
     expect(container.textContent).not.toMatch(/v4 score/i);
   });
 
@@ -336,7 +336,7 @@ describe("SeoReport score scope", () => {
     expect(screen.queryByText(/external links matched this check/)).toBeNull();
     expect(screen.getByText(/0 applicable page checks.*1 unscored or not assessed/)).toBeTruthy();
     expect(input.categories[0].items).toContain(legacy);
-    fireEvent.click(screen.getByText("Score method and coverage"));
+    fireEvent.click(screen.getByText("Checks and coverage"));
     expect(screen.getByText("Unscored observations: Context observation.")).toBeTruthy();
   });
 

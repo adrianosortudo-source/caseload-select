@@ -95,8 +95,8 @@ export default async function SeoCheckPage({ searchParams }: PageProps) {
             <div className="seo-cat-preview">
               <div className="seo-cat-icon">2</div>
               <h3 className="seo-cat-preview-name">Schema &amp; Structured Data</h3>
-              <p className="seo-cat-preview-desc">
-                The scan may note structured data it observes. Optional markup is not a requirement and does not guarantee a search result feature.
+              <p className="seo-cat-preview-desc seo-review-copy">
+                The scan records information found in page code. Optional markup does not guarantee a special search result.
               </p>
             </div>
             <div className="seo-cat-preview">
@@ -116,15 +116,15 @@ export default async function SeoCheckPage({ searchParams }: PageProps) {
             <div className="seo-cat-preview">
               <div className="seo-cat-icon">5</div>
               <h3 className="seo-cat-preview-name">Technical &amp; Security</h3>
-              <p className="seo-cat-preview-desc">
-                Secure connections are one of the five core check types. Other security observations may be shown separately for review.
+              <p className="seo-cat-preview-desc seo-review-copy">
+                The scan notes secure connections and other delivery settings that may deserve a closer review.
               </p>
             </div>
             <div className="seo-cat-preview">
               <div className="seo-cat-icon">6</div>
               <h3 className="seo-cat-preview-name">Performance</h3>
-              <p className="seo-cat-preview-desc">
-                Performance observations, when available, come from this scan’s own retrieval. They do not measure the experience of real visitors or contribute to an overall grade.
+              <p className="seo-cat-preview-desc seo-review-copy">
+                Performance notes describe this scan’s retrieval, rather than the experience of real visitors.
               </p>
             </div>
             <div className="seo-cat-preview">
@@ -294,6 +294,7 @@ export default async function SeoCheckPage({ searchParams }: PageProps) {
           color: var(--navy);
           margin: 0 0 var(--sp-2);
         }
+        .seo-review-copy { text-wrap: pretty; }
         .seo-cat-preview-desc {
           font-size: 12.5px;
           color: var(--text-muted);
