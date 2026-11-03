@@ -553,3 +553,61 @@ describe("getDisplayedCategoryWeights", () => {
     expect(getDisplayedCategoryWeights(categories, weights, 4)).toEqual([]);
   });
 });
+
+
+describe("evidence-based lawyer overview", () => {
+  it("puts six exclusions in context despite a stored score of 98 without mutating the result", () => {
+    const input: ReportInput = { ...base, overallScore: 98, pagesScanned: 25, pages: Array.from({length:25}, (_,i)=>({
+      ...base.pages![0], url:`https://example.com/page-${i}/`, pageType:i===0?"homepage":"practice",
+      indexability:{...base.pages![0].indexability,googleDirectives:{noindex:i<6?"observed":"not-observed",nofollow:"not-observed",observations:[]}},
+    })) };
+    const before=JSON.stringify(input);
+    const model=buildSeoReportModel(input);
+    expect(model.overview?.working).toContain("All 25 checked pages loaded over secure connections");
+    expect(model.overview?.attention).toContain("6 checked pages ask Google to leave them out of search");
+    expect(model.overview?.attention).toContain("Confirm whether these pages should help prospective clients");
+    expect(model.overview?.nextStep).toContain("CaseLoad Select");
+    expect(model.overview?.nextStep).toContain("which changes are warranted");
+    expect(model.overview?.aiNote).toContain("does not show whether AI services mention your firm");
+    expect(model.scoreExplanation.score).toBe(98);
+    expect(JSON.stringify(input)).toBe(before);
+  });
+  it("does not present unknown Google settings as an all-clear",()=>{
+    const page={...base.pages![0],indexability:{...base.pages![0].indexability,googleDirectives:{noindex:"unknown" as const,nofollow:"not-observed" as const,observations:[]}}};
+    const model=buildSeoReportModel({...base,pages:[page],pagesScanned:1});
+    expect(model.overview?.attention).toContain("could not determine some search settings on 1 checked page");
+    expect(model.overview?.attention).not.toContain("no priority search-setting issue");
+  });
+  it("keeps utility exclusions distinct from a client-facing visibility problem",()=>{
+    const page={...base.pages![0],url:"https://example.com/privacy/",pageType:"policy",indexability:{...base.pages![0].indexability,googleDirectives:{noindex:"observed" as const,nofollow:"not-observed" as const,observations:[]}}};
+    const model=buildSeoReportModel({...base,pages:[page],pagesScanned:1});
+    expect(model.overview?.attention).toContain("classified as utility content");
+    expect(model.overview?.attention).not.toContain("help prospective clients find");
+  });
+  it("does not invent strengths when page evidence is absent",()=>{
+    const model=buildSeoReportModel({...base,pages:[],pagesScanned:0});
+    expect(model.overview?.working).toContain("not return enough page evidence");
+    expect(model.overview?.working).not.toContain("loaded over secure");
+    expect(model.overview?.attention).toContain("Confirm that the website can be reviewed");
+  });
+  it("does not claim a successful enquiry route from an error response",()=>{
+    const model=buildSeoReportModel({...base,pages:[{...base.pages![0],httpStatus:404}],pagesScanned:1});
+    expect(model.overview?.working).not.toContain("Contact options");
+    expect(model.overview?.working).not.toContain("loaded over secure");
+    expect(model.overview?.attention).toContain("could not be reviewed as normal working pages");
+  });
+  it("describes crawl restrictions without claiming actual Google indexing",()=>{
+    const model=buildSeoReportModel({...base,pages:[{...base.pages![0],robotsAccess:{google:false,bing:true}}],pagesScanned:1});
+    expect(model.overview?.attention).toContain("may limit Google's access");
+    expect(model.overview?.attention).not.toMatch(/not indexed|cannot be indexed/);
+  });
+  it("bounds a clean sample rather than certifying overall website health",()=>{
+    const model=buildSeoReportModel(base);
+    expect(model.overview?.attention).toContain("These checks found no priority search-setting issue");
+    expect(model.overview?.attention).toContain("do not show whether the right people find the firm");
+  });
+  it("preserves historical methods instead of rewriting their interpretation",()=>{
+    expect(buildSeoReportModel({...base,methodologyVersion:4}).overview).toBeNull();
+    expect(buildSeoReportModel({...base,methodologyVersion:6}).overview).toBeNull();
+  });
+});

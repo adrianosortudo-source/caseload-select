@@ -61,7 +61,7 @@ export default async function SeoCheckPage({ searchParams }: PageProps) {
             </div>
             <div className="seo-hero-stat">
               <div className="seo-hero-stat-num">5</div>
-              <div className="seo-hero-stat-label">Score check types</div>
+              <div className="seo-hero-stat-label">Core check types</div>
             </div>
             <div className="seo-hero-stat">
               <div className="seo-hero-stat-num">0</div>
@@ -81,7 +81,7 @@ export default async function SeoCheckPage({ searchParams }: PageProps) {
               Areas for review<span className="ts" />
             </h2>
             <p className="seo-categories-intro">
-              The v5 score uses five directly observed check types across three of the report’s ten categories: page title, HTTP status, indexability, robots.txt crawl access and HTTPS. Other observations are shown for context and do not add points. If we cannot tell whether a page tells Google not to index it, that check is not scored.
+              The report uses five core check types: page titles, successful page responses, Google search instructions, crawl rules and secure connections. It introduces strengths, priorities and next steps, with other observations available for context. It does not assign an overall SEO or AI grade.
             </p>
           </div>
           <div className="seo-categories-grid">
@@ -89,14 +89,14 @@ export default async function SeoCheckPage({ searchParams }: PageProps) {
               <div className="seo-cat-icon">1</div>
               <h3 className="seo-cat-preview-name">On-Page SEO</h3>
               <p className="seo-cat-preview-desc">
-                The limited score checks whether an inspected page has a non-empty title. Other on-page observations may help frame a review but do not all add points.
+                The core title check records whether an inspected page has a title. It does not judge the quality of the title or the page content.
               </p>
             </div>
             <div className="seo-cat-preview">
               <div className="seo-cat-icon">2</div>
               <h3 className="seo-cat-preview-name">Schema &amp; Structured Data</h3>
               <p className="seo-cat-preview-desc">
-                The scan may note structured data it observes. Optional markup is not a score requirement and does not guarantee a search result feature.
+                The scan may note structured data it observes. Optional markup is not a requirement and does not guarantee a search result feature.
               </p>
             </div>
             <div className="seo-cat-preview">
@@ -117,14 +117,14 @@ export default async function SeoCheckPage({ searchParams }: PageProps) {
               <div className="seo-cat-icon">5</div>
               <h3 className="seo-cat-preview-name">Technical &amp; Security</h3>
               <p className="seo-cat-preview-desc">
-                HTTPS is one of the five scored check types. Other security observations may be shown separately and do not add points.
+                Secure connections are one of the five core check types. Other security observations may be shown separately for review.
               </p>
             </div>
             <div className="seo-cat-preview">
               <div className="seo-cat-icon">6</div>
               <h3 className="seo-cat-preview-name">Performance</h3>
               <p className="seo-cat-preview-desc">
-                Performance observations, when available, come from this scan’s own retrieval. They are not real-user Core Web Vitals and do not contribute to the v5 score.
+                Performance observations, when available, come from this scan’s own retrieval. They do not measure the experience of real visitors or contribute to an overall grade.
               </p>
             </div>
             <div className="seo-cat-preview">

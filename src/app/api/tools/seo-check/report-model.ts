@@ -139,6 +139,13 @@ export interface ReportAction {
   technicalEvidence: string[];
 }
 
+export interface ReportOverview {
+  working: string;
+  attention: string;
+  nextStep: string;
+  aiNote: string;
+}
+
 export interface SeoReportModel {
   methodology: { version: number; label: "Website checks" | "Historical score" | "Unsupported method" | "Method not recorded"; notice: string | null };
   coverage: {
@@ -150,6 +157,7 @@ export interface SeoReportModel {
     pageSetHashBasis: "normalized-url-identities" | null;
   };
   headline: { domain: string; interpretation: string };
+  overview: ReportOverview | null;
   accessSummary: {
     checkedPageCount: number;
     noindexCount: number;
@@ -389,6 +397,63 @@ function makeAction(family: Family, issues: ReportIssue[], pages: ReportPage[], 
   };
 }
 
+function buildCurrentOverview(pages: ReportPage[], actions: ReportAction[], coverage: ReportInput["coverage"]): ReportOverview {
+  const nextStep = "Start with the services and types of matters you want the website to support. CaseLoad Select can review these findings against those priorities, confirm which changes are warranted and plan the work with you.";
+  const aiNote = "This scan does not show whether AI services mention your firm. The AI observations below are starting points for a closer content review.";
+  if (!pages.length) return {
+    working: "The scan did not return enough page evidence to identify reliable strengths.",
+    attention: "A useful review needs accessible page evidence. Confirm that the website can be reviewed before choosing improvements.",
+    nextStep, aiNote,
+  };
+  const workingPages = pages.filter(page => page.httpStatus != null && page.httpStatus >= 200 && page.httpStatus < 300);
+  const securePages = workingPages.filter(page => page.url.startsWith("https://"));
+  const hasContact = workingPages.some(page => page.lawFirm?.phoneVisible || page.lawFirm?.contactFormPresent || page.lawFirm?.consultationCta);
+  const hasServices = workingPages.some(page => page.lawFirm?.practiceAreaIntent);
+  const positives: string[] = [];
+  if (securePages.length === pages.length) positives.push(pages.length === 1
+    ? "The checked page loaded over a secure connection."
+    : `All ${pages.length} checked pages loaded over secure connections.`);
+  else if (securePages.length) positives.push(`${securePages.length} checked ${securePages.length === 1 ? "page loaded" : "pages loaded"} over secure connections.`);
+  else if (workingPages.length) positives.push(`${workingPages.length} checked ${workingPages.length === 1 ? "page returned" : "pages returned"} a successful response.`);
+  if (hasContact && hasServices) positives.push("Contact options and service information were present in the sample. These are useful basics for helping people understand the firm and get in touch.");
+  else if (hasContact) positives.push("Contact options were present in the sample.");
+  else if (hasServices) positives.push("Service information was present in the sample.");
+  const working = positives.length ? positives.join(" ") : "The scan did not establish a reliable access or contact strength from the checked pages.";
+  const excluded = pages.filter(page => page.indexability?.googleDirectives?.noindex === "observed");
+  const priorityExcluded = excluded.filter(page => !utilityPage(page));
+  const restricted = pages.filter(page => page.robotsAccess?.google === false && !utilityPage(page));
+  const uncertain = pages.filter(page => !page.indexability?.googleDirectives || page.indexability.googleDirectives.noindex === "unknown" || page.robotsAccess?.google == null);
+  const unsuccessful = pages.length - workingPages.length;
+  let attention: string;
+  if (priorityExcluded.length) {
+    const count = priorityExcluded.length;
+    attention = `${count} checked ${count === 1 ? "page asks" : "pages ask"} Google to leave ${count === 1 ? "it" : "them"} out of search. Confirm whether ${count === 1 ? "this page should" : "these pages should"} help prospective clients find your firm before changing the settings.`;
+  } else if (restricted.length) {
+    attention = `Crawl rules on ${restricted.length} checked ${restricted.length === 1 ? "page may" : "pages may"} limit Google's access. Confirm whether that matches the role those pages should play for prospective clients.`;
+  } else if (unsuccessful || coverage?.failedPages) {
+    attention = "Some pages could not be reviewed as normal working pages. Confirm that the relevant addresses lead to the pages you expect before planning content work.";
+  } else if (uncertain.length) {
+    attention = `The scan could not determine some search settings on ${uncertain.length} checked ${uncertain.length === 1 ? "page" : "pages"}. Review those gaps before drawing conclusions about search visibility.`;
+  } else if (excluded.length) {
+    attention = "Search exclusions were observed on pages classified as utility content. Confirm their intended role before treating them as a visibility problem.";
+  } else if (actions.length) {
+    const directions: Record<string, string> = {
+      "connection": "Review secure access to the pages that support enquiries before asking prospective clients to share information.",
+      "contact-route": "Review how a prospective client is expected to contact the firm from its priority pages. A clear next step should follow the service information.",
+      "service-information": "Review whether priority pages make the firm's services and intended clients clear. Start with the matters you want the website to support.",
+      "page-labels": "Review whether page names and headings make the purpose of your priority pages clear to prospective clients.",
+      "business-information": "Confirm that the firm's name and contact details are presented consistently on its priority pages.",
+      "supporting-content": "Review whether key pages help a prospective client understand when the firm can help and what the next step involves.",
+      "discovery": "Review how priority pages are connected and whether visitors reach the intended page for each service.",
+      "browser-experience": "Review the key enquiry journeys on real devices before choosing technical changes.",
+    };
+    attention = directions[actions[0].family] ?? "The findings identify pages for a closer review. Focus first on those intended to attract the matters your firm wants.";
+  } else {
+    attention = "These checks found no priority search-setting issue. They do not show whether the right people find the firm or choose to contact it.";
+  }
+  return { working, attention, nextStep, aiNote };
+}
+
 export function buildSeoReportModel(input: ReportInput): SeoReportModel {
   const pages = input.pages ?? [];
   const issues = input.issues ?? [];
@@ -561,6 +626,7 @@ export function buildSeoReportModel(input: ReportInput): SeoReportModel {
       domain: input.domain,
       interpretation: priorityActions[0]?.title ?? "No priority action was identified by these checks. This limited scan does not confirm that the whole website is free of problems.",
     },
+    overview: current ? buildCurrentOverview(pages, priorityActions, input.coverage) : null,
     accessSummary: {
       checkedPageCount: pages.length,
       noindexCount: noindexPages.length,
@@ -588,6 +654,6 @@ export function buildSeoReportModel(input: ReportInput): SeoReportModel {
       assessedCategoryCount,
       totalCategoryCount,
     },
-    cta: { heading: "Next steps", body: "We can help interpret these findings, identify what matters for your cases, and decide what to fix first.", linkLabel: "Book a conversation", href: CTA_HREF },
+    cta: { heading: "Next steps", body: current ? "Bring these findings to a conversation about your priorities. CaseLoad Select can scope the review, prioritise the work and coordinate implementation." : "We can help interpret these findings, identify what matters for your cases, and decide what to fix first.", linkLabel: "Book a conversation", href: CTA_HREF },
   };
 }

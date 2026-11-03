@@ -36,10 +36,10 @@ const result: SeoCheckResult = {
 };
 
 describe("SeoReport score scope", () => {
-  it("states the v5 limited score and when an indexability check is unscored", () => {
+  it("states the evidence-led public report scope", () => {
     render(<SeoCheckTool />);
-    expect(screen.getByText(/score covers five limited check types, not the whole site/i)).toBeTruthy();
-    expect(screen.getByText(/If we cannot tell whether a page tells Google not to index it, that check is not scored/i)).toBeTruthy();
+    expect(screen.getByText(/report introduces what is working, where to focus and the next decision for the firm/i)).toBeTruthy();
+    expect(screen.getByText(/does not assign an overall SEO grade/i)).toBeTruthy();
   });
 
   it("uses the same plain-language Google indexability limit in operator mode", () => {
@@ -61,7 +61,7 @@ describe("SeoReport score scope", () => {
     expect(pendingFetch).toHaveBeenCalledWith("/api/tools/seo-check", expect.objectContaining({ method: "POST" }));
   });
 
-  it("places a quantified Google noindex finding before the limited numeric score", () => {
+  it("introduces a lawyer overview before evidence and does not publish stored numeric grades", () => {
     const priorityPage: NonNullable<SeoCheckResult["pages"]>[number] = {
       url: "https://example.com/employment/",
       title: "Employment law",
@@ -92,11 +92,19 @@ describe("SeoReport score scope", () => {
     expect(screen.getByRole("heading", { name: "Supporting evidence" })).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Next steps" })).toBeTruthy();
 
-    expect(within(screen.getByRole("region", { name: "Priority search finding" })).getByText("1 of 1 checked page tells Google not to include it in search. Google must load the page first.")).toBeTruthy();
-    const priority = container.querySelector('[data-ui-component-content="priority-context"]');
-    const score = container.querySelector('[data-ui-component-content="score-disclosure"]');
-    if (!priority || !score) throw new Error("Priority or score section is missing.");
-    expect(Boolean(priority.compareDocumentPosition(score) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
+    const overview=screen.getByRole("region",{name:"What this means"});
+    expect(within(overview).getByText(/1 checked page asks Google to leave it out of search/)).toBeTruthy();
+    expect(within(overview).getByRole("heading",{name:"What's working"})).toBeTruthy();
+    expect(within(overview).getByRole("heading",{name:"Where to focus"})).toBeTruthy();
+    expect(within(overview).getByRole("heading",{name:"Your next step"})).toBeTruthy();
+    expect(screen.queryByRole("region",{name:"Website checks score"})).toBeNull();
+    expect(container.querySelector(".cls-priority-context")).toBeNull();
+    expect(container.querySelector("style")?.textContent).not.toMatch(/border-left/);
+    expect(container.textContent).not.toContain("98/100");
+    const evidence=screen.getByRole("region",{name:"Priority findings"});
+    expect(Boolean(overview.compareDocumentPosition(evidence)&Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
+    fireEvent.click(screen.getByText("Pages inspected (1)"));
+    expect(container.textContent).not.toContain("92/100");
   });
 
   it("shows and copies the concise AI observation in the visible AI section", async () => {
@@ -157,32 +165,53 @@ describe("SeoReport score scope", () => {
     expect(writeText.mock.calls[0][0]).toContain("The scan is incomplete.");
   });
 
-  it("describes v5 score scope and performance accurately on the public landing page", async () => {
+  it("describes the evidence-led report and performance scope on the public landing page", async () => {
     const page = await SeoCheckPage({ searchParams: Promise.resolve({ embed: "1" }) });
     const { container } = render(page);
     const categoriesIntro = container.querySelector(".seo-categories-intro");
 
-    expect(categoriesIntro?.textContent).toContain("The v5 score uses five directly observed check types");
-    expect(categoriesIntro?.textContent).toContain("If we cannot tell whether a page tells Google not to index it, that check is not scored.");
-    expect(screen.getByText(/Performance observations, when available.*do not contribute to the v5 score/i)).toBeTruthy();
+    expect(categoriesIntro?.textContent).toContain("The report uses five core check types");
+    expect(categoriesIntro?.textContent).toContain("It does not assign an overall SEO or AI grade.");
+    expect(screen.getByText(/Performance observations, when available.*do not measure the experience of real visitors/i)).toBeTruthy();
     expect(container.textContent).not.toMatch(/v4 score/i);
   });
 
-  it("shows the scored coverage beside the score and includes it in the copied summary", async () => {
-    const writeText = vi.fn().mockResolvedValue(undefined);
-    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
+  it("copies the strategic overview without publishing the stored current score", async()=>{
+    const writeText=vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator,"clipboard",{configurable:true,value:{writeText}});
+    const {container}=render(<SeoReport result={result} onReset={vi.fn()} hideCta/>);
+    expect(screen.getByRole("region",{name:"What this means"})).toBeTruthy();
+    expect(container.textContent).not.toContain("98/100");
+    fireEvent.click(screen.getByRole("button",{name:"Copy report summary"}));
+    await waitFor(()=>expect(writeText).toHaveBeenCalled());
+    const copy=writeText.mock.calls[0][0];
+    expect(copy).toContain("What's working:");
+    expect(copy).toContain("Where to focus:");
+    expect(copy).toContain("Your next step:");
+    expect(copy).toContain("CaseLoad Select");
+    expect(copy).not.toContain("98/100");
+    expect(result.overallScore).toBe(98);
+  });
 
-    render(<SeoReport result={result} onReset={vi.fn()} hideCta />);
+  it("does not tease a current grade at the email step and permits a skip without another request",async()=>{
+    const fetchMock=vi.fn().mockResolvedValue({ok:true,json:async()=>result});
+    vi.stubGlobal("fetch",fetchMock);
+    render(<SeoCheckTool/>);
+    fireEvent.change(screen.getByLabelText("Public website URL"),{target:{value:"example.com"}});
+    fireEvent.click(screen.getByRole("button",{name:"Check my site"}));
+    expect(await screen.findByRole("button",{name:"Skip, show me the report"},{timeout:3000})).toBeTruthy();
+    expect(screen.queryByText("98/100")).toBeNull();
+    expect((screen.getByPlaceholderText("you@yourfirm.ca") as HTMLInputElement).value).toBe("");
+    fireEvent.click(screen.getByRole("button",{name:"Skip, show me the report"}));
+    expect(screen.getByRole("region",{name:"What this means"})).toBeTruthy();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
 
-    const scopeLabel = "Limited checks: 5 check types across 3 of 10 categories";
-    const scoreNote = "Not a whole-site grade or ranking prediction.";
-    expect(screen.getByText(scopeLabel)).toBeTruthy();
-    expect(within(screen.getByLabelText("Website checks score")).getByText(scoreNote)).toBeTruthy();
-
-    fireEvent.click(screen.getByRole("button", { name: "Copy report summary" }));
-    await waitFor(() => expect(writeText).toHaveBeenCalled());
-    expect(writeText.mock.calls[0][0]).toContain(scopeLabel + ": 98/100.");
-    expect(writeText.mock.calls[0][0]).toContain(scoreNote);
+  it("keeps recorded historical scores explicitly historical",()=>{
+    render(<SeoReport result={{...result,methodologyVersion:4,overallScore:81}} onReset={vi.fn()} hideCta/>);
+    expect(screen.getByRole("region",{name:"Website checks score"})).toBeTruthy();
+    expect(screen.getByText("81/100")).toBeTruthy();
+    expect(screen.queryByRole("region",{name:"What this means"})).toBeNull();
   });
 
   it("labels category totals as unscored or not assessed", () => {

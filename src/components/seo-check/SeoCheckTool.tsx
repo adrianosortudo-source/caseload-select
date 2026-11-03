@@ -37,6 +37,7 @@ export default function SeoCheckTool({
   const [targetLocation, setTargetLocation] = useState("");
   const [error, setError] = useState("");
   const [result, setResult] = useState<SeoCheckResult | null>(null);
+  const resultPageCount = result?.pagesScanned ?? result?.pages?.length ?? 0;
   const [email, setEmail] = useState("");
   const [emailError, setEmailError] = useState("");
 
@@ -259,7 +260,7 @@ export default function SeoCheckTool({
           <p className="seo-input-hint">
             {isOperator
               ? "Internal diagnostic. Runs a bounded crawl and reviews the available website categories per page. The score reflects five limited check types, not a whole-site SEO grade. If we cannot tell whether a page tells Google not to index it, that check is not scored. The report includes a prospecting summary and outreach angles for internal use."
-              : "Enter any law firm website. This scan checks public SEO, AI crawler settings, structured data, local details, and technical delivery. Its score covers five limited check types, not the whole site. If we cannot tell whether a page tells Google not to index it, that check is not scored. Use the findings as a starting point; the scan does not verify rankings or AI citations."}
+              : "Enter any law firm website. This scan checks public SEO, AI crawler settings, structured data, local details, and technical delivery. The report introduces what is working, where to focus and the next decision for the firm. It does not assign an overall SEO grade or verify rankings or AI citations."}
           </p>
         </div>
       )}
@@ -319,7 +320,7 @@ export default function SeoCheckTool({
         <div className="seo-email-gate">
           <div className="seo-email-card">
             <div className="seo-email-preview">
-              <div className="seo-email-grade-peek">
+              {result.methodologyVersion===5?<p className="seo-email-preview-text">{resultPageCount} page{resultPageCount===1?"":"s"} checked</p>:<div className="seo-email-grade-peek">
                 <span
                   className="seo-email-grade-label"
                   style={{
@@ -336,7 +337,7 @@ export default function SeoCheckTool({
                   Limited checks
                 </span>
                 <span className="seo-email-grade-score">{result.overallScore === null ? "Not assessed" : `${result.overallScore}/100`}</span>
-              </div>
+              </div>}
               <p className="seo-email-preview-text">
                 Your report for <strong>{result.domain}</strong> is ready.
               </p>
@@ -345,7 +346,7 @@ export default function SeoCheckTool({
               <h3 className="seo-email-title">Enter your email to view the report</h3>
               <p className="seo-email-sub">
                 See the pages checked, what the scan observed, why a finding may matter, and general next steps.
-                The score reflects only checks assessed in this scan; it is not a whole-site SEO grade. AI crawler observations cannot verify access or citations.
+                The overview introduces what is working, where to focus and the next step for your firm. Supporting evidence is included below. AI observations do not verify citations or recommendations.
               </p>
               <div className="seo-email-row">
                 <input
