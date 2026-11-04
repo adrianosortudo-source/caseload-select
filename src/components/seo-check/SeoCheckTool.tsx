@@ -467,7 +467,7 @@ export default function SeoCheckTool({
           margin: var(--sp-2) 0 0;
         }
         .seo-input-hint {
-          text-wrap: pretty;
+          text-wrap: wrap;
           font-size: 12.5px;
           color: var(--text-muted);
           margin: var(--sp-3) 0 0;
@@ -766,6 +766,9 @@ export default function SeoCheckTool({
         }
         .seo-skip-link:hover { color: var(--navy); }
 
+        @media (max-width: 360px) {
+          .seo-email-form { padding-inline: 12px !important; }
+        }
         @media (max-width: 640px) {
           .seo-input-row { flex-direction: column; }
           .seo-intent-grid-2 { grid-template-columns: 1fr; }
