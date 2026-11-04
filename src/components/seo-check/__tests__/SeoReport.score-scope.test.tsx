@@ -94,18 +94,19 @@ describe("SeoReport score scope", () => {
     expect(screen.getByRole("heading", { name: "Supporting evidence" })).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Next steps" })).toBeTruthy();
 
-    const overview=screen.getByRole("region",{name:"What this means"});
-    expect(within(overview).getByText(/The checked page tells Google not to show it in search results/)).toBeTruthy();
-    expect(within(overview).getByRole("heading",{name:"What is already in place"})).toBeTruthy();
-    const affectedPages=within(overview).getByRole("list",{name:"Pages affected by this finding"});
-    expect(within(affectedPages).getByRole("link",{name:"Employment law"}).getAttribute("href")).toBe("https://example.com/employment/");
+    const overview=screen.getByRole("region",{name:"Your priority"});
+    expect(within(overview).getByRole("heading",{name:"Decide which excluded pages should appear in search"})).toBeTruthy();
+    expect(within(overview).queryByText("What is already in place")).toBeNull();
+    const priority=screen.getByRole("region",{name:"Priority findings"});
+    expect(within(priority).getByRole("link",{name:"Employment law"}).getAttribute("href")).toBe("https://example.com/employment/");
+    expect(within(priority).getByText("Who should act")).toBeTruthy();
+    expect(within(priority).getByText("How to verify")).toBeTruthy();
     fireEvent.click(screen.getByRole("button",{name:"Copy report summary"}));
     await waitFor(()=>expect(writeText).toHaveBeenCalled());
     expect(writeText.mock.calls[0][0]).toContain("Employment law: https://example.com/employment/");
-    expect(within(overview).getByRole("heading",{name:"Where to focus"})).toBeTruthy();
-    expect(within(overview).getByRole("heading",{name:"What to do next"})).toBeTruthy();
-    expect(within(within(overview).getByRole("list",{name:"Recommended next steps"})).getAllByRole("listitem")).toHaveLength(3);
-    expect(within(overview).getByRole("heading",{name:"Search and AI answers"})).toBeTruthy();
+    expect(writeText.mock.calls[0][0]).toContain("How to verify:");
+    const sequence=screen.getByRole("region",{name:"Your action plan"});
+    expect(within(sequence).getAllByRole("listitem")).toHaveLength(3);
     expect(screen.queryByRole("region",{name:"Website checks score"})).toBeNull();
     expect(container.querySelector(".cls-priority-context")).toBeNull();
     expect(container.querySelector("style")?.textContent).not.toMatch(/border-left/);
@@ -189,14 +190,15 @@ describe("SeoReport score scope", () => {
     const writeText=vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator,"clipboard",{configurable:true,value:{writeText}});
     const {container}=render(<SeoReport result={result} onReset={vi.fn()} hideCta/>);
-    expect(screen.getByRole("region",{name:"What this means"})).toBeTruthy();
+    expect(screen.getByRole("region",{name:"Your priority"})).toBeTruthy();
     expect(container.textContent).not.toContain("98/100");
     fireEvent.click(screen.getByRole("button",{name:"Copy report summary"}));
     await waitFor(()=>expect(writeText).toHaveBeenCalled());
     const copy=writeText.mock.calls[0][0];
-    expect(copy).toContain("What is already in place:");
-    expect(copy).toContain("Where to focus:");
-    expect(copy).toContain("What to do next:");
+    expect(copy).toContain("Your priority");
+    expect(copy).toContain("Decisions and recommended work");
+    expect(copy).toContain("Your action plan");
+    expect(copy).toContain("AI mentions and citations: Not measured");
     expect(copy).toContain("CaseLoad Select");
     expect(copy).not.toContain("98/100");
     expect(result.overallScore).toBe(98);
@@ -212,7 +214,7 @@ describe("SeoReport score scope", () => {
     expect(screen.queryByText("98/100")).toBeNull();
     expect((screen.getByPlaceholderText("you@yourfirm.ca") as HTMLInputElement).value).toBe("");
     fireEvent.click(screen.getByRole("button",{name:"Skip, show me the report"}));
-    expect(screen.getByRole("region",{name:"What this means"})).toBeTruthy();
+    expect(screen.getByRole("region",{name:"Your priority"})).toBeTruthy();
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
@@ -220,7 +222,7 @@ describe("SeoReport score scope", () => {
     render(<SeoReport result={{...result,methodologyVersion:4,overallScore:81}} onReset={vi.fn()} hideCta/>);
     expect(screen.getByRole("region",{name:"Website checks score"})).toBeTruthy();
     expect(screen.getByText("81/100")).toBeTruthy();
-    expect(screen.queryByRole("region",{name:"What this means"})).toBeNull();
+    expect(screen.queryByRole("region",{name:"Your priority"})).toBeNull();
   });
 
   it("labels category totals as unscored or not assessed", () => {

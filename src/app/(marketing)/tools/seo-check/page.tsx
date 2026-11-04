@@ -160,6 +160,7 @@ export default async function SeoCheckPage({ searchParams }: PageProps) {
           min-height: calc(100vh - 72px);
           padding: var(--sp-9) var(--section-pad-h) var(--sp-10);
         }
+        .seo-main:has(.cls-report) { padding-inline: 0; }
         .seo-hero {
           max-width: 760px;
           margin: 0 auto var(--sp-8);
