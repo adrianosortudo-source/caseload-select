@@ -45,7 +45,7 @@ export interface ReportCategory {
 
 export interface ReportPage {
   url: string;
-  title?: string;
+  title?: string | null;
   pageType: string;
   httpStatus: number;
   indexability: {
