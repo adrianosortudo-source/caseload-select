@@ -572,6 +572,18 @@ describe("evidence-based lawyer overview", () => {
     expect(model.scoreExplanation.score).toBe(98);
     expect(JSON.stringify(input)).toBe(before);
   });
+  it("names every affected page and keeps conversion uncertainty out of confirmed basics",()=>{
+    const pages = [
+      {...base.pages![0],title:"Employment and Labour Law",url:"https://example.com/employment/",pageType:"practice",indexability:{...base.pages![0].indexability,googleDirectives:{noindex:"observed" as const,nofollow:"not-observed" as const,observations:[]}}},
+      {...base.pages![0],title:"Haya Tariq - Senior Law Clerk",url:"https://example.com/team/haya/",pageType:"attorney",indexability:{...base.pages![0].indexability,googleDirectives:{noindex:"observed" as const,nofollow:"not-observed" as const,observations:[]}}},
+      {...base.pages![0],title:"Contact",url:"https://example.com/contact/",pageType:"contact"},
+    ];
+    const model=buildSeoReportModel({...base,pages,pagesScanned:3});
+    expect(model.overview?.attentionPages).toEqual(pages.slice(0,2).map(({title,url})=>({title,url})));
+    expect(model.overview?.working).not.toMatch(/presence alone|understand the offer|become suitable clients|foundation/);
+    expect(model.overview?.working).toContain("All 3 checked pages loaded over secure connections");
+    expect(model.overview?.working).toContain("found on 3 checked pages");
+  });
   it("does not present unknown Google settings as an all-clear",()=>{
     const page={...base.pages![0],indexability:{...base.pages![0].indexability,googleDirectives:{noindex:"unknown" as const,nofollow:"not-observed" as const,observations:[]}}};
     const model=buildSeoReportModel({...base,pages:[page],pagesScanned:1});
@@ -592,7 +604,7 @@ describe("evidence-based lawyer overview", () => {
   });
   it("does not claim a successful enquiry route from an error response",()=>{
     const model=buildSeoReportModel({...base,pages:[{...base.pages![0],httpStatus:404}],pagesScanned:1});
-    expect(model.overview?.working).not.toContain("Contact options");
+    expect(model.overview?.working).not.toContain("invitation to enquire");
     expect(model.overview?.working).not.toContain("loaded over secure");
     expect(model.overview?.attention).toContain("could not be reviewed as normal working pages");
   });

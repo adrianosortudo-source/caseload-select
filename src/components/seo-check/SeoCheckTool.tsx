@@ -260,7 +260,7 @@ export default function SeoCheckTool({
           <p className="seo-input-hint">
             {isOperator
               ? "Internal diagnostic. Runs a bounded crawl and reviews the available website categories per page. The score reflects five limited check types, not a whole-site SEO grade. If we cannot tell whether a page tells Google not to index it, that check is not scored. The report includes a prospecting summary and outreach angles for internal use."
-              : "Enter any public law firm website. Review what is working, where to focus and what to discuss next, with supporting SEO and AI observations. No overall SEO or AI grade is assigned."}
+              : "Enter a public law firm website. Review confirmed findings, affected pages and recommended priorities for SEO and AI search. No overall SEO or AI grade is assigned."}
           </p>
         </div>
       )}
@@ -345,7 +345,7 @@ export default function SeoCheckTool({
             <div className="seo-email-form">
               <h3 className="seo-email-title">Enter your email to view the report</h3>
               <p className="seo-email-sub">
-                See what is working, where to focus and the next decision for your firm. The report includes page evidence and separate AI observations.
+                Your report is ready. Review the affected pages and recommended next steps, with separate observations about AI search.
               </p>
               <div className="seo-email-row">
                 <input

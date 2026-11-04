@@ -38,7 +38,7 @@ const result: SeoCheckResult = {
 describe("SeoReport score scope", () => {
   it("states the evidence-led public report scope", () => {
     render(<SeoCheckTool />);
-    expect(screen.getByText(/Review what is working, where to focus and what to discuss next/i)).toBeTruthy();
+    expect(screen.getByText(/Review confirmed findings, affected pages and recommended priorities/i)).toBeTruthy();
     expect(screen.getByText(/No overall SEO or AI grade is assigned/i)).toBeTruthy();
   });
 
@@ -61,7 +61,9 @@ describe("SeoReport score scope", () => {
     expect(pendingFetch).toHaveBeenCalledWith("/api/tools/seo-check", expect.objectContaining({ method: "POST" }));
   });
 
-  it("introduces a lawyer overview before evidence and does not publish stored numeric grades", () => {
+  it("introduces a lawyer overview before evidence and does not publish stored numeric grades", async () => {
+    const writeText=vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator,"clipboard",{configurable:true,value:{writeText}});
     const priorityPage: NonNullable<SeoCheckResult["pages"]>[number] = {
       url: "https://example.com/employment/",
       title: "Employment law",
@@ -94,10 +96,15 @@ describe("SeoReport score scope", () => {
 
     const overview=screen.getByRole("region",{name:"What this means"});
     expect(within(overview).getByText(/The checked page tells Google not to show it in search results/)).toBeTruthy();
-    expect(within(overview).getByRole("heading",{name:"What's working"})).toBeTruthy();
+    expect(within(overview).getByRole("heading",{name:"What is already in place"})).toBeTruthy();
+    const affectedPages=within(overview).getByRole("list",{name:"Pages affected by this finding"});
+    expect(within(affectedPages).getByRole("link",{name:"Employment law"}).getAttribute("href")).toBe("https://example.com/employment/");
+    fireEvent.click(screen.getByRole("button",{name:"Copy report summary"}));
+    await waitFor(()=>expect(writeText).toHaveBeenCalled());
+    expect(writeText.mock.calls[0][0]).toContain("Employment law: https://example.com/employment/");
     expect(within(overview).getByRole("heading",{name:"Where to focus"})).toBeTruthy();
     expect(within(overview).getByRole("heading",{name:"What to do next"})).toBeTruthy();
-    expect(within(overview).getAllByRole("listitem")).toHaveLength(3);
+    expect(within(within(overview).getByRole("list",{name:"Recommended next steps"})).getAllByRole("listitem")).toHaveLength(3);
     expect(within(overview).getByRole("heading",{name:"Search and AI answers"})).toBeTruthy();
     expect(screen.queryByRole("region",{name:"Website checks score"})).toBeNull();
     expect(container.querySelector(".cls-priority-context")).toBeNull();
@@ -187,7 +194,7 @@ describe("SeoReport score scope", () => {
     fireEvent.click(screen.getByRole("button",{name:"Copy report summary"}));
     await waitFor(()=>expect(writeText).toHaveBeenCalled());
     const copy=writeText.mock.calls[0][0];
-    expect(copy).toContain("What's working:");
+    expect(copy).toContain("What is already in place:");
     expect(copy).toContain("Where to focus:");
     expect(copy).toContain("What to do next:");
     expect(copy).toContain("CaseLoad Select");
