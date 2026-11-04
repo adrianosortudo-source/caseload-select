@@ -161,6 +161,7 @@ export default async function SeoCheckPage({ searchParams }: PageProps) {
           padding: var(--sp-9) var(--section-pad-h) var(--sp-10);
         }
         .seo-main:has(.cls-report) { padding-inline: 0; }
+        .seo-tool-section:has(.cls-report) { padding: 0; }
         .seo-hero {
           max-width: 760px;
           margin: 0 auto var(--sp-8);

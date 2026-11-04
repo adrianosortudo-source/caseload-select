@@ -151,7 +151,7 @@ export default function SeoReport({result,onReset,hideCta=false,showInternal=fal
 .cls-button:hover,.cls-card-action button:hover{background:var(--navy);color:var(--white)}
 .cls-button-light{background:var(--white);color:var(--navy);border-color:var(--white)}
 .cls-copy-status{font:400 .84rem/1.4 'DM Sans',Arial,sans-serif;color:var(--ink)}
-.cls-overview{padding:32px 0 40px}.cls-overview h2{margin-bottom:20px}.cls-overview h3{font-size:clamp(1.25rem,2.2vw,1.65rem);line-height:1.25}.cls-overview .cls-intro-actions{margin-top:24px}
+.cls-report .cls-overview{padding:32px 0 40px}.cls-overview h2{margin-bottom:20px}.cls-overview h3{font-size:clamp(1.25rem,2.2vw,1.65rem);line-height:1.25}.cls-overview .cls-intro-actions{margin-top:24px}
 .cls-report .cls-main{padding-inline:0}.cls-decision{padding:28px 0;border-top:1px solid var(--ink)}.cls-decision-state{color:var(--navy);font-weight:700}.cls-decision-block{margin-top:20px}.cls-decision-block h4{margin:0;font:800 1rem/1.35 Manrope,Arial,sans-serif;letter-spacing:-.01em}.cls-decision-pages{list-style:none;margin:20px 0;padding:0}.cls-decision-pages li+li{margin-top:14px}.cls-decision-pages a{display:block;font-weight:700}.cls-report .cls-decision-pages p{margin-top:4px}.cls-sequence ol{list-style:none;margin:24px 0 0;padding:0}.cls-sequence li+li{margin-top:24px}.cls-sequence h3,.cls-ai-assessment h3{font-size:1.2rem;line-height:1.3}.cls-ai-assessment{margin-top:24px}
 .cls-report .cls-overview [data-ui-copy],.cls-report .cls-decision [data-ui-copy],.cls-report .cls-sequence [data-ui-copy],.cls-report .cls-ai-assessment [data-ui-copy],.cls-report .cls-cta [data-ui-copy]{text-wrap:pretty}
 
