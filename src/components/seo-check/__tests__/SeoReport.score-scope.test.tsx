@@ -89,12 +89,12 @@ describe("SeoReport score scope", () => {
     const { container } = render(<SeoReport result={priorityResult} onReset={vi.fn()} />);
     expect(screen.getByRole("heading", { name: "Search settings on checked pages" })).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Priority findings" })).toBeTruthy();
-    expect(screen.getByRole("heading", { name: "AI and page content" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "AI search observations" })).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Scan limits" })).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Supporting evidence" })).toBeTruthy();
-    expect(screen.getByRole("heading", { name: "Next steps" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Plan your next step" })).toBeTruthy();
 
-    const overview=screen.getByRole("region",{name:"Your priority"});
+    const overview=screen.getByRole("region",{name:"Review the search exclusions"});
     expect(within(overview).getByRole("heading",{name:"Review the search exclusions"})).toBeTruthy();
     expect(within(overview).queryByText("What is already in place")).toBeNull();
     const priority=screen.getByRole("region",{name:"Priority findings"});
@@ -107,7 +107,7 @@ describe("SeoReport score scope", () => {
     await waitFor(()=>expect(writeText).toHaveBeenCalled());
     expect(writeText.mock.calls[0][0]).toContain("Employment law: https://example.com/employment/");
     expect(writeText.mock.calls[0][0]).toContain("How to verify:");
-    const sequence=screen.getByRole("region",{name:"Your action plan"});
+    const sequence=screen.getByRole("region",{name:"Your next steps"});
     expect(within(sequence).getAllByRole("listitem")).toHaveLength(3);
     expect(screen.queryByRole("region",{name:"Website checks score"})).toBeNull();
     expect(container.querySelector(".cls-priority-context")).toBeNull();
@@ -115,7 +115,7 @@ describe("SeoReport score scope", () => {
     expect(container.textContent).not.toContain("98/100");
     const evidence=screen.getByRole("region",{name:"Priority findings"});
     expect(Boolean(overview.compareDocumentPosition(evidence)&Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
-    fireEvent.click(screen.getByText("Pages inspected (1)"));
+    fireEvent.click(screen.getByText("See the 1 page reviewed"));
     expect(container.textContent).not.toContain("92/100");
   });
 
@@ -133,7 +133,7 @@ describe("SeoReport score scope", () => {
     };
     render(<SeoReport result={aiResult} onReset={vi.fn()} hideCta />);
 
-    const aiSection = within(screen.getByRole("region", { name: "AI and page content" }));
+    const aiSection = within(screen.getByRole("region", { name: "AI search observations" }));
     const intro = "The list below describes crawler purposes, robots.txt rules and documented behavior. A rule does not prove access or use.";
     expect(aiSection.getByText(intro)).toBeTruthy();
 
@@ -170,11 +170,11 @@ describe("SeoReport score scope", () => {
     };
     render(<SeoReport result={coverageOnlyPartial} onReset={vi.fn()} hideCta />);
 
-    expect(screen.getByText("Partial scan")).toBeTruthy();
+    expect(screen.getByText("Some pages could not be retrieved")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Copy report summary" }));
     await waitFor(() => expect(writeText).toHaveBeenCalled());
-    expect(writeText.mock.calls[0][0]).toContain("Scan incomplete.");
-    expect(writeText.mock.calls[0][0]).toContain("The scan is incomplete.");
+    expect(writeText.mock.calls[0][0]).toContain("Some pages could not be retrieved");
+    expect(writeText.mock.calls[0][0]).toContain("1 attempted page did not return usable evidence");
   });
 
   it("describes the evidence-led report and performance scope on the public landing page", async () => {
@@ -192,14 +192,14 @@ describe("SeoReport score scope", () => {
     const writeText=vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator,"clipboard",{configurable:true,value:{writeText}});
     const {container}=render(<SeoReport result={result} onReset={vi.fn()} hideCta/>);
-    expect(screen.getByRole("region",{name:"Your priority"})).toBeTruthy();
+    expect(screen.getByRole("region",{name:"Obtain usable page evidence before choosing improvements"})).toBeTruthy();
     expect(container.textContent).not.toContain("98/100");
     fireEvent.click(screen.getByRole("button",{name:"Copy report summary"}));
     await waitFor(()=>expect(writeText).toHaveBeenCalled());
     const copy=writeText.mock.calls[0][0];
-    expect(copy).toContain("Your priority");
-    expect(copy).toContain("Decisions and recommended work");
-    expect(copy).toContain("Your action plan");
+    expect(copy).toContain("Obtain usable page evidence before choosing improvements");
+    expect(copy).not.toContain("Decisions and recommended work");
+    expect(copy).toContain("Your next steps");
     expect(copy).toContain("AI mentions and citations: Not measured");
     expect(copy).toContain("CaseLoad Select");
     expect(copy).not.toContain("98/100");
@@ -216,7 +216,7 @@ describe("SeoReport score scope", () => {
     expect(screen.queryByText("98/100")).toBeNull();
     expect((screen.getByPlaceholderText("you@yourfirm.ca") as HTMLInputElement).value).toBe("");
     fireEvent.click(screen.getByRole("button",{name:"Skip, show me the report"}));
-    expect(screen.getByRole("region",{name:"Your priority"})).toBeTruthy();
+    expect(screen.getByRole("region",{name:"Obtain usable page evidence before choosing improvements"})).toBeTruthy();
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
@@ -322,7 +322,7 @@ describe("SeoReport score scope", () => {
     };
     render(<SeoReport result={{ ...result, pagesScanned: 1, pages: [page] }} onReset={vi.fn()} hideCta />);
 
-    const aiSection = within(screen.getByRole("region", { name: "AI and page content" }));
+    const aiSection = within(screen.getByRole("region", { name: "AI search observations" }));
     const summary = screen.getByText("Page-level AEO and AI observations (1 observation group)");
     fireEvent.click(summary);
 
@@ -370,7 +370,7 @@ describe("SeoReport score scope", () => {
     };
     render(<SeoReport result={{ ...result, pagesScanned: 1, pages: [page] }} onReset={vi.fn()} hideCta />);
 
-    const aiSection = within(screen.getByRole("region", { name: "AI and page content" }));
+    const aiSection = within(screen.getByRole("region", { name: "AI search observations" }));
     expect(aiSection.queryByText(/Page-level AEO and AI observations/)).toBeNull();
     expect(aiSection.getByText(/This scan did not assess provider-specific crawler policy or actual AI service access/)).toBeTruthy();
     expect(aiSection.queryByText(/All AI observations passed|No AEO issues/i)).toBeNull();
