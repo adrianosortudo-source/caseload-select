@@ -37,6 +37,7 @@ export default function SeoCheckTool({
   const [targetLocation, setTargetLocation] = useState("");
   const [error, setError] = useState("");
   const [result, setResult] = useState<SeoCheckResult | null>(null);
+  const resultPageCount = result?.pagesScanned ?? result?.pages?.length ?? 0;
   const [email, setEmail] = useState("");
   const [emailError, setEmailError] = useState("");
 
@@ -259,7 +260,7 @@ export default function SeoCheckTool({
           <p className="seo-input-hint">
             {isOperator
               ? "Internal diagnostic. Runs a bounded crawl and reviews the available website categories per page. The score reflects five limited check types, not a whole-site SEO grade. If we cannot tell whether a page tells Google not to index it, that check is not scored. The report includes a prospecting summary and outreach angles for internal use."
-              : "Enter any law firm website. This scan checks public SEO, AI crawler settings, structured data, local details, and technical delivery. Its score covers five limited check types, not the whole site. If we cannot tell whether a page tells Google not to index it, that check is not scored. Use the findings as a starting point; the scan does not verify rankings or AI citations."}
+              : "Enter a public law firm website. Review confirmed findings, affected pages and recommended priorities for SEO and AI search. No overall SEO or AI grade is assigned."}
           </p>
         </div>
       )}
@@ -319,7 +320,7 @@ export default function SeoCheckTool({
         <div className="seo-email-gate">
           <div className="seo-email-card">
             <div className="seo-email-preview">
-              <div className="seo-email-grade-peek">
+              {result.methodologyVersion===5?<p className="seo-email-preview-text">{resultPageCount} page{resultPageCount===1?"":"s"} checked</p>:<div className="seo-email-grade-peek">
                 <span
                   className="seo-email-grade-label"
                   style={{
@@ -336,7 +337,7 @@ export default function SeoCheckTool({
                   Limited checks
                 </span>
                 <span className="seo-email-grade-score">{result.overallScore === null ? "Not assessed" : `${result.overallScore}/100`}</span>
-              </div>
+              </div>}
               <p className="seo-email-preview-text">
                 Your report for <strong>{result.domain}</strong> is ready.
               </p>
@@ -344,8 +345,7 @@ export default function SeoCheckTool({
             <div className="seo-email-form">
               <h3 className="seo-email-title">Enter your email to view the report</h3>
               <p className="seo-email-sub">
-                See the pages checked, what the scan observed, why a finding may matter, and general next steps.
-                The score reflects only checks assessed in this scan; it is not a whole-site SEO grade. AI crawler observations cannot verify access or citations.
+                Your report is ready. Review the affected pages and recommended next steps, with separate observations about AI search.
               </p>
               <div className="seo-email-row">
                 <input
@@ -467,6 +467,7 @@ export default function SeoCheckTool({
           margin: var(--sp-2) 0 0;
         }
         .seo-input-hint {
+          text-wrap: wrap;
           font-size: 12.5px;
           color: var(--text-muted);
           margin: var(--sp-3) 0 0;
@@ -712,6 +713,7 @@ export default function SeoCheckTool({
           margin: 0 0 var(--sp-2);
         }
         .seo-email-sub {
+          text-wrap: pretty;
           font-size: 13.5px;
           color: var(--text-muted);
           line-height: 1.55;
@@ -764,6 +766,9 @@ export default function SeoCheckTool({
         }
         .seo-skip-link:hover { color: var(--navy); }
 
+        @media (max-width: 360px) {
+          .seo-email-form { padding-inline: 12px !important; }
+        }
         @media (max-width: 640px) {
           .seo-input-row { flex-direction: column; }
           .seo-intent-grid-2 { grid-template-columns: 1fr; }
