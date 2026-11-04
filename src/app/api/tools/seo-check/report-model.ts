@@ -437,7 +437,7 @@ function buildCurrentOverview(pages: ReportPage[], actions: ReportAction[], cove
   }));
   const findings: ReportDecision[] = [];
   if (mismatches.length) findings.push({
-    id: "sitemap-exclusion", state: "Observed mismatch", title: "Make the sitemap and search instructions agree",
+    id: "sitemap-exclusion", state: "Observed mismatch", title: "Align the search settings",
     observed: `${mismatches.length === 1 ? "This page is" : "These pages are"} listed in the sitemap supplied to search engines, but ${mismatches.length === 1 ? "its settings ask" : "their settings ask"} Google to leave ${mismatches.length === 1 ? "it" : "them"} out of search results.`,
     whyItMatters: "The sitemap and page settings should reflect the same decision about public discovery. Agree the page's role before treating the exclusion as a mistake.",
     nextStep: "Decide whether each listed page should appear in search. Have your web provider align its sitemap entry and exclusion settings with that decision.",
@@ -470,10 +470,10 @@ function buildCurrentOverview(pages: ReportPage[], actions: ReportAction[], cove
       verification: "Record the agreed purpose for each URL, check its settings and review the relevant page status in Google Search Console.", pages: pageEvidence(selected, true),
     });
   };
-  addExclusion("service-exclusions", practice, "Decide which service pages should attract enquiries",
+  addExclusion("service-exclusions", practice, "Choose the service pages",
     "A current service page should support the matters the firm wants to attract. An older or duplicate version can have a different purpose.",
     "Confirm which listed page represents the current service. If it should attract search enquiries, commission a correction to unintended exclusions. If it is an older version, agree how visitors should reach the current page.");
-  addExclusion("team-exclusions", team, "Confirm the public role of the excluded team pages",
+  addExclusion("team-exclusions", team, "Review the team pages",
     "Prospective clients use team information to assess the people behind the firm. The scan has not verified whether these profiles are current.",
     "Confirm which listed profiles or directories belong in the firm's current public presence. Retain deliberate exclusions and correct settings that conflict with that agreed purpose.");
   addExclusion("other-exclusions", other, "Confirm the purpose of the other excluded pages",
@@ -496,14 +496,14 @@ function buildCurrentOverview(pages: ReportPage[], actions: ReportAction[], cove
       pages: action.affectedUrls.map(url => ({title: pages.find(page => page.url === url)?.title?.trim() || url, url, evidence: action.evidenceLabel})),
     });
   }
-  let title = "No priority issue found by these checks";
+  let title = "No priority finding in this scan";
   let attention = "Use the result as a technical baseline. A further review should examine how your main service pages answer client questions and perform in search, using the firm's search and enquiry records.";
   if (mismatches.length) {
-    title = "Resolve the conflicting search settings first";
+    title = "Resolve the search conflict";
     attention = `${mismatches.length === 1 ? "One checked page appears" : `${mismatches.length} checked pages appear`} in the sitemap but also ${mismatches.length === 1 ? "requests" : "request"} exclusion from Google. Make those settings agree with the page's intended role.`;
     if (remaining.length) attention += ` Separately, decide whether the ${remaining.length} other excluded ${remaining.length === 1 ? "page should" : "pages should"} represent current services or team members in search.`;
   } else if (priorityExcluded.length) {
-    title = "Decide which excluded pages should appear in search";
+    title = "Review the search exclusions";
     attention = `${priorityExcluded.length} checked ${priorityExcluded.length === 1 ? "page asks" : "pages ask"} Google to leave ${priorityExcluded.length === 1 ? "it" : "them"} out of search. Confirm which pages should attract enquiries before commissioning changes. An exclusion is not automatically an error.`;
   } else if (findings.length) {
     title = findings[0].title;
@@ -521,12 +521,12 @@ function buildCurrentOverview(pages: ReportPage[], actions: ReportAction[], cove
     {title: "Obtain reliable evidence", detail: "Complete the page review before choosing website improvements."},
   ] : findings.length ? [
     {title: "Agree the page priorities", detail: "Confirm which listed pages represent current services and people, and which should appear in search. Record deliberate exclusions."},
-    {title: "Commission the confirmed work", detail: "Have the web provider or content reviewer scope the changes for those pages. Agree an owner and a clear completion check for each item."},
+    {title: "Commission the work", detail: "Have the web provider or content reviewer scope the changes for those pages. Agree an owner and a clear completion check for each item."},
     {title: "Verify before expanding the work", detail: "Check the changed pages and use the firm's search account to confirm their reported status. Review enquiry performance separately."},
   ] : [
     {title: "Choose the services to assess", detail: "Identify the matters and locations the firm wants its website to support."},
-    {title: "Review evidence of effectiveness", detail: "Assess the priority service pages alongside search performance, client questions and enquiry quality."},
-    {title: "Commission evidence-backed improvements", detail: "Use that review to decide which changes are warranted and how their results will be measured."},
+    {title: "Review the evidence", detail: "Assess the priority service pages alongside search performance, client questions and enquiry quality."},
+    {title: "Agree the improvement plan", detail: "Use that review to decide which changes are warranted and how their results will be measured."},
   ];
   const secure = usable.filter(page => page.url.startsWith("https://")).length;
   const contact = usable.filter(page => page.lawFirm?.phoneVisible || page.lawFirm?.contactFormPresent || page.lawFirm?.consultationCta).length;
