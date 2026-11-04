@@ -553,3 +553,98 @@ describe("getDisplayedCategoryWeights", () => {
     expect(getDisplayedCategoryWeights(categories, weights, 4)).toEqual([]);
   });
 });
+
+
+describe("decision-led lawyer report", () => {
+  const excludedPage = (url:string,pageType:string,inSitemap?:boolean|null,sitemapComplete=true) => ({
+    ...base.pages![0], url, title:url, pageType,
+    indexability:{...base.pages![0].indexability,inSitemap,sitemapComplete,googleDirectives:{noindex:"observed" as const,nofollow:"not-observed" as const,observations:[]}},
+  });
+  it("separates a Soni-style sitemap mismatch from service and team purpose decisions without mutating the result",()=>{
+    const affected=[excludedPage("https://example.com/employment/","practice",false),excludedPage("https://example.com/team/","attorney",true),...Array.from({length:4},(_,i)=>excludedPage(`https://example.com/team/person-${i}/`,"attorney",false))];
+    const input:ReportInput={...base,overallScore:98,pagesScanned:25,pages:[...affected,...Array.from({length:19},(_,i)=>({...base.pages![0],url:`https://example.com/other-${i}/`}))]};
+    const before=JSON.stringify(input);
+    const model=buildSeoReportModel(input);
+    expect(model.overview?.findings.map(f=>f.id)).toEqual(["sitemap-exclusion","service-exclusions","team-exclusions"]);
+    expect(model.overview?.findings.map(f=>f.pages.length)).toEqual([1,1,4]);
+    expect(model.overview?.findings[0]).toMatchObject({state:"Observed mismatch",pages:[{url:affected[1].url}]});
+    expect(model.overview?.findings.slice(1).every(f=>f.state==="Confirm intended use")).toBe(true);
+    expect(model.overview?.attention).toContain("5 other excluded pages");
+    expect(model.overview?.nextSteps).toHaveLength(3);
+    expect(model.overview?.findings.every(f=>f.owner && f.verification)).toBe(true);
+    expect(model.scoreExplanation.score).toBe(98);
+    expect(JSON.stringify(input)).toBe(before);
+  });
+  it("does not infer a sitemap mismatch or absence from unknown membership",()=>{
+    const model=buildSeoReportModel({...base,pages:[excludedPage("https://example.com/service/","practice",null)],pagesScanned:1});
+    expect(model.overview?.findings.map(f=>f.id)).toEqual(["service-exclusions"]);
+    expect(model.overview?.findings[0].pages[0].evidence).toContain("membership was not established");
+  });
+  it("does not claim sitemap absence when discovery is incomplete",()=>{
+    const model=buildSeoReportModel({...base,pages:[excludedPage("https://example.com/service/","practice",false,false)],pagesScanned:1});
+    expect(model.overview?.findings[0].pages[0].evidence).not.toContain("Not listed");
+  });
+  it("keeps positive sitemap evidence even when other sitemap discovery is incomplete",()=>{
+    const model=buildSeoReportModel({...base,pages:[excludedPage("https://example.com/service/","practice",true,false)],pagesScanned:1});
+    expect(model.overview?.findings[0].id).toBe("sitemap-exclusion");
+    expect(model.overview?.findings[0].pages[0].evidence).toContain("Listed in");
+  });
+  it("does not reinterpret unknown Google applicability as a sitemap mismatch",()=>{
+    const page={...excludedPage("https://example.com/service/","practice",true),indexability:{inSitemap:true,googleDirectives:{noindex:"unknown" as const,nofollow:"not-observed" as const,observations:[]}}};
+    const model=buildSeoReportModel({...base,pages:[page],pagesScanned:1});
+    expect(model.overview?.findings.map(f=>f.id)).toEqual(["unknown-settings"]);
+    expect(model.overview?.findings[0].state).toBe("Evidence incomplete");
+  });
+  it("does not treat an excluded utility page as a marketing failure",()=>{
+    const model=buildSeoReportModel({...base,pages:[excludedPage("https://example.com/privacy/","policy",true)],pagesScanned:1});
+    expect(model.overview?.findings).toEqual([]);
+    expect(model.overview?.attention).toContain("not a marketing failure");
+    expect(model.overview?.nextSteps.map(s=>s.detail).join(" ")).not.toContain("correct exclusions");
+  });
+  it("does not turn service keywords or contact patterns into a prominent strength",()=>{
+    const model=buildSeoReportModel(base);
+    expect(model.overview?.findings).toEqual([]);
+    expect(model.overview?.attention).not.toMatch(/strong|service information was found|foundation|contact options/);
+    expect(model.overview?.basics.join(" ")).toContain("contact-detail or enquiry-invitation pattern");
+    expect(model.overview?.basics.join(" ")).not.toContain("service information");
+  });
+  it("publishes one material finding without filling three slots",()=>{
+    const model=buildSeoReportModel({...base,pages:[excludedPage("https://example.com/service/","practice",true)],pagesScanned:1});
+    expect(model.overview?.findings).toHaveLength(1);
+  });
+  it("uses page titles and preserves staff roles rather than inventing lawyer identities",()=>{
+    const page={...excludedPage("https://example.com/team/haya/","attorney",false),title:"Haya Tariq - Senior Law Clerk"};
+    const model=buildSeoReportModel({...base,pages:[page],pagesScanned:1});
+    expect(model.overview?.findings[0].pages[0].title).toBe(page.title);
+    expect(JSON.stringify(model.overview)).not.toContain("four lawyers");
+  });
+  it("uses the actual URL when a saved title is absent",()=>{
+    const page={...excludedPage("https://example.com/service/","practice",true),title:null};
+    expect(buildSeoReportModel({...base,pages:[page]}).overview?.findings[0].pages[0].title).toBe(page.url);
+  });
+  it("keeps actual AI visibility unmeasured rather than grading open access",()=>{
+    const model=buildSeoReportModel(base);
+    expect(model.overview?.aiVisibility).toMatch(/^Not measured/);
+    expect(model.overview?.aiVisibility).not.toMatch(/0 visibility|high visibility|A-/);
+    expect(model.overview?.aiNextStep).toContain("actual answers");
+  });
+  it("does not present failed responses as reliable service or sitemap findings",()=>{
+    const model=buildSeoReportModel({...base,pages:[{...excludedPage("https://example.com/missing/","practice",true),httpStatus:404}],pagesScanned:1});
+    expect(model.overview?.findings.map(f=>f.id)).toEqual(["page-evidence"]);
+    expect(model.overview?.basics.join(" ")).toContain("0 inspected pages loaded over HTTPS");
+  });
+  it("requests usable evidence instead of commissioning content when no pages were returned",()=>{
+    const model=buildSeoReportModel({...base,pages:[],pagesScanned:0});
+    expect(model.overview?.title).toContain("Obtain usable page evidence");
+    expect(model.overview?.nextSteps[0].title).toBe("Establish the cause");
+  });
+  it("describes crawl restrictions without claiming actual Google indexing",()=>{
+    const model=buildSeoReportModel({...base,pages:[{...base.pages![0],robotsAccess:{google:false,bing:true}}],pagesScanned:1});
+    expect(model.overview?.findings[0].id).toBe("crawler-access");
+    expect(model.overview?.attention).not.toMatch(/not indexed|cannot be indexed/);
+  });
+  it("preserves the interpretation of historical and unsupported methods",()=>{
+    expect(buildSeoReportModel({...base,methodologyVersion:4}).overview).toBeNull();
+    expect(buildSeoReportModel({...base,methodologyVersion:6}).overview).toBeNull();
+  });
+});
