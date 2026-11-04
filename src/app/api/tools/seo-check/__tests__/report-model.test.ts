@@ -564,11 +564,11 @@ describe("evidence-based lawyer overview", () => {
     const before=JSON.stringify(input);
     const model=buildSeoReportModel(input);
     expect(model.overview?.working).toContain("All 25 checked pages loaded over secure connections");
-    expect(model.overview?.attention).toContain("6 checked pages ask Google to leave them out of search");
-    expect(model.overview?.attention).toContain("Confirm whether these pages should help prospective clients");
-    expect(model.overview?.nextStep).toContain("CaseLoad Select");
-    expect(model.overview?.nextStep).toContain("which changes are warranted");
-    expect(model.overview?.aiNote).toContain("does not show whether AI services mention your firm");
+    expect(model.overview?.attention).toContain("6 of the 25 checked pages tell Google not to show them in search results");
+    expect(model.overview?.attention).toContain("Make this the first item in your website improvement plan");
+    expect(model.overview?.nextStep.split("\n\n")).toHaveLength(3);
+    expect(model.overview?.nextStep).toContain("correct unintended exclusions");
+    expect(model.overview?.aiNote).toContain("has not assessed answer quality or measured AI mentions");
     expect(model.scoreExplanation.score).toBe(98);
     expect(JSON.stringify(input)).toBe(before);
   });
@@ -605,6 +605,20 @@ describe("evidence-based lawyer overview", () => {
     const model=buildSeoReportModel(base);
     expect(model.overview?.attention).toContain("These checks found no priority search-setting issue");
     expect(model.overview?.attention).toContain("do not show whether the right people find the firm");
+  });
+  it("identifies service and team pages without presenting staff as lawyers",()=>{
+    const pages=["practice","attorney","attorney","policy"].map((pageType,i)=>({...base.pages![0],url:`https://example.com/page-${i}`,pageType,indexability:{...base.pages![0].indexability,googleDirectives:{noindex:"observed" as const,nofollow:"not-observed" as const,observations:[]}}}));
+    const model=buildSeoReportModel({...base,pages,pagesScanned:4});
+    expect(model.overview?.attention).toContain("3 of the 4 checked pages");
+    expect(model.overview?.attention).toContain("1 practice-area page and 2 team pages");
+    expect(model.overview?.attention).not.toContain("2 lawyers");
+    expect(model.overview?.nextStep).toContain("retaining any deliberate exclusions");
+  });
+  it("does not prescribe exclusion repairs when no priority search-setting issue was found",()=>{
+    const model=buildSeoReportModel(base);
+    expect(model.overview?.nextStep).toContain("quality of enquiries");
+    expect(model.overview?.nextStep).not.toMatch(/correct unintended exclusions|restricted pages/);
+    expect(model.overview?.aiNote).not.toContain("Resolve unintended search exclusions");
   });
   it("preserves historical methods instead of rewriting their interpretation",()=>{
     expect(buildSeoReportModel({...base,methodologyVersion:4}).overview).toBeNull();

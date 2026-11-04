@@ -93,10 +93,12 @@ describe("SeoReport score scope", () => {
     expect(screen.getByRole("heading", { name: "Next steps" })).toBeTruthy();
 
     const overview=screen.getByRole("region",{name:"What this means"});
-    expect(within(overview).getByText(/1 checked page asks Google to leave it out of search/)).toBeTruthy();
+    expect(within(overview).getByText(/The checked page tells Google not to show it in search results/)).toBeTruthy();
     expect(within(overview).getByRole("heading",{name:"What's working"})).toBeTruthy();
     expect(within(overview).getByRole("heading",{name:"Where to focus"})).toBeTruthy();
-    expect(within(overview).getByRole("heading",{name:"Your next step"})).toBeTruthy();
+    expect(within(overview).getByRole("heading",{name:"What to do next"})).toBeTruthy();
+    expect(within(overview).getAllByRole("listitem")).toHaveLength(3);
+    expect(within(overview).getByRole("heading",{name:"Search and AI answers"})).toBeTruthy();
     expect(screen.queryByRole("region",{name:"Website checks score"})).toBeNull();
     expect(container.querySelector(".cls-priority-context")).toBeNull();
     expect(container.querySelector("style")?.textContent).not.toMatch(/border-left/);
@@ -187,7 +189,7 @@ describe("SeoReport score scope", () => {
     const copy=writeText.mock.calls[0][0];
     expect(copy).toContain("What's working:");
     expect(copy).toContain("Where to focus:");
-    expect(copy).toContain("Your next step:");
+    expect(copy).toContain("What to do next:");
     expect(copy).toContain("CaseLoad Select");
     expect(copy).not.toContain("98/100");
     expect(result.overallScore).toBe(98);
