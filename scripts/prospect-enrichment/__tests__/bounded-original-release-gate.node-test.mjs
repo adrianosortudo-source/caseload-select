@@ -147,10 +147,14 @@ test("pinned CLI skips guarded historical references and plans only the target o
   console.info("bounded-cli-phase","missing-history-dry-run");
   assert.throws(()=>verifyPlan(dry(),"pre"));t.diagnostic("A missing historical ledger row was rejected by the plan verifier.");
   const before=(await db.query("SELECT version,name,statements FROM supabase_migrations.schema_migrations ORDER BY version")).rows;
+  // The CLI can terminate existing database sessions during push. Close our idle
+  // pool first so its asynchronous disconnect cannot fail the test spuriously.
+  await db.end(); db=undefined;
   console.info("bounded-cli-phase","actual-negative-push");
   assert.throws(()=>execFileSync(cli,["db","push","--yes","--include-all","--skip-vault","--output-format","json","--db-url",scratch.toString()],{cwd:staged,env:cliEnvironment,encoding:"utf8",stdio:["ignore","pipe","pipe"],timeout:60000}),
     isHistoricalGuardFailure);
   t.diagnostic("Actual CLI push stopped at the historical SQL guard.");
+  db=new Pool({connectionString:scratch.toString(),max:1});
   assert.deepEqual((await db.query("SELECT version,name,statements FROM supabase_migrations.schema_migrations ORDER BY version")).rows,before);
   assert.equal((await db.query("SELECT count(*)::int count FROM supabase_migrations.schema_migrations WHERE version='20261013174258'")).rows[0].count,0);
   await assert.rejects(db.query(guardedReference(reference.ledger.at(-1))),/bounded_release_history_reference_execution_prohibited/);
