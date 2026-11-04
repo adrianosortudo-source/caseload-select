@@ -117,7 +117,7 @@ export default function SeoReport({result,onReset,hideCta=false,showInternal=fal
 .cls-button:hover,.cls-card-action button:hover{background:var(--navy);color:var(--white)}
 .cls-button-light{background:var(--white);color:var(--navy);border-color:var(--white)}
 .cls-copy-status{font:400 .84rem/1.4 'DM Sans',Arial,sans-serif;color:var(--ink)}
-.cls-overview{padding:32px 0 40px}.cls-overview h2{margin-bottom:24px}.cls-overview-part+.cls-overview-part{margin-top:28px}.cls-overview h3{font-size:1.25rem;line-height:1.3}.cls-report .cls-overview p[data-ui-copy]{margin-top:8px;text-wrap:pretty}.cls-overview-steps{margin:12px 0 0;padding-left:24px}.cls-overview-steps li+li{margin-top:16px}.cls-overview .cls-overview-ai-note{margin-top:28px}.cls-overview .cls-intro-actions{margin-top:28px}
+.cls-overview{padding:32px 0 40px}.cls-overview h2{margin-bottom:24px}.cls-overview-part+.cls-overview-part{margin-top:28px}.cls-overview h3{font-size:1.25rem;line-height:1.3}.cls-report .cls-overview p[data-ui-copy]{margin-top:8px;text-wrap:pretty}.cls-overview-steps{margin:12px 0 0;padding-left:24px;list-style-type:decimal}.cls-overview-steps li+li{margin-top:16px}.cls-overview .cls-overview-ai-note{margin-top:28px}.cls-overview .cls-intro-actions{margin-top:28px}
 .cls-score-row{display:grid;grid-template-columns:minmax(0,1fr);gap:12px;align-items:start;padding:30px 0;border-bottom:1px solid var(--ink)}
 .cls-score-value{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
 .cls-score-value strong{font:600 1.1rem/1.2 Oxanium,monospace;border:1px solid var(--navy);padding:10px 14px}
