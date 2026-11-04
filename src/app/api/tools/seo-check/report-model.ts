@@ -441,7 +441,7 @@ function buildCurrentOverview(pages: ReportPage[], actions: ReportAction[], cove
     observed: `${mismatches.length === 1 ? "This page is" : "These pages are"} listed in the sitemap supplied to search engines, but ${mismatches.length === 1 ? "its settings ask" : "their settings ask"} Google to leave ${mismatches.length === 1 ? "it" : "them"} out of search results.`,
     whyItMatters: "The sitemap and page settings should reflect the same decision about public discovery. Agree the page's role before treating the exclusion as a mistake.",
     nextStep: "Decide whether each listed page should appear in search. Have your web provider align its sitemap entry and exclusion settings with that decision.",
-    owner: "The firm confirms the intended purpose. The web provider corrects the configuration.",
+    owner: "The firm decides which pages should appear in search. The web provider applies that decision.",
     verification: "Check the page settings and the updated sitemap together. Use Google Search Console to review the page's reported indexing status.",
     pages: pageEvidence(mismatches, true),
   });
@@ -520,7 +520,7 @@ function buildCurrentOverview(pages: ReportPage[], actions: ReportAction[], cove
     {title: "Verify page access", detail: "Have the provider check the important service and contact pages in a browser and review their access settings."},
     {title: "Obtain reliable evidence", detail: "Complete the page review before choosing website improvements."},
   ] : findings.length ? [
-    {title: "Agree the page priorities", detail: "Confirm which listed pages represent current services and people, and which should appear in search. Record deliberate exclusions."},
+    {title: "Agree the page priorities", detail: "Review the listed pages and confirm their current purpose. Decide which should appear in search and record deliberate exclusions."},
     {title: "Commission the work", detail: "Have the web provider or content reviewer scope the changes for those pages. Agree an owner and a clear completion check for each item."},
     {title: "Verify before expanding the work", detail: "Check the changed pages and use the firm's search account to confirm their reported status. Review enquiry performance separately."},
   ] : [
