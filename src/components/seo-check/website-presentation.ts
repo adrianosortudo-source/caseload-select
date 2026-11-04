@@ -8,7 +8,7 @@ export function buildWebsitePresentation(input: ReportInput, model: SeoReportMod
   const definitions = [
     { id: "seo.indexability.http-status", label: "HTTP status", title: "Pages opened successfully", detail: "The checker received a successful response from these pages.", matches: (p: ReportPage) => usable(p) },
     { id: "seo.technical.https", label: "HTTPS", title: "Secure connections", detail: "These pages loaded over HTTPS, which encrypts the connection.", matches: (p: ReportPage) => usable(p) && p.url.startsWith("https://") },
-    { id: "seo.on-page.page-title", label: "Page title", title: "Page titles present", detail: "These pages had a title that search engines can use. The clarity and relevance of each title need a content review.", matches: (p: ReportPage) => usable(p) && Boolean(p.title?.trim()) },
+    { id: "seo.on-page.page-title", label: "Page title", title: "Page titles present", detail: "These pages had a title that search engines can use.", followUp: "The clarity and relevance of each title need a content review.", matches: (p: ReportPage) => usable(p) && Boolean(p.title?.trim()) },
     { id: "seo.indexability.indexable", label: "Indexable", title: "No Google exclusion", detail: "No instruction asking Google to leave these pages out of search was recorded.", matches: (p: ReportPage) => usable(p) && p.indexability.googleDirectives?.noindex === "not-observed" },
     { id: "seo.indexability.robots-txt-crawl-access", label: "robots.txt crawl access", title: "Google crawl rules", detail: "The published rules did not block Google from these pages.", matches: (p: ReportPage) => usable(p) && p.robotsAccess?.google === true },
   ];
@@ -28,7 +28,7 @@ export function buildWebsitePresentation(input: ReportInput, model: SeoReportMod
       "seo.indexability.robots-txt-crawl-access": "The passed count includes pages with no recorded Google crawl restriction. Review any remaining pages in the supporting evidence.",
     };
     const detail = unknown && !review ? "Evidence was missing for some pages. The passed count includes only confirmed observations; inspect the remaining pages in the supporting evidence." : review ? mixedDetails[definition.id] : definition.detail;
-    return { id: definition.id, title: definition.title, detail, passed, review, unknown, total };
+    return { id: definition.id, title: definition.title, detail, followUp: review || unknown ? undefined : definition.followUp, passed, review, unknown, total };
   });
   const coverage = model.coverage;
   const stopLabel = coverage.stopReason === "page-limit" ? `${coverage.requestedLimit ?? total}-page sample limit reached`
@@ -50,7 +50,7 @@ export function buildWebsitePresentation(input: ReportInput, model: SeoReportMod
     ? `All ${total} reviewed pages loaded successfully, used secure connections and had page titles. We found no published instructions telling Google to stay away from these pages or leave them out of search.`
     : model.overview?.attention ?? "Review the recorded observations before choosing website changes.";
   const interpretation = allPassed
-    ? "These five checks did not identify a technical repair to prioritise in this sample. Search performance and enquiry quality still need a separate review."
+    ? "These five checks found no technical repair to prioritise in this sample. Use your search and enquiry records to identify which service pages need attention."
     : "Agree the purpose of each affected page before changing its settings. Use your search and enquiry records to judge the effect on the firm.";
   const direction = hasFindings ? "Your next step: decide which pages belong in search and have your provider update the settings." : "Your next step: review whether your service pages help attract the cases your firm wants.";
   const aiSearch = [

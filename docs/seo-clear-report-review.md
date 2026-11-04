@@ -16,7 +16,7 @@ Run the existing app locally or use its protected preview, then run:
 node scripts/seo-report-rendered-check.mjs --url APP_URL/tools/seo-check?embed=1 --soni SAVED_SONI_JSON --sakuraba SAVED_SAKURABA_JSON --output ARTIFACT_DIRECTORY
 ```
 
-The test requires the saved 25-page Soni and Sakuraba results. It fulfills the scan response locally, skips the email step, blocks other POST requests and all requests to the firms, and checks both reports at 1440, 1024, 768, 640, 375, 320 and 294 CSS pixels. It checks the default and expanded AEO states, real clipboard readback, page and methodology disclosures, horizontal overflow and rendered copy widths/line breaks. Screenshots and the measurement record are written to the specified output directory, outside the repository.
+The test requires the saved 25-page Soni and Sakuraba results. It fulfills the scan response locally, skips the email step, blocks other POST requests and all requests to the firms, and checks both reports at 1440, 1024, 768, 640, 375, 349, 320 and 294 CSS pixels. It checks the default and expanded AEO states, real clipboard readback, page and methodology disclosures, horizontal overflow and rendered copy widths/line breaks. Screenshots and the measurement record are written to the specified output directory, outside the repository.
 
 For an authenticated preview, supply VERCEL_OIDC_TOKEN through the linked project's development environment. The script sends it only to the exact app origin and never writes it to its artifacts.
 
@@ -25,8 +25,10 @@ The header's `report-heading` marker identifies its own full-width content box. 
 ## Acceptance
 
 - Both saved-result flows pass, with no new scan or email.
-- All 28 rendered states pass, plus page/methodology disclosure overflow checks.
+- All 32 rendered states pass, plus page/methodology disclosure overflow checks.
 - Soni shows six linked excluded pages and 19 of 25 passing the exclusion check.
 - Sakuraba shows five passing check counts, no empty priority finding, and no overall grade.
 - Focused model, component and presentation tests cover historical reports, partial results, missing evidence and search-versus-training crawler scope.
 - Review both final reports before merging; merge approval is separate.
+
+The 349px width covers the actual embedded frame inside the public page at a 375px viewport. The check-count introduction and page-title explanation use separate paragraphs for their distinct ideas. The clean-result next step points to search and enquiry records.
