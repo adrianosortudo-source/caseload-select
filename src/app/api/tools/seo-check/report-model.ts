@@ -535,7 +535,7 @@ function buildCurrentOverview(pages: ReportPage[], actions: ReportAction[], cove
   return {title, attention, findings: findings.slice(0,3), nextSteps, basics,
     aiAccess: "The scan inspected page instructions and published crawler rules. These describe access settings, not proof that an AI service fetched a page.",
     aiVisibility: "Not measured. This scan did not collect AI answers, brand recommendations or citations of the firm.",
-    aiNextStep: "A visibility review should examine actual answers about your services in the locations you serve, including whether the firm is mentioned, linked and described accurately.",
+    aiNextStep: "Review actual answers about your services and the locations you serve. Check whether AI services mention and link to the firm, and describe it accurately.",
   };
 }
 
