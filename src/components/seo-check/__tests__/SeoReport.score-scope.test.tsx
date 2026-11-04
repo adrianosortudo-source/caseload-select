@@ -38,8 +38,8 @@ const result: SeoCheckResult = {
 describe("SeoReport score scope", () => {
   it("states the evidence-led public report scope", () => {
     render(<SeoCheckTool />);
-    expect(screen.getByText(/Review confirmed findings, affected pages and recommended priorities/i)).toBeTruthy();
-    expect(screen.getByText(/No overall SEO or AI grade is assigned/i)).toBeTruthy();
+    expect(screen.getByText(/Review confirmed findings, affected pages and priorities/i)).toBeTruthy();
+    expect(screen.getByText(/The report does not assign overall grades/i)).toBeTruthy();
   });
 
   it("uses the same plain-language Google indexability limit in operator mode", () => {
