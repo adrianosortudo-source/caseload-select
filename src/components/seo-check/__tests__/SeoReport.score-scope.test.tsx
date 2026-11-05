@@ -131,6 +131,8 @@ describe("SeoReport score scope", () => {
     const disclosure = screen.getByText("View evidence for 1 affected page");
     expect(disclosure.tagName).toBe("SUMMARY");
     const pageEvidence = screen.getByText(/Google exclusion observed/);
+    expect(pageEvidence.tagName).toBe("P");
+    expect(pageEvidence.getAttribute("data-ui-copy")).toBe("supporting");
     expect(pageEvidence.closest("details")?.open).toBe(false);
     fireEvent.click(disclosure);
     expect(pageEvidence.closest("details")?.open).toBe(true);
@@ -138,6 +140,27 @@ describe("SeoReport score scope", () => {
     expect(container.querySelector("img[onerror]")).toBeNull();
   });
 
+  it("renders R1 source-field evidence verbatim in a wrapped, accessible disclosure", () => {
+    const description = "ENPT 905 393 2999Schedule your consultation Immigration Lawyer in Toronto for Brazilians";
+    const sourcePage: NonNullable<SeoCheckResult["pages"]>[number] = {
+      url: "https://example.com/en/service/", title: "Immigration Lawyer", pageType: "practice", pageScore: null, pageGrade: "N/A", aiVisibilityScore: null,
+      categories: scoreCategories, failCount: 0, warnCount: 0, httpStatus: 200, indexable: true,
+      indexability: { metaNoindex: false, headerNoindex: false, indexable: true, googleDirectives: { noindex: "not-observed", nofollow: "not-observed", observations: [] } },
+      pageAudit: { metaDescription: description, phoneEvidence: ["905 393 2999"] },
+    };
+    const { container } = render(<SeoReport result={{ ...result, pagesScanned: 1, pages: [sourcePage] }} onReset={vi.fn()} hideCta />);
+
+    const r1Finding = container.querySelector("#description-navigation-prefix") as HTMLElement;
+    const summary = within(r1Finding).getByText("View evidence for 1 affected page");
+    fireEvent.click(summary);
+    const record = screen.getByText(`Saved meta description: “${description}”`, { selector: "pre" });
+    expect(record.tagName).toBe("PRE");
+    expect(record.textContent).toBe(`Saved meta description: “${description}”`);
+    expect(record.hasAttribute("data-ui-copy")).toBe(false);
+    expect(record.closest("details")?.open).toBe(true);
+    expect(container.querySelector("style")?.textContent).toContain("white-space:pre-wrap");
+    expect(container.querySelector("style")?.textContent).toContain("overflow-wrap:anywhere");
+  });
   it("shows and copies the concise AI observation in the visible AI section", async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
@@ -348,7 +371,7 @@ describe("SeoReport score scope", () => {
     expect(aiSection.getByText(/Headings matching the question format: 2/)).toBeTruthy();
     expect(aiSection.getByRole("link", { name: "/services/" }).getAttribute("href")).toBe(pageUrl);
     expect(aiSection.getByText(/These patterns are unscored/)).toBeTruthy();
-    expect(aiSection.getByText(/Question-style headings are optional. The scan did not assess answer quality or AI use, or verify identities and credentials in page code/)).toBeTruthy();
+    expect(aiSection.getByText(/Question-style headings are optional. Sentence counts are broad wording-pattern matches; answer quality was not assessed. AI use, identities and credentials in page code were not verified/)).toBeTruthy();
     expect(aiSection.getByText(/Discuss these pages with a human reviewer and your web provider/)).toBeTruthy();
     expect(aiSection.queryByText("Root-only robots policy detail.")).toBeNull();
     expect(aiSection.queryByText("Site-level crawler policy detail.")).toBeNull();

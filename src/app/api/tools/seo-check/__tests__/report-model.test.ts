@@ -434,7 +434,7 @@ describe("buildSeoReportModel", () => {
     expect(model.aiPageObservations.map(item => item.label)).toEqual(["Person information", "Question headings", "Answer wording", "Page structure", "Firm information", "Author information"]);
     expect(model.aiPageObservations[0].detail).toBe("The page code contains a person or lawyer data type.");
     expect(model.aiPageObservations[1].detail).toBe("Headings matching the question format: 1.");
-    expect(model.aiPageObservations[2].detail).toBe("Sentences matching the wording pattern: 2.");
+    expect(model.aiPageObservations[2].detail).toBe("Matching sentences: 2.");
     expect(model.aiPageObservations[3].detail).toContain("includes 4 of the structure types");
     expect(model.aiPageObservations[4].detail).toContain("Other formats and visible content were not checked");
     expect(model.aiPageObservations[5].detail).toBe("An author field or person data type was found in the page code.");

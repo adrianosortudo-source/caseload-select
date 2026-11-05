@@ -251,7 +251,7 @@ function describeAeoPageObservation(label: string, detail: string): { label: str
     return { label: "Question headings", detail: "Headings matching the question format: " + match[1] + "." };
   }
   if (label === "Direct-answer sentences" && (match = detail.match(/^(\d+) sentences matched a broad wording pattern in initial HTML\. This is not an assessment of answer quality or AI visibility\.$/))) {
-    return { label: "Answer wording", detail: "Sentences matching the wording pattern: " + match[1] + "." };
+    return { label: "Answer wording", detail: "Matching sentences: " + match[1] + "." };
   }
   if (label === "Semantic HTML structure" && (match = detail.match(/^(\d+) of this check's listed semantic element types were observed in initial HTML\. This structural observation is not a measure of AI visibility\.$/))) {
     return { label: "Page structure", detail: "The page code includes " + match[1] + " of the structure types this check looks for. This does not measure how clearly the content reads." };
