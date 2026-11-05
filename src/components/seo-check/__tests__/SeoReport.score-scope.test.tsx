@@ -48,6 +48,16 @@ describe("SeoReport score scope", () => {
     expect(screen.getByText(/If we cannot tell whether a page tells Google not to index it, that check is not scored/i)).toBeTruthy();
   });
 
+  it("keeps editorial observations separate from the topics for a separate review", () => {
+    render(<SeoReport result={result} onReset={vi.fn()} hideCta />);
+    fireEvent.click(screen.getByText("Five basic checks and counts"));
+    expect(screen.getByText("Description and heading observations prompt editorial review; they are not validated ranking tests.")).toBeTruthy();
+    expect(screen.getByText("A separate review should assess:")).toBeTruthy();
+    expect(screen.getByText("Google indexing", { exact: true })).toBeTruthy();
+    expect(screen.getByText("Search performance", { exact: true })).toBeTruthy();
+    expect(screen.getByText("Enquiry quality", { exact: true })).toBeTruthy();
+  });
+
   it("shows a truthful indeterminate status while a scan request is pending", async () => {
     const pendingFetch = vi.fn(() => new Promise<Response>(() => {}));
     vi.stubGlobal("fetch", pendingFetch);
@@ -168,7 +178,7 @@ describe("SeoReport score scope", () => {
       ...result,
       aiBots: [{
         token: "Googlebot", name: "Googlebot", blocked: false,
-        policyObservation: "no-blocking-rule-observed", robotsSemantics: "respects",
+        policyObservation: "no-blocking-rule-observed", robotsSemantics: "unknown",
         actualFetchAccess: "not-verified", purposes: ["search"], isControlToken: false,
         sourceUrl: null, reviewedAt: null, sourceVerification: "unavailable",
       }],
