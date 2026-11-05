@@ -329,8 +329,6 @@ export default function SeoReport({result,onReset,hideCta=false,showInternal=fal
 .cls-report-current .cls-decision [data-ui-copy]{text-wrap:pretty}
 .cls-report-current .cls-sequence [data-ui-copy]{text-wrap:pretty}
 .cls-report-current .cls-overview .cls-next-direction{font-size:16px}
-.cls-report-current .cls-overview h2[data-ui-copy],.cls-report-current .cls-decision h3[data-ui-copy],.cls-report-current .cls-sequence h3[data-ui-copy]{text-wrap:balance}
-.cls-report-current .cls-overview>p[data-ui-copy],.cls-report-current .cls-sequence p[data-ui-copy],.cls-report-current .cls-useful-content p[data-ui-copy]{text-wrap:wrap}
 
 
 
