@@ -173,7 +173,7 @@ export default function SeoReport({result,onReset,hideCta=false,showInternal=fal
 .cls-report .cls-overview{padding:32px 0 40px}.cls-overview h2{margin-bottom:20px}.cls-overview h3{font-size:clamp(1.25rem,2.2vw,1.65rem);line-height:1.25}.cls-overview .cls-intro-actions{margin-top:24px}
 .cls-report .cls-main{padding-inline:0}.cls-decision-order{list-style:decimal inside;margin:0;padding:0}.cls-decision-order>li{border-top:1px solid var(--ink);padding-top:20px}.cls-decision{padding:8px 0 28px}.cls-decision-state{color:var(--navy);font-weight:700}.cls-decision-block{margin-top:20px}.cls-decision-block h4{margin:0;font:800 1rem/1.35 Manrope,Arial,sans-serif;letter-spacing:-.01em}.cls-decision-pages{list-style:none;margin:20px 0;padding:0}.cls-decision-pages li+li{margin-top:14px}.cls-decision-pages a{display:block;font-weight:700}.cls-report .cls-decision-pages p{margin-top:4px}.cls-focus-first{padding:18px 0 24px}.cls-focus-first h3{font-size:1.15rem}.cls-focus-first ol{margin:12px 0 0;padding-left:24px}.cls-focus-first li{padding:5px 0;overflow-wrap:anywhere}.cls-focus-first a{font-weight:700}.cls-useful-content ul{list-style:none;padding:0;margin:20px 0}.cls-useful-content li{padding:16px 0;border-top:1px solid var(--ink)}.cls-useful-content li p{margin-top:6px}.cls-sequence ol{list-style:decimal inside;margin:24px 0 0;padding:0}.cls-sequence h3{margin-top:8px}.cls-sequence li+li{margin-top:24px}.cls-sequence h3,.cls-ai-assessment h3{font-size:1.2rem;line-height:1.3}.cls-ai-assessment{margin-top:24px}
 .cls-report-current .cls-useful-content h2,.cls-report-current .cls-cta h2,.cls-report-current .cls-focus-first h3{ text-wrap:pretty }
-.cls-report-current .cls-useful-content [data-ui-copy]{text-wrap:pretty}
+.cls-report-current .cls-useful-content p[data-ui-copy]{text-wrap:wrap}
 
 @media(max-width:480px){.cls-report-current .cls-cta h2{font-size:19px}.cls-report-current .cls-useful-content h2{font-size:20px}.cls-report-current .cls-decision h3{font-size:18px}}
 
@@ -328,6 +328,7 @@ export default function SeoReport({result,onReset,hideCta=false,showInternal=fal
 .cls-report-current .cls-basics p[data-ui-copy],.cls-report-current .cls-ai>p[data-ui-copy],.cls-report-current .cls-coverage-note{ text-wrap:pretty }
 .cls-report-current .cls-decision [data-ui-copy]{text-wrap:pretty}
 .cls-report-current .cls-sequence [data-ui-copy]{text-wrap:pretty}
+@media(max-width:480px){.cls-report-current .cls-sequence h3{font-size:clamp(17px,5vw,19px)}}
 .cls-report-current .cls-overview .cls-next-direction{font-size:16px}
 
 
