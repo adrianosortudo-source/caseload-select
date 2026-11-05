@@ -79,7 +79,18 @@ export function buildWebsitePresentation(input: ReportInput, model: SeoReportMod
   const nextSteps = model.overview?.nextSteps ?? [];
   const serviceExamples = hasFindings ? [] : pages.filter(p => ["practice", "practice-area"].includes(p.pageType) && usable(p)).slice(0,3).map(p => ({ title: p.title?.trim() || p.url, url: p.url }));
   const helpDeliverable = hasFindings
-    ? `CaseLoad Select can help prepare the decisions, review notes and publication checks for ${model.overview?.findings.map(finding => `${finding.title.toLowerCase()} (${finding.pages.length} page${finding.pages.length === 1 ? "" : "s"})`).join("; ")}. These are proposed deliverables based on this report.`
+    ? `CaseLoad Select can help prepare ${[...(model.overview?.findings ?? [])].map(finding => {
+      const count = new Set(finding.pages.map(page => page.url)).size;
+      const pages = `${count} ${count === 1 ? "page" : "pages"}`;
+      if (finding.ruleId === "R1") return `search-description drafts for ${pages}`;
+      if (finding.ruleId === "R2") return `FAQ review notes for ${pages}`;
+      if (finding.ruleId === "R3") return `service-heading review notes for ${pages}`;
+      if (finding.ruleId === "R4") return `page-role decisions for ${pages}`;
+      if (finding.id === "sitemap-exclusion") return `sitemap and search-setting checks for ${pages}`;
+      if (finding.id === "service-exclusions") return `service-page search decisions for ${pages}`;
+      if (finding.id === "team-exclusions") return `team-page search decisions for ${pages}`;
+      return `review notes and next steps for “${finding.title}” (${pages})`;
+    }).join(", ")}. These are proposed deliverables based on this report.`
     : "CaseLoad Select can compare up to three service pages with the firm's search and enquiry records and prepare a focused review. Those records were not read by this scan.";
   return { checks, allPassed, title, introduction, interpretation, direction, stopLabel, coverageNote, aiSearch, aiIntro, nextSteps, serviceExamples, helpDeliverable };
 }

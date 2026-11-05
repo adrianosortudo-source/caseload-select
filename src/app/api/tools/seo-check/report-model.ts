@@ -516,9 +516,15 @@ function buildCurrentOverview(pages: ReportPage[], actions: ReportAction[], cove
   let title = "No priority finding in this scan";
   let attention = "Use the result as a technical baseline. A further review should examine how your main service pages answer client questions and perform in search, using the firm's search and enquiry records.";
   if (mismatches.length) {
-    title = "Resolve the search conflict";
-    attention = `${mismatches.length === 1 ? "One checked page appears" : `${mismatches.length} checked pages appear`} in the sitemap but also ${mismatches.length === 1 ? "requests" : "request"} exclusion from Google. Make those settings agree with the page's intended role.`;
-    if (remaining.length) attention += ` Separately, decide whether the ${remaining.length} other excluded ${remaining.length === 1 ? "page should" : "pages should"} represent current services or team members in search.`;
+    const excludedCount = new Set(priorityExcluded.map(page => page.url)).size;
+    const mismatchCount = new Set(mismatches.map(page => page.url)).size;
+    const remainingCount = Math.max(0, excludedCount - mismatchCount);
+    title = excludedCount === 1 ? "One page asks Google to leave it out of search" : `${excludedCount} pages ask Google to leave them out of search`;
+    const overlap = mismatchCount === 1
+      ? `One of those ${excludedCount} pages also appears in the inspected sitemap.`
+      : `${mismatchCount} of those ${excludedCount} pages also appear in the inspected sitemap.`;
+    attention = `${excludedCount} checked pages ask Google to leave them out of search. ${overlap} This overlap is part of the total, not an extra page.`;
+    if (remainingCount) attention += ` The other ${remainingCount} excluded ${remainingCount === 1 ? "page is" : "pages are"} separate from that sitemap mismatch. Review each page's intended role, then align its setting and sitemap entry with that decision.`;
   } else if (priorityExcluded.length) {
     title = "Review the search exclusions";
     attention = `${priorityExcluded.length} checked ${priorityExcluded.length === 1 ? "page asks" : "pages ask"} Google to leave ${priorityExcluded.length === 1 ? "it" : "them"} out of search. Confirm which pages should attract enquiries before commissioning changes. An exclusion is not automatically an error.`;
@@ -539,14 +545,14 @@ function buildCurrentOverview(pages: ReportPage[], actions: ReportAction[], cove
   ] : findings.length ? [
     ...findings.map((finding): { title: string; detail: string } => {
       const count = new Set(finding.pages.map(page => page.url)).size;
-      if (finding.ruleId === "R1") return { title: "Approve description drafts", detail: `Draft and approve descriptions for ${count} pages, then ask the provider to publish them.` };
-      if (finding.ruleId === "R2") return { title: "Review the FAQ sections", detail: `Have a qualified reviewer read the FAQ sections on the ${count} listed service pages and confirm whether the answers fit each page.` };
-      if (finding.ruleId === "R3") return { title: "Confirm the page structure", detail: "Review whether the named service headings belong in a related-services section or the main explanation on the listed page." };
-      if (finding.ruleId === "R4") return { title: "Agree the two page roles", detail: "Decide what each listed page is for. Both pages may remain if their introductions explain their separate roles." };
-      if (finding.id === "sitemap-exclusion") return { title: "Align the team-page settings", detail: "Decide whether the listed team directory should appear in search, then align its sitemap listing with that decision." };
-      if (finding.id === "service-exclusions") return { title: "Confirm current service pages", detail: `Decide whether the ${count} excluded service page${count === 1 ? "" : "s"} is current and should be discoverable.` };
-      if (finding.id === "team-exclusions") return { title: "Confirm current team pages", detail: `Confirm which ${count} listed profiles are current. Keep deliberate exclusions.` };
-      return { title: finding.title, detail: `Review the ${count} listed page${count === 1 ? "" : "s"} and decide what should happen next.` };
+      if (finding.ruleId === "R1") return { title: "Approve search descriptions", detail: `Draft a search description for each listed page, then ask the provider to publish the approved text.` };
+      if (finding.ruleId === "R2") return { title: "Review FAQ answers", detail: "Have a qualified reviewer check whether the answers fit each page. Keep relevant sections; change only confirmed problems." };
+      if (finding.ruleId === "R3") return { title: "Review service headings", detail: "Check whether the service headings belong with related services or in the page's main explanation." };
+      if (finding.ruleId === "R4") return { title: "Agree page roles", detail: "Keep both pages only if their introductions explain their separate roles." };
+      if (finding.id === "sitemap-exclusion") return { title: "Align search settings", detail: "Decide whether the listed page should appear in search. Ask your provider to align its settings and sitemap entry." };
+      if (finding.id === "service-exclusions") return { title: "Confirm service pages", detail: `Decide whether each excluded service page is current and should appear in search.` };
+      if (finding.id === "team-exclusions") return { title: "Confirm team pages", detail: `Confirm which listed profiles are current and keep deliberate exclusions.` };
+      return { title: "Check the agreed change", detail: `Review the ${count} listed page${count === 1 ? "" : "s"} against the recorded decision.` };
     }),
     {title: "Verify agreed changes", detail: "Check the published page settings, descriptions or sections against each recorded decision."},
   ] : [

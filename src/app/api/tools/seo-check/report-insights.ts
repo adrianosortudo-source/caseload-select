@@ -172,7 +172,7 @@ function ruleTwo(pages: InsightPage[]): ReportDecision[] {
     if (distinct.length < 2 || descriptorCount < 2) continue;
     out.push(makeInsight({
       id: `faq-context-${topicKey}`, ruleId: "R2", family: "content-context", sortClass: 3, state: "Check context",
-      title: "Review the shared FAQ sections",
+      title: "Review FAQ answers",
       observed: `The same topic-specific FAQ heading appears on ${distinct.length} retrieved service pages with different service descriptors. The scan recorded headings only; it did not inspect the complete answers.`,
       whyItMatters: "The questions may help visitors on more than one service page, but the answers need to fit the page where they appear.",
       nextStep: "Ask a qualified reviewer to read the FAQ sections on these pages and decide whether the answers serve each page's topic. Keep relevant material; change wording only if that review confirms a problem.",

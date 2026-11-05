@@ -54,6 +54,10 @@ describe("buildSeoReportModel", () => {
     ];
     const model = buildSeoReportModel({ ...base, domain: "sonilaw.ca", pagesScanned: 25, pages, issues: [] });
     expect(model.accessSummary).toMatchObject({ checkedPageCount: 25, noindexCount: 6 });
+    expect(model.overview?.title).toBe("6 pages ask Google to leave them out of search");
+    expect(model.overview?.attention).toContain("1 of those 6 pages also appear in the inspected sitemap");
+    expect(model.overview?.attention).toContain("overlap is part of the total, not an extra page");
+    expect(model.overview?.attention).toContain("other 5 excluded pages");
     expect(model.overview?.findings.map(item => item.id)).toContain("sitemap-exclusion");
     const faq = model.overview?.findings.find(item => item.ruleId === "R2");
     expect(faq?.pages.map(item => item.url)).toHaveLength(3);

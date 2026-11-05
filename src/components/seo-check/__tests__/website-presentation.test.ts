@@ -43,6 +43,14 @@ describe("website report presentation", () => {
     expect(report.checks.find(c => c.id.endsWith(".indexable"))?.detail).toContain("excluded pages named");
     expect(report.direction).toContain("Start with");
   });
+  it("uses an issue-specific CTA deliverable without joining an imperative title into a sentence", () => {
+    const data = input();
+    data.pages![0].indexability.googleDirectives!.noindex = "observed";
+    data.pages![0].indexability.inSitemap = true;
+    const report = view(data);
+    expect(report.helpDeliverable).toContain("sitemap and search-setting checks for 1 page");
+    expect(report.helpDeliverable).not.toContain("for align");
+  });
   it("distinguishes a page limit from a retrieval failure and never invents a site total", () => {
     const data = input();
     Object.assign(data.coverage!, { stopReason: "page-limit", partial: true, discoveredCandidateUrls: 101 });
