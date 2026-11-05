@@ -134,7 +134,7 @@ function descriptionPrefixMatch(page: InsightPage): boolean {
   return recorded.includes(digits);
 }
 function ruleOne(pages: InsightPage[]): ReportDecision[] {
-  const matched = sortPages(pages.filter(descriptionPrefixMatch));
+  const matched = sortPages(pages.filter(descriptionPrefixMatch)).filter((page, index, all) => all.findIndex(candidate => candidate.url === page.url) === index);
   if (!matched.length) return [];
   return [makeInsight({
     id: "description-navigation-prefix", ruleId: "R1", family: "description-contamination", sortClass: 1, state: "Improve first",

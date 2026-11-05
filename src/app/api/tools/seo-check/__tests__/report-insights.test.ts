@@ -22,6 +22,7 @@ describe("report insights", () => {
     expect(result).toHaveLength(1);
     expect(result[0]).toMatchObject({ ruleId: "R1", state: "Improve first", pages: [{ url: "https://alpha.test/en/service/" }, { url: "https://beta.test/pt/service/" }] });
     expect(result[0].title).toBe("2 search descriptions begin with menu text");
+    expect(buildReportInsights([matchingDescription("https://alpha.test/en/service/"), matchingDescription("https://alpha.test/en/service/")])[0]).toMatchObject({ title: "1 search description begins with menu text", pages: [{ url: "https://alpha.test/en/service/" }] });
     expect(result[0].pages[0].evidence).toContain(prefix);
     expect(buildReportInsights([matchingDescription("https://renamed.test/service/")])[0].ruleId).toBe("R1");
   });
