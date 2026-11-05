@@ -269,7 +269,7 @@ export default function SeoReport({result,onReset,hideCta=false,showInternal=fal
 .cls-report-current .cls-state{color:var(--ink)}
 .cls-report-current .cls-coverage-note{font-size:15px;color:#4a5a72}
 .cls-report-current .cls-overview{padding:30px 32px;background:var(--white)}
-.cls-report-current .cls-overview h2{font-size:34px;margin-bottom:16px}
+.cls-report-current .cls-overview h2{font-size:32px;margin-bottom:16px}
 .cls-report-current .cls-next-direction{color:var(--navy);font-weight:700;font-size:20px;margin-top:20px}
 .cls-report-current .cls-section{padding:32px 0;border:0}
 .cls-report-current .cls-basic-list{list-style:none;padding:0;margin:24px 0 0;background:var(--white)}
