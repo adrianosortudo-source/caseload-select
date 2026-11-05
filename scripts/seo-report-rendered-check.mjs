@@ -96,7 +96,8 @@ try {
     const copied = await page.evaluate(() => navigator.clipboard.readText());
     assert(copied.includes('25-page sample limit reached'));
     assert(!copied.includes('98/100'));
-    for (const width of [1440, 1024, 768, 640, 375, 320, 294]) {
+    assert(copied.includes('The clarity and relevance of each title need a content review.'));
+    for (const width of [1440, 1024, 768, 640, 375, 349, 320, 294]) {
       await page.setViewportSize({ width, height: 1000 });
       await page.evaluate(() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))));
       for (const state of ['default', 'ai-expanded']) {
