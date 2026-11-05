@@ -518,13 +518,11 @@ function buildCurrentOverview(pages: ReportPage[], actions: ReportAction[], cove
   if (mismatches.length) {
     const excludedCount = new Set(priorityExcluded.map(page => page.url)).size;
     const mismatchCount = new Set(mismatches.map(page => page.url)).size;
-    const remainingCount = Math.max(0, excludedCount - mismatchCount);
     title = excludedCount === 1 ? "One page asks Google to leave it out of search" : `${excludedCount} pages ask Google to leave them out of search`;
-    const overlap = mismatchCount === 1
-      ? `One of those ${excludedCount} pages also appears in the inspected sitemap.`
-      : `${mismatchCount} of those ${excludedCount} pages also appear in the inspected sitemap.`;
-    attention = `${excludedCount} checked ${excludedCount === 1 ? "page asks Google to leave it" : "pages ask Google to leave them"} out of search. ${overlap} This overlap is part of the total, not an extra page.`;
-    if (remainingCount) attention += ` The other ${remainingCount} excluded ${remainingCount === 1 ? "page is" : "pages are"} separate from that sitemap mismatch. Review each page's intended role, then align its setting and sitemap entry with that decision.`;
+    const sitemapRelationship = mismatchCount === 1
+      ? `One ${excludedCount === 1 ? "page" : `of those ${excludedCount} pages`} is also listed in the inspected sitemap.`
+      : `${mismatchCount} of those ${excludedCount} pages are also listed in the inspected sitemap.`;
+    attention = `${excludedCount} checked ${excludedCount === 1 ? "page asks Google to leave it" : "pages ask Google to leave them"} out of search. ${sitemapRelationship} Review each page's purpose before changing its search setting or sitemap entry.`;
   } else if (priorityExcluded.length) {
     title = "Review the search exclusions";
     attention = `${priorityExcluded.length} checked ${priorityExcluded.length === 1 ? "page asks" : "pages ask"} Google to leave ${priorityExcluded.length === 1 ? "it" : "them"} out of search. Confirm which pages should attract enquiries before commissioning changes. An exclusion is not automatically an error.`;
@@ -545,13 +543,13 @@ function buildCurrentOverview(pages: ReportPage[], actions: ReportAction[], cove
   ] : findings.length ? [
     ...findings.map((finding): { title: string; detail: string } => {
       const count = new Set(finding.pages.map(page => page.url)).size;
-      if (finding.ruleId === "R1") return { title: "Approve search descriptions", detail: `Draft a search description for each listed page, then ask the provider to publish the approved text.` };
+      if (finding.ruleId === "R1") return { title: "Draft and approve search descriptions", detail: `Draft a search description for each listed page, then ask the provider to publish the approved text.` };
       if (finding.ruleId === "R2") return { title: "Review FAQ answers", detail: "Have a qualified reviewer check whether the answers fit each page. Keep relevant sections; change only confirmed problems." };
       if (finding.ruleId === "R3") return { title: "Review service headings", detail: "Check whether the service headings belong with related services or in the page's main explanation." };
       if (finding.ruleId === "R4") return { title: "Agree page roles", detail: "Decide what each page is for. If you keep both, make their roles clear." };
       if (finding.id === "sitemap-exclusion") return { title: "Align search settings", detail: "Decide whether the listed page should appear in search. Ask your provider to align its settings and sitemap entry." };
       if (finding.id === "service-exclusions") return { title: "Confirm service pages", detail: `Decide whether each excluded service page is current and should appear in search.` };
-      if (finding.id === "team-exclusions") return { title: "Confirm team pages", detail: `Confirm which listed profiles are current and keep deliberate exclusions.` };
+      if (finding.id === "team-exclusions") return { title: "Confirm team pages", detail: `Confirm which listed profiles are current. Keep deliberate exclusions.` };
       return { title: "Check the agreed change", detail: `Review the ${count} listed page${count === 1 ? "" : "s"} against the recorded decision.` };
     }),
     {title: "Verify agreed changes", detail: "Check the published page settings, descriptions or sections against each recorded decision."},
@@ -572,7 +570,7 @@ function buildCurrentOverview(pages: ReportPage[], actions: ReportAction[], cove
     const audiencePhrase = audienceHeading?.match(/^.*?\bfor\s+[^\s]+/i)?.[0];
     if (audiencePhrase && positiveExamples.length < 3) positiveExamples.push({ text: `Audience wording: “${audiencePhrase}”.`, pageTitle: page.title?.trim() || page.url, url: page.url });
     const contactPhrase = page.pageAudit?.ctaEvidence?.find(value => value.trim());
-    if (/contact/i.test(page.url) && contactPhrase && page.pageAudit?.phoneEvidence?.length && positiveExamples.length < 3) positiveExamples.push({ text: `Contact page: “${contactPhrase}” and a phone number.`, pageTitle: page.title?.trim() || page.url, url: page.url });
+    if (/contact/i.test(page.url) && contactPhrase && page.pageAudit?.phoneEvidence?.length && positiveExamples.length < 3) positiveExamples.push({ text: `The contact page lists a phone number and invites visitors to “${contactPhrase}”.`, pageTitle: page.title?.trim() || page.url, url: page.url });
     const specificH1 = headings.find(value => /\b(?:employment|immigration|real estate|wills|estates|civil litigation|contract)\b/i.test(value) && /\b(?:law|lawyer|attorney|service)\b/i.test(value));
     if (specificH1 && positiveExamples.length < 3 && !positiveExamples.some(example => example.url === page.url)) positiveExamples.push({ text: `The heading names a legal service: “${specificH1}”.`, pageTitle: page.title?.trim() || page.url, url: page.url });
     if (positiveExamples.length >= 3) break;

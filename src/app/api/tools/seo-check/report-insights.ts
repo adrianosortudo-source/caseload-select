@@ -143,7 +143,7 @@ function ruleOne(pages: InsightPage[]): ReportDecision[] {
     whyItMatters: "A searcher may see navigation and a contact prompt where a short explanation of the service and audience would help identify the page.",
     nextStep: "Have a content reviewer draft a concise service-and-audience description for each listed page. The firm should approve the wording before the web provider updates the published fields.",
     owner: "The firm's content reviewer approves the descriptions. The web provider updates the page fields.",
-    verification: "Inspect the published description field for every listed URL. Search engines may still display different wording.",
+    verification: "Check the published description for every listed page. Search engines can choose different wording.",
     pages: matched.map(page => pageFor(page, exactEvidence("Saved meta description", audit(page).metaDescription ?? ""))),
     sourceFieldRefs: matched.map(page => `${page.url}#pageAudit.metaDescription,pageAudit.phoneEvidence`), evidenceBasis: "A bounded locale-pair, recorded-phone and explicit EN/PT contact-prefix match at the start of saved descriptions.",
   })];
@@ -221,7 +221,7 @@ function ruleThree(pages: InsightPage[]): ReportDecision[] {
       whyItMatters: "A reader should be able to tell which service the page explains and how related services connect to it.",
       nextStep: "Review whether these topics are clearly grouped as related services or were unintentionally placed in the main service explanation. Do not change the headings until that context is confirmed.",
       owner: "The firm and a qualified content reviewer confirm the intended page structure. The web provider implements any approved changes.",
-      verification: "Review the published page's title, main explanation and related-services grouping after any agreed change.",
+      verification: "After an agreed change, review the page title, main explanation and how related services are presented.",
       pages: [pageFor(candidate.page, `${exactEvidence("Title", candidate.page.title ?? candidate.page.url)}; H1: ${(audit(candidate.page).h1s ?? []).map(value => `“${value}”`).join("; ")}; H2 evidence: ${representative.map(item => `“${item.heading}”`).join("; ")}`)],
       sourceFieldRefs: [`${candidate.page.url}#title,pageAudit.h1s,pageAudit.h2s`], evidenceBasis: "Title and H1 agree on one vocabulary topic; two or more distinct other service families occur in saved H2 headings.",
     }));
@@ -251,10 +251,10 @@ function ruleFour(pages: InsightPage[]): ReportDecision[] {
     if (!bothShowDifferentPageWording) continue;
     out.push(makeInsight({
       id: `page-role-${topic}-${firstLanguage}`, ruleId: "R4", family: "intent-decision", sortClass: 2, state: "Confirm intent",
-      title: `Agree the roles of these ${topic} pages`,
+      title: `Give each ${topic} page a clear purpose`,
       observed: `Two retrieved pages are identified as ${topic} pages by their titles and main headings, but their public wording differs. This scan does not measure search performance or establish that either page should be removed.`,
       whyItMatters: "Clear page roles can help the firm and its visitors understand which page provides a broad overview and which addresses a particular audience or need.",
-      nextStep: "Decide what each page is for. A valid decision is to keep both, with introductions and navigation that explain their separate roles.",
+      nextStep: "Decide whether these pages serve separate audiences. If both stay, explain their roles in each introduction and link.",
       owner: "The firm confirms the audience and role of each page. A content reviewer and web provider update approved wording and navigation.",
       verification: "Record an agreed role for each URL and check its published introduction and navigation after any approved update.",
       pages: [first, second].map(page => pageFor(page, `${exactEvidence("Title", page.title ?? page.url)}; H1: ${(audit(page).h1s ?? []).map(value => `“${value}”`).join("; ")}`)),

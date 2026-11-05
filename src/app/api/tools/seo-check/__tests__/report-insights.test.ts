@@ -79,6 +79,7 @@ describe("report insights", () => {
     expect(r3?.pages[0].evidence).toContain("H1:");
     expect(r3?.pages[0].evidence).toContain("H2 evidence:");
     expect(r3?.nextStep).toContain("related services");
+    expect(r3?.verification).toBe("After an agreed change, review the page title, main explanation and how related services are presented.");
   });
 
   it("does not promote shared related-service headings, ambiguous pages, unsupported evidence or article titles", () => {
@@ -101,7 +102,7 @@ describe("report insights", () => {
     const r4 = buildReportInsights(pages).find(item => item.ruleId === "R4");
     expect(r4).toMatchObject({ state: "Confirm intent" });
     expect(r4?.pages).toHaveLength(2);
-    expect(r4?.nextStep).toContain("keep both");
+    expect(r4?.nextStep).toContain("If both stay");
     const translationOnly = [pages[0], pages[2]];
     expect(ids(translationOnly)).not.toContain("R4");
   });
