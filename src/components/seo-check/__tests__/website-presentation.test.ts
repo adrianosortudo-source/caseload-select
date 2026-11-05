@@ -41,7 +41,16 @@ describe("website report presentation", () => {
     expect(report.checks.find(c => c.id.endsWith('.indexable'))?.review).toBe(1);
     expect(report.title).toBe("Review the search exclusions");
     expect(report.checks.find(c => c.id.endsWith(".indexable"))?.detail).toContain("excluded pages named");
-    expect(report.direction).toContain("which pages belong in search");
+    expect(report.direction).toContain("Start with");
+    expect(report.interpretation).not.toContain("Google may choose different wording");
+  });
+  it("uses an issue-specific CTA deliverable without joining an imperative title into a sentence", () => {
+    const data = input();
+    data.pages![0].indexability.googleDirectives!.noindex = "observed";
+    data.pages![0].indexability.inSitemap = true;
+    const report = view(data);
+    expect(report.helpDeliverable).toContain("sitemap and search-setting checks for 1 page");
+    expect(report.helpDeliverable).not.toContain("for align");
   });
   it("distinguishes a page limit from a retrieval failure and never invents a site total", () => {
     const data = input();
@@ -71,7 +80,7 @@ describe("website report presentation", () => {
     expect(view(data).aiSearch.every(b => b.result === "Rules not assessed")).toBe(true);
     expect(view(data).aiIntro).toContain("not assessed");
     data.aiBots.push({ name: "ChatGPT", token: "OAI-SearchBot", blocked: true, purposes: ["search"], policyObservation: "blocking-rule-observed" });
-    expect(view(data).aiSearch[0].result).toBe("Blocking rule found");
+    expect(view(data).aiSearch[0].result).toBe("Blocking rule observed");
     expect(view(data).aiIntro).toContain("intentional");
   });
   it("only uses observed service pages as examples and never mutates saved data", () => {

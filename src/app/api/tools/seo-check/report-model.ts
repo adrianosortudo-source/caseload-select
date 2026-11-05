@@ -2,6 +2,7 @@ import { normalizeLegacyPurposes } from "./crawler-policy";
 import { CATEGORY_WEIGHTS } from "./category-weights";
 import type { AiBotPurpose } from "./engine-core";
 import { CURRENT_METHODOLOGY_VERSION, isLimitedScoreMethodology, isCurrentMethodology } from "./methodology-version";
+import { buildReportInsights, type ReportPageAudit } from "./report-insights";
 
 /**
  * Deterministic public report model for the in-tool SEO check.
@@ -28,7 +29,17 @@ export interface ReportCheckItem {
   applicability?: "applicable" | "not-applicable" | "unknown";
 }
 
+const SAVED_GOOGLE_NOINDEX_DETAILS = [
+  "The inspected HTML or response headers contain a noindex instruction addressed to Google. Google can act on it only if it retrieves this response; this does not confirm current indexing status.",
+];
+const GOOGLE_NOINDEX_DISPLAY_DETAIL = "A noindex instruction for Google was observed in the inspected HTML or response headers. Google can act on it only after retrieving this response; this does not confirm the page's current Google indexing status.";
+function checkDetailForDisplay(detail: string, methodologyVersion?: number): string {
+  return methodologyVersion === 5 && SAVED_GOOGLE_NOINDEX_DETAILS.includes(detail) ? GOOGLE_NOINDEX_DISPLAY_DETAIL : detail;
+}
+
 export function checkObservationDisplayText(item: Pick<ReportCheckItem, "detail" | "scored" | "disposition">, methodologyVersion?: number): string {
+  const displayDetail = checkDetailForDisplay(item.detail, methodologyVersion);
+  if (displayDetail !== item.detail) return displayDetail;
   if (methodologyVersion !== 4 && methodologyVersion !== 5 || item.scored !== false) return item.detail;
   const explanation = item.disposition === "pending-review"
     ? "This check is excluded until its source and meaning are verified; it does not establish a search defect. No fix is recommended from this check."
@@ -64,6 +75,7 @@ export interface ReportPage {
     practiceAreaIntent: boolean;
     trust?: { credentials: boolean };
   };
+  pageAudit?: ReportPageAudit | null;
   categories: ReportCategory[];
 }
 
@@ -144,7 +156,7 @@ export interface ReportAction {
 
 export interface ReportDecision {
   id: string;
-  state: "Observed mismatch" | "Confirm intended use" | "Evidence incomplete" | "Observed finding";
+  state: "Observed mismatch" | "Confirm intended use" | "Evidence incomplete" | "Observed finding" | "Resolve first" | "Improve first" | "Check context" | "Confirm intent";
   title: string;
   observed: string;
   whyItMatters: string;
@@ -152,12 +164,20 @@ export interface ReportDecision {
   owner: string;
   verification: string;
   pages: Array<{ title: string; url: string; evidence: string }>;
+  ruleId?: string;
+  family?: string;
+  sortClass?: number;
+  sourceFieldRefs?: string[];
+  evidenceBasis?: string;
+  relatedPages?: Array<{ title: string; url: string; evidence: string }>;
 }
 
 export interface ReportOverview {
   title: string;
   attention: string;
   findings: ReportDecision[];
+  focusLinks: Array<{ id: string; title: string; pageCount: number }>;
+  positiveExamples: Array<{ text: string; pageTitle: string; url: string }>;
   nextSteps: Array<{ title: string; detail: string }>;
   basics: string[];
   aiAccess: string;
@@ -224,9 +244,9 @@ function describeAeoPageObservation(label: string, detail: string): { label: str
     "A named business entity was observed in structured data.": { label: "Firm information", detail: "A business name was found in the page data read by this check. Its accuracy was not verified." },
     "A meta description was observed; no named entity was found in the inspected JSON-LD. Other formats and rendered markup were not assessed.": { label: "Firm information", detail: "A short page description was found, but no business name was found in the structured data inspected. Other formats and visible content were not checked." },
     "No named entity was found in the inspected JSON-LD. Other formats and rendered markup were not assessed.": { label: "Firm information", detail: "No business name was found in the structured data inspected. Other formats and visible content were not checked." },
-    "Attorney or Person schema was observed in the inspected HTML.": { label: "Person information", detail: "The page code contains a person or lawyer data type. No identity or qualifications were verified." },
+    "Attorney or Person schema was observed in the inspected HTML.": { label: "Person information", detail: "The page code contains a person or lawyer data type." },
     "No Attorney or Person JSON-LD type was observed. Its absence is optional and does not establish whether lawyer details appear elsewhere.": { label: "Person information", detail: "No person or lawyer data type was found in the inspected page code. This does not mean the page lacks lawyer information." },
-    "An author meta tag or Person/Attorney JSON-LD was observed. Identity, qualifications, and other page content were not assessed.": { label: "Author information", detail: "An author field or person data type was found in the page code. Authorship and credentials were not verified." },
+    "An author meta tag or Person/Attorney JSON-LD was observed. Identity, qualifications, and other page content were not assessed.": { label: "Author information", detail: "An author field or person data type was found in the page code." },
     "No author meta tag or Person/Attorney JSON-LD was observed. Other formats and content were not assessed.": { label: "Author information", detail: "No author field or person data type was found in the page code inspected. Other formats and content were not checked." },
   };
   const expectedLabels: Record<string, string> = {
@@ -238,10 +258,10 @@ function describeAeoPageObservation(label: string, detail: string): { label: str
   if (known && expectedLabels[label] === known.label) return known;
   let match: RegExpMatchArray | null;
   if (label === "Question-format headings" && (match = detail.match(/^(\d+) headings matched this question-format pattern in initial HTML\. This is a formatting observation; no question format is required by this check\.$/))) {
-    return { label: "Question headings", detail: match[1] + (match[1] === "1" ? " heading looks like a question" : " headings look like questions") + " to this check. That format is optional. The scan does not judge how well the page answers client questions." };
+    return { label: "Question headings", detail: "Headings matching the question format: " + match[1] + "." };
   }
   if (label === "Direct-answer sentences" && (match = detail.match(/^(\d+) sentences matched a broad wording pattern in initial HTML\. This is not an assessment of answer quality or AI visibility\.$/))) {
-    return { label: "Answer wording", detail: match[1] + (match[1] === "1" ? " sentence matched" : " sentences matched") + " a broad wording pattern. The scan did not assess whether they provide useful answers." };
+    return { label: "Answer wording", detail: "Matching sentences: " + match[1] + "." };
   }
   if (label === "Semantic HTML structure" && (match = detail.match(/^(\d+) of this check's listed semantic element types were observed in initial HTML\. This structural observation is not a measure of AI visibility\.$/))) {
     return { label: "Page structure", detail: "The page code includes " + match[1] + " of the structure types this check looks for. This does not measure how clearly the content reads." };
@@ -252,7 +272,7 @@ function describeAeoPageObservation(label: string, detail: string): { label: str
 const METHOD_NOTE = "This saved scan used an earlier scoring method. Run a new scan for the current report. Scores from different methods should not be compared.";
 const UNSUPPORTED_METHOD_NOTE = "This saved scan records a scoring method this report does not interpret. Run a new scan for the current report.";
 const SCORE_NOTE = "Not a whole-site grade or ranking prediction.";
-const LIMITATION = (n: number) => `Only the initial HTML of ${n} ${n === 1 ? "page" : "pages"} was checked. This is not a full site audit and does not verify indexing, rankings, enquiries, legal accuracy, or AI citations of the firm.`;
+const LIMITATION = (n: number) => `Only the initial HTML of ${n} ${n === 1 ? "page" : "pages"} was checked. This is not a full site audit and does not verify indexing, rankings, enquiries or legal accuracy.`;
 const PARTIAL_LIMITATION = "The scan is incomplete. Findings apply only to inspected pages.";
 const CTA_HREF = "https://cal.com/adriano-caseloadselect/conversation";
 
@@ -416,7 +436,7 @@ function makeAction(family: Family, issues: ReportIssue[], pages: ReportPage[], 
   };
 }
 
-function buildCurrentOverview(pages: ReportPage[], actions: ReportAction[], coverage: ReportInput["coverage"]): ReportOverview {
+function buildCurrentOverview(pages: ReportPage[], actions: ReportAction[], coverage: ReportInput["coverage"], insights: ReportDecision[]): ReportOverview {
   const usable = pages.filter(page => page.httpStatus >= 200 && page.httpStatus < 300);
   const excluded = usable.filter(page => page.indexability?.googleDirectives?.noindex === "observed");
   const priorityExcluded = excluded.filter(page => !utilityPage(page));
@@ -444,6 +464,9 @@ function buildCurrentOverview(pages: ReportPage[], actions: ReportAction[], cove
     owner: "The firm decides which pages should appear in search. The web provider applies that decision.",
     verification: "Check the page settings and the updated sitemap together. Use Google Search Console to review the page's reported indexing status.",
     pages: pageEvidence(mismatches, true),
+    relatedPages: pages.filter(page => {
+      try { return new URL(page.url).pathname.replace(/\/+$/, "") === "/our-team"; } catch { return false; }
+    }).map(page => ({ title: page.title?.trim() || page.url, url: page.url, evidence: "A separate page in the saved inventory to compare. The scan does not establish that it replaces the listed team page." })),
   });
   if (restricted.length) findings.push({
     id: "crawler-access", state: "Confirm intended use", title: "Confirm access to pages meant to attract clients",
@@ -488,7 +511,6 @@ function buildCurrentOverview(pages: ReportPage[], actions: ReportAction[], cove
     verification: "Obtain page-level settings and check the relevant URLs in the firm's search account.", pages: pageEvidence(uncertain),
   });
   for (const action of actions.filter(action => !["search-exclusion", "robots-access"].includes(action.family))) {
-    if (findings.length >= 3) break;
     findings.push({id: action.id, state: action.evidenceLabel === "Observed in this scan" ? "Observed finding" : "Evidence incomplete",
       title: action.title, observed: action.observed, whyItMatters: action.whyItMatters, nextStep: action.nextStep,
       owner: "The firm agrees the priority. The web provider or responsible content reviewer establishes the work required.",
@@ -496,12 +518,21 @@ function buildCurrentOverview(pages: ReportPage[], actions: ReportAction[], cove
       pages: action.affectedUrls.map(url => ({title: pages.find(page => page.url === url)?.title?.trim() || url, url, evidence: action.evidenceLabel})),
     });
   }
+  findings.push(...insights);
+  const findingsOrder = new Map([["Resolve first", 0], ["Observed mismatch", 0], ["Confirm intended use", 1], ["Confirm intent", 1], ["Improve first", 2], ["Check context", 3], ["Evidence incomplete", 4], ["Observed finding", 5]]);
+  findings.sort((a, b) => (a.sortClass ?? 0) - (b.sortClass ?? 0)
+    || (findingsOrder.get(a.state) ?? 9) - (findingsOrder.get(b.state) ?? 9)
+    || (a.pages[0]?.url ?? "").localeCompare(b.pages[0]?.url ?? ""));
   let title = "No priority finding in this scan";
   let attention = "Use the result as a technical baseline. A further review should examine how your main service pages answer client questions and perform in search, using the firm's search and enquiry records.";
   if (mismatches.length) {
-    title = "Resolve the search conflict";
-    attention = `${mismatches.length === 1 ? "One checked page appears" : `${mismatches.length} checked pages appear`} in the sitemap but also ${mismatches.length === 1 ? "requests" : "request"} exclusion from Google. Make those settings agree with the page's intended role.`;
-    if (remaining.length) attention += ` Separately, decide whether the ${remaining.length} other excluded ${remaining.length === 1 ? "page should" : "pages should"} represent current services or team members in search.`;
+    const excludedCount = new Set(priorityExcluded.map(page => page.url)).size;
+    const mismatchCount = new Set(mismatches.map(page => page.url)).size;
+    title = excludedCount === 1 ? "One page asks Google to leave it out of search" : `${excludedCount} pages ask Google to leave them out of search`;
+    const sitemapRelationship = mismatchCount === 1
+      ? `One ${excludedCount === 1 ? "page" : `of those ${excludedCount} pages`} is also listed in the inspected sitemap.`
+      : `${mismatchCount} of those ${excludedCount} pages are also listed in the inspected sitemap.`;
+    attention = `${excludedCount} checked ${excludedCount === 1 ? "page asks Google to leave it" : "pages ask Google to leave them"} out of search. ${sitemapRelationship} Review each page's purpose before changing its search setting or sitemap entry.`;
   } else if (priorityExcluded.length) {
     title = "Review the search exclusions";
     attention = `${priorityExcluded.length} checked ${priorityExcluded.length === 1 ? "page asks" : "pages ask"} Google to leave ${priorityExcluded.length === 1 ? "it" : "them"} out of search. Confirm which pages should attract enquiries before commissioning changes. An exclusion is not automatically an error.`;
@@ -520,21 +551,46 @@ function buildCurrentOverview(pages: ReportPage[], actions: ReportAction[], cove
     {title: "Verify page access", detail: "Have the provider check the important service and contact pages in a browser and review their access settings."},
     {title: "Obtain reliable evidence", detail: "Complete the page review before choosing website improvements."},
   ] : findings.length ? [
-    {title: "Agree the page priorities", detail: "Review the listed pages and confirm their current purpose. Decide which should appear in search and record deliberate exclusions."},
-    {title: "Commission the work", detail: "Have the web provider or content reviewer scope the changes for those pages. Agree an owner and a clear completion check for each item."},
-    {title: "Verify before expanding the work", detail: "Check the changed pages and use the firm's search account to confirm their reported status. Review enquiry performance separately."},
+    ...findings.map((finding): { title: string; detail: string } => {
+      const count = new Set(finding.pages.map(page => page.url)).size;
+      if (finding.ruleId === "R1") return { title: "Approve search descriptions", detail: `Draft a search description for each listed page, then ask the provider to publish the approved text.` };
+      if (finding.ruleId === "R2") return { title: "Review FAQ answers", detail: "Have a qualified reviewer check whether the answers fit each page. Keep relevant sections; change only confirmed problems." };
+      if (finding.ruleId === "R3") return { title: "Review service headings", detail: "Check whether the service headings belong with related services or in the page's main explanation." };
+      if (finding.ruleId === "R4") return { title: "Agree page roles", detail: "Decide what each page is for. If you keep both, make their roles clear." };
+      if (finding.id === "sitemap-exclusion") return { title: "Align search settings", detail: "Decide whether the listed page should appear in search. Ask your provider to align its settings and sitemap entry." };
+      if (finding.id === "service-exclusions") return { title: "Confirm service pages", detail: `Decide whether each excluded service page is current and should appear in search.` };
+      if (finding.id === "team-exclusions") return { title: "Confirm team pages", detail: `Confirm which listed profiles are current. Keep deliberate exclusions.` };
+      return { title: "Check the agreed change", detail: `Review the ${count} listed page${count === 1 ? "" : "s"} against the recorded decision.` };
+    }),
+    {title: "Verify agreed changes", detail: "Check the published page settings, descriptions or sections against each recorded decision."},
   ] : [
-    {title: "Choose the services to assess", detail: "Identify the matters and locations the firm wants its website to support."},
-    {title: "Review the evidence", detail: "Assess the priority service pages alongside search performance, client questions and enquiry quality."},
-    {title: "Agree the improvement plan", detail: "Use that review to decide which changes are warranted and how their results will be measured."},
+    {title: "Optional service-page review", detail: "Compare up to three clearly identified service pages with the firm's search and enquiry records. Review how people find those pages, what enquiries follow and whether the public wording fits the work the firm wants. This review needs the firm's own search and enquiry data."},
   ];
   const secure = usable.filter(page => page.url.startsWith("https://")).length;
   const contact = usable.filter(page => page.lawFirm?.phoneVisible || page.lawFirm?.contactFormPresent || page.lawFirm?.consultationCta).length;
+  const positiveExamples: ReportOverview["positiveExamples"] = [];
+  const examplePages = [...usable].sort((a, b) => {
+    const audience = (page: ReportPage) => (page.pageAudit?.h1s ?? []).find(value => /\bfor\s+(?:brazilians|families|businesses|employees|employers|workers)\b/i.test(value) && /\b(?:law|lawyer|attorney|immigration|service)\b/i.test(value)) ?? "";
+    const priority = (page: ReportPage) => audience(page) ? 0 : /contact/i.test(page.url) ? 1 : 2;
+    return priority(a) - priority(b) || (audience(a).length - audience(b).length) || a.url.localeCompare(b.url);
+  });
+  for (const page of examplePages) {
+    const headings = page.pageAudit?.h1s ?? [];
+    const audienceHeading = headings.find(value => /\bfor\s+(?:brazilians|families|businesses|employees|employers|workers)\b/i.test(value) && /\b(?:law|lawyer|attorney|immigration|service)\b/i.test(value));
+    const audiencePhrase = audienceHeading?.match(/^.*?\bfor\s+[^\s]+/i)?.[0];
+    if (audiencePhrase && positiveExamples.length < 3) positiveExamples.push({ text: `Audience wording: “${audiencePhrase}”.`, pageTitle: page.title?.trim() || page.url, url: page.url });
+    const contactPhrase = page.pageAudit?.ctaEvidence?.find(value => value.trim());
+    if (/contact/i.test(page.url) && contactPhrase && page.pageAudit?.phoneEvidence?.length && positiveExamples.length < 3) positiveExamples.push({ text: `Contact page: “${contactPhrase}” and a phone number.`, pageTitle: page.title?.trim() || page.url, url: page.url });
+    const specificH1 = headings.find(value => /\b(?:employment|immigration|real estate|wills|estates|civil litigation|contract)\b/i.test(value) && /\b(?:law|lawyer|attorney|service)\b/i.test(value));
+    if (specificH1 && positiveExamples.length < 3 && !positiveExamples.some(example => example.url === page.url)) positiveExamples.push({ text: `The heading names a legal service: “${specificH1}”.`, pageTitle: page.title?.trim() || page.url, url: page.url });
+    if (positiveExamples.length >= 3) break;
+  }
   const basics = [`${usable.length} of ${pages.length} inspected pages returned a successful response.`, `${secure} inspected pages loaded over HTTPS.`, `${contact} inspected pages matched a contact-detail or enquiry-invitation pattern.`];
   if (excluded.some(utilityPage)) basics.push("Search exclusions were also observed on utility pages. A utility-page exclusion alone is not a marketing defect.");
-  return {title, attention, findings: findings.slice(0,3), nextSteps, basics,
+  const focusLinks = findings.slice(0, 3).map(finding => ({ id: finding.id, title: finding.title, pageCount: new Set(finding.pages.map(page => page.url)).size }));
+  return {title, attention, findings, focusLinks, positiveExamples, nextSteps, basics,
     aiAccess: "The scan inspected page instructions and published crawler rules. These describe access settings, not proof that an AI service fetched a page.",
-    aiVisibility: "Not measured. This scan did not collect AI answers, brand recommendations or citations of the firm.",
+    aiVisibility: "Actual AI mentions and citations were not measured.",
     aiNextStep: "Review actual answers about your services and the locations you serve. Check whether AI services mention and link to the firm, and describe it accurately.",
   };
 }
@@ -688,7 +744,8 @@ export function buildSeoReportModel(input: ReportInput): SeoReportModel {
       : "No scored checks contributed to this scan. This scan does not grade the whole site or predict rankings."
     : METHOD_NOTE;
   const limitations = [LIMITATION(pages.length || input.pagesScanned), ...(resolvedPartial ? [PARTIAL_LIMITATION] : [])];
-  const overview = current ? buildCurrentOverview(pages, priorityActions, input.coverage) : null;
+  const insights = version === 5 ? buildReportInsights(pages) : [];
+  const overview = current ? buildCurrentOverview(pages, priorityActions, input.coverage, insights) : null;
   return {
     methodology: { version, label: current ? "Website checks" : typeof input.methodologyVersion !== "number" ? "Method not recorded" : supported || version <= 3 ? "Historical score" : "Unsupported method", notice: current ? null : version > CURRENT_METHODOLOGY_VERSION ? UNSUPPORTED_METHOD_NOTE : METHOD_NOTE },
     coverage: {
@@ -730,7 +787,7 @@ export function buildSeoReportModel(input: ReportInput): SeoReportModel {
     aiPageObservations,
     crawlerPolicies,
     limitations,
-    findingGroups: reportIssues.map((issue) => ({ category: issue.category, title: issue.title, detail: issue.detail, affectedUrls: issue.affectedUrls, status: issue.status })),
+    findingGroups: reportIssues.map((issue) => ({ category: issue.category, title: issue.title, detail: checkDetailForDisplay(issue.detail, version), affectedUrls: issue.affectedUrls, status: issue.status })),
     scoreExplanation: {
       assessed: current ? assessed : scoreMethodSupported && Number.isFinite(input.overallScore),
       score: scoreMethodSupported && Number.isFinite(input.overallScore) && (!current || assessed) ? input.overallScore! : null,

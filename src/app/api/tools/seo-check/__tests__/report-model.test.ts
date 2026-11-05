@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildSeoReportModel, checkObservationDisplayText, getDisplayedCategoryWeights, type ReportInput } from "../report-model";
+import { buildSeoReportModel, checkObservationDisplayText, getDisplayedCategoryWeights, type ReportInput, type ReportPage } from "../report-model";
 
 const base: ReportInput = {
   domain: "example.com",
@@ -32,12 +32,63 @@ const base: ReportInput = {
 };
 
 describe("buildSeoReportModel", () => {
+  it("integrates Soni-like technical evidence and shared FAQ review without capping distinct findings", () => {
+    const excluded = [
+      ["/practice/employment-law/", "Employment Law | Soni Law Firm", "practice"],
+      ["/team/", "Our Team | Soni Law Firm", "attorney"],
+      ["/team/thanh-justin-pham/", "Thanh Justin Pham | Soni Law Firm", "attorney"],
+      ["/team/ummuhani-khaleel/", "Ummuhani Khaleel | Soni Law Firm", "attorney"],
+      ["/team/haya-tariq/", "Haya Tariq | Soni Law Firm", "attorney"],
+      ["/team/harjot-dosanjh/", "Harjot Dosanjh | Soni Law Firm", "attorney"],
+    ] as const;
+    const faqHeading = "Frequently Asked Questions About Wrongful Dismissal";
+    const servicePages: ReportPage[] = [
+      { url: "https://sonilaw.ca/breach-of-contract-lawyer/", title: "Breach of Contract Lawyer: Toronto & North York's Best Lawyer", pageType: "other", httpStatus: 200, indexability: {}, categories: [], pageAudit: { h1s: ["Breach of Contract Lawyer In North York & Toronto"], h2s: [faqHeading] } },
+      { url: "https://sonilaw.ca/contract-lawyer/", title: "Contract Lawyer: Employee Contract Dispute Lawyer | North York", pageType: "other", httpStatus: 200, indexability: {}, categories: [], pageAudit: { h1s: ["Contract Lawyer In North York & Toronto"], h2s: [faqHeading] } },
+      { url: "https://sonilaw.ca/disability-insurance-lawyer/", title: "Disability Insurance Lawyer: Lawyer in Toronto & North York", pageType: "other", httpStatus: 200, indexability: {}, categories: [], pageAudit: { h1s: ["Disability Insurance Lawyer In North York & Toronto"], h2s: [faqHeading] } },
+    ];
+    const pages: ReportPage[] = [
+      ...excluded.map(([path, title, pageType]) => ({ url: `https://sonilaw.ca${path}`, title, pageType, httpStatus: 200, indexability: { googleDirectives: { noindex: "observed" as const, nofollow: "not-observed" as const, observations: [] }, inSitemap: path === "/team/" }, categories: [] })),
+      ...servicePages,
+      ...Array.from({ length: 16 }, (_, index) => ({ url: `https://sonilaw.ca/other-${index}/`, title: `Other page ${index}`, pageType: "other", httpStatus: 200, indexability: { googleDirectives: { noindex: "not-observed" as const, nofollow: "not-observed" as const, observations: [] }, inSitemap: false }, categories: [] })),
+    ];
+    const model = buildSeoReportModel({ ...base, domain: "sonilaw.ca", pagesScanned: 25, pages, issues: [] });
+    expect(model.accessSummary).toMatchObject({ checkedPageCount: 25, noindexCount: 6 });
+    expect(model.overview?.title).toBe("6 pages ask Google to leave them out of search");
+    expect(model.overview?.attention).toBe("6 checked pages ask Google to leave them out of search. One of those 6 pages is also listed in the inspected sitemap. Review each page's purpose before changing its search setting or sitemap entry.");
+    expect(model.overview?.findings.map(item => item.id)).toContain("sitemap-exclusion");
+    const faq = model.overview?.findings.find(item => item.ruleId === "R2");
+    expect(faq?.pages.map(item => item.url)).toHaveLength(3);
+    expect(faq?.pages[0].evidence).toContain(faqHeading);
+    expect(model.overview?.findings.length).toBeGreaterThan(3);
+    expect(model.overview?.focusLinks).toHaveLength(3);
+  });
+
+  it("integrates the Sakuraba-like description, Portuguese context and English page-role observations", () => {
+    const prefix = "ENPT 905 393 2999Schedule your consultation";
+    const described = ["immigration-lawyer", "real-estate-lawyer", "wills-estates-lawyer", "civil-litigation-lawyer"].map(slug => ({
+      url: `https://sakurabalaw.ca/en/${slug}/`, title: `${slug === "immigration-lawyer" ? "Immigration Lawyer" : slug} - Sakuraba Law`, pageType: "practice", httpStatus: 200,
+      indexability: {}, categories: [], pageAudit: { metaDescription: `${prefix} ${slug}`, phoneEvidence: ["905 393 2999"], h1s: [slug === "immigration-lawyer" ? "Immigration Lawyer in Toronto for Brazilians Building a Life in Canada" : `${slug} in Toronto`] },
+    } as ReportPage));
+    const pages: ReportPage[] = [
+      ...described,
+      { url: "https://sakurabalaw.ca/imigracao/", title: "Imigração - Sakuraba Law", pageType: "other", httpStatus: 200, indexability: {}, categories: [], pageAudit: { h1s: ["Sua Jornada de Imigração para o Canadá"], h2s: ["Separação, guarda de filhos, pensão e questões transnacionais Brasil-Canadá.", "Imóveis & Transações", "Empresas & Corporativo", "Testamentos e Herança", "Direito Civil"] } },
+      { url: "https://sakurabalaw.ca/en/immigration/", title: "Immigration - Sakuraba Law", pageType: "practice", httpStatus: 200, indexability: {}, categories: [], pageAudit: { h1s: ["Legal Solutions for Your New Life in Canada", "Our Immigration Services"] } },
+    ];
+    const model = buildSeoReportModel({ ...base, domain: "sakurabalaw.ca", pagesScanned: 25, pages, issues: [] });
+    expect(model.overview?.findings.find(item => item.ruleId === "R1")?.pages).toHaveLength(4);
+    expect(model.overview?.findings.find(item => item.ruleId === "R3")?.pages[0].evidence).toContain("Imóveis & Transações");
+    expect(model.overview?.findings.find(item => item.ruleId === "R4")?.title).toBe("Give each immigration page a clear purpose");
+    expect(model.overview?.findings.find(item => item.ruleId === "R4")?.pages).toHaveLength(2);
+    expect(model.scoreExplanation).toEqual(buildSeoReportModel({ ...base, pages, issues: [] }).scoreExplanation);
+  });
+
   it("labels the current weighted score clearly and always includes bounded-scope limitations and one CTA", () => {
     const model = buildSeoReportModel(base);
     expect(model.methodology).toMatchObject({ version: 5, label: "Website checks", notice: null });
     expect(model.scoreExplanation).toMatchObject({ assessed: true, score: 74, label: "Limited checks: 1 check type across 1 of 1 category", scoredCheckTypeCount: 1, assessedCategoryCount: 1, totalCategoryCount: 1 });
     expect(model.scoreExplanation.note).toBe("Not a whole-site grade or ranking prediction.");
-    expect(model.limitations).toEqual(["Only the initial HTML of 2 pages was checked. This is not a full site audit and does not verify indexing, rankings, enquiries, legal accuracy, or AI citations of the firm."]);
+    expect(model.limitations).toEqual(["Only the initial HTML of 2 pages was checked. This is not a full site audit and does not verify indexing, rankings, enquiries or legal accuracy."]);
     expect(model.cta).toMatchObject({ heading: "Next steps", linkLabel: "Book a conversation", href: "https://cal.com/adriano-caseloadselect/conversation" });
   });
 
@@ -125,6 +176,20 @@ describe("buildSeoReportModel", () => {
     expect(checkObservationDisplayText({ detail, scored: false, disposition: "pending-review" }, 4))
       .toContain("excluded until its source and meaning are verified");
     expect(checkObservationDisplayText({ detail, scored: false, disposition: "unscored" }, 3)).toBe(detail);
+  });
+
+  it("renders saved v5 noindex caveats in plain language without changing other saved details", () => {
+    const stored = "The inspected HTML or response headers contain a noindex instruction addressed to Google. Google can act on it only if it retrieves this response; this does not confirm current indexing status.";
+    const expected = "A noindex instruction for Google was observed in the inspected HTML or response headers. Google can act on it only after retrieving this response; this does not confirm the page's current Google indexing status.";
+    expect(checkObservationDisplayText({ detail: stored, scored: true }, 5)).toBe(expected);
+    expect(stored).toContain("this does not confirm current indexing status");
+    expect(checkObservationDisplayText({ detail: "A custom saved detail.", scored: true }, 5)).toBe("A custom saved detail.");
+    expect(checkObservationDisplayText({ detail: `${stored} Custom note.`, scored: true }, 5)).toBe(`${stored} Custom note.`);
+    expect(checkObservationDisplayText({ detail: stored, scored: true }, 4)).toBe(stored);
+    const inputIssue = { id: "indexability-1", category: "Indexability", status: "fail" as const, title: "Indexable", detail: stored, affectedUrls: ["https://example.com/service/"], affectedCount: 1, totalPages: 1 };
+    const model = buildSeoReportModel({ ...base, issues: [inputIssue] });
+    expect(model.findingGroups[0].detail).toBe(expected);
+    expect(inputIssue.detail).toBe(stored);
   });
 
   it("uses singular and plural wording for observed Google instructions", () => {
@@ -381,12 +446,12 @@ describe("buildSeoReportModel", () => {
     const snapshot = JSON.stringify(raw);
     const model = buildSeoReportModel({ ...base, pages: [{ ...base.pages![0], categories: [{ name: "AI Visibility", score: 0, maxScore: 0, items: raw }] }] });
     expect(model.aiPageObservations.map(item => item.label)).toEqual(["Person information", "Question headings", "Answer wording", "Page structure", "Firm information", "Author information"]);
-    expect(model.aiPageObservations[0].detail).toContain("No identity or qualifications were verified");
-    expect(model.aiPageObservations[1].detail).toContain("1 heading looks like a question");
-    expect(model.aiPageObservations[2].detail).toContain("2 sentences matched");
+    expect(model.aiPageObservations[0].detail).toBe("The page code contains a person or lawyer data type.");
+    expect(model.aiPageObservations[1].detail).toBe("Headings matching the question format: 1.");
+    expect(model.aiPageObservations[2].detail).toBe("Matching sentences: 2.");
     expect(model.aiPageObservations[3].detail).toContain("includes 4 of the structure types");
     expect(model.aiPageObservations[4].detail).toContain("Other formats and visible content were not checked");
-    expect(model.aiPageObservations[5].detail).toContain("Authorship and credentials were not verified");
+    expect(model.aiPageObservations[5].detail).toBe("An author field or person data type was found in the page code.");
     expect(JSON.stringify(raw)).toBe(snapshot);
     expect(model.scoreExplanation.score).toBe(74);
   });
@@ -569,8 +634,9 @@ describe("decision-led lawyer report", () => {
     expect(model.overview?.findings.map(f=>f.pages.length)).toEqual([1,1,4]);
     expect(model.overview?.findings[0]).toMatchObject({state:"Observed mismatch",pages:[{url:affected[1].url}]});
     expect(model.overview?.findings.slice(1).every(f=>f.state==="Confirm intended use")).toBe(true);
-    expect(model.overview?.attention).toContain("5 other excluded pages");
-    expect(model.overview?.nextSteps).toHaveLength(3);
+    expect(model.overview?.nextSteps.find(step=>step.title==="Confirm team pages")?.detail).toBe("Confirm which listed profiles are current. Keep deliberate exclusions.");
+    expect(model.overview?.attention).toContain("One of those 6 pages is also listed in the inspected sitemap");
+    expect(model.overview?.nextSteps).toHaveLength(4);
     expect(model.overview?.findings.every(f=>f.owner && f.verification)).toBe(true);
     expect(model.scoreExplanation.score).toBe(98);
     expect(JSON.stringify(input)).toBe(before);
@@ -608,6 +674,22 @@ describe("decision-led lawyer report", () => {
     expect(model.overview?.basics.join(" ")).toContain("contact-detail or enquiry-invitation pattern");
     expect(model.overview?.basics.join(" ")).not.toContain("service information");
   });
+  it("retains the mobile-tested search-description step title",()=>{
+    const page: ReportPage = {
+      ...base.pages![0], url: "https://example.com/en/service/", pageType: "practice",
+      pageAudit: { metaDescription: "ENPT 905 393 2999Schedule your consultation Immigration Lawyer in Toronto for Brazilians", phoneEvidence: ["905 393 2999"] },
+    };
+    const model = buildSeoReportModel({ ...base, pages: [page], pagesScanned: 1 });
+    expect(model.overview?.nextSteps[0].title).toBe("Approve search descriptions");
+  });
+  it("keeps contact-positive copy tied to its saved call to action and phone evidence",()=>{
+    const page: ReportPage = {
+      ...base.pages![0], url: "https://example.com/contact/", title: "Contact Example Firm",
+      pageAudit: { ctaEvidence: ["contact us"], phoneEvidence: ["905 222 1234"] },
+    };
+    const model = buildSeoReportModel({ ...base, pages: [page], pagesScanned: 1 });
+    expect(model.overview?.positiveExamples[0].text).toBe("Contact page: “contact us” and a phone number.");
+  });
   it("publishes one material finding without filling three slots",()=>{
     const model=buildSeoReportModel({...base,pages:[excludedPage("https://example.com/service/","practice",true)],pagesScanned:1});
     expect(model.overview?.findings).toHaveLength(1);
@@ -624,7 +706,7 @@ describe("decision-led lawyer report", () => {
   });
   it("keeps actual AI visibility unmeasured rather than grading open access",()=>{
     const model=buildSeoReportModel(base);
-    expect(model.overview?.aiVisibility).toMatch(/^Not measured/);
+    expect(model.overview?.aiVisibility).toMatch(/^Actual AI mentions and citations were not measured/);
     expect(model.overview?.aiVisibility).not.toMatch(/0 visibility|high visibility|A-/);
     expect(model.overview?.aiNextStep).toContain("actual answers");
   });

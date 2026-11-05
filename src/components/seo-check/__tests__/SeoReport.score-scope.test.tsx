@@ -48,6 +48,16 @@ describe("SeoReport score scope", () => {
     expect(screen.getByText(/If we cannot tell whether a page tells Google not to index it, that check is not scored/i)).toBeTruthy();
   });
 
+  it("keeps editorial observations separate from the topics for a separate review", () => {
+    render(<SeoReport result={result} onReset={vi.fn()} hideCta />);
+    fireEvent.click(screen.getByText("Five basic checks and counts"));
+    expect(screen.getByText("Description and heading observations prompt editorial review; they are not validated ranking tests.")).toBeTruthy();
+    expect(screen.getByText("A separate review should assess:")).toBeTruthy();
+    expect(screen.getByText("Google indexing", { exact: true })).toBeTruthy();
+    expect(screen.getByText("Search performance", { exact: true })).toBeTruthy();
+    expect(screen.getByText("Enquiry quality", { exact: true })).toBeTruthy();
+  });
+
   it("shows a truthful indeterminate status while a scan request is pending", async () => {
     const pendingFetch = vi.fn(() => new Promise<Response>(() => {}));
     vi.stubGlobal("fetch", pendingFetch);
@@ -88,37 +98,79 @@ describe("SeoReport score scope", () => {
     const priorityResult: SeoCheckResult = { ...result, pagesScanned: 1, pages: [priorityPage] };
     const { container } = render(<SeoReport result={priorityResult} onReset={vi.fn()} />);
     expect(screen.getByRole("heading", { name: "Search settings on checked pages" })).toBeTruthy();
-    expect(screen.getByRole("heading", { name: "Priority findings" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Findings and decisions" })).toBeTruthy();
     expect(screen.getByRole("heading", { name: "AI search observations" })).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Scan limits" })).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Supporting evidence" })).toBeTruthy();
-    expect(screen.getByRole("heading", { name: "Plan your next step" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Help from CaseLoad Select" })).toBeTruthy();
 
     const overview=screen.getByRole("region",{name:"Review the search exclusions"});
     expect(within(overview).getByRole("heading",{name:"Review the search exclusions"})).toBeTruthy();
     expect(within(overview).queryByText("What is already in place")).toBeNull();
-    const priority=screen.getByRole("region",{name:"Priority findings"});
+    const priority=screen.getByRole("region",{name:"Findings and decisions"});
+    const evidenceToggle=within(priority).getByText("View evidence for 1 affected page");
+    fireEvent.click(evidenceToggle);
     expect(within(priority).getByRole("link",{name:"Employment law"}).getAttribute("href")).toBe("https://example.com/employment/");
     expect(within(priority).getByText("Who should act")).toBeTruthy();
     expect(within(priority).getByText("How to verify")).toBeTruthy();
-    expect(within(priority).getByRole("list",{name:"Recommended decisions"}).tagName).toBe("OL");
+    expect(within(priority).getByRole("list",{name:"All findings and decisions"}).tagName).toBe("OL");
     expect(within(priority).getByRole("heading",{name:"Choose the service pages"})).toBeTruthy();
     fireEvent.click(screen.getByRole("button",{name:"Copy report summary"}));
     await waitFor(()=>expect(writeText).toHaveBeenCalled());
     expect(writeText.mock.calls[0][0]).toContain("Employment law: https://example.com/employment/");
     expect(writeText.mock.calls[0][0]).toContain("How to verify:");
     const sequence=screen.getByRole("region",{name:"Your next steps"});
-    expect(within(sequence).getAllByRole("listitem")).toHaveLength(3);
+    expect(within(sequence).getAllByRole("listitem")).toHaveLength(2);
     expect(screen.queryByRole("region",{name:"Website checks score"})).toBeNull();
     expect(container.querySelector(".cls-priority-context")).toBeNull();
     expect(container.querySelector("style")?.textContent).not.toMatch(/border-left/);
     expect(container.textContent).not.toContain("98/100");
-    const evidence=screen.getByRole("region",{name:"Priority findings"});
+    const evidence=screen.getByRole("region",{name:"Findings and decisions"});
     expect(Boolean(overview.compareDocumentPosition(evidence)&Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
     fireEvent.click(screen.getByText("See the 1 page reviewed"));
     expect(container.textContent).not.toContain("92/100");
   });
 
+  it("keeps full affected-page evidence in a counted keyboard disclosure and rejects unsafe evidence URLs", () => {
+    const unsafePage: NonNullable<SeoCheckResult["pages"]>[number] = {
+      url: "javascript:alert(1)", title: "<img src=x onerror=alert(1)>", pageType: "practice", pageScore: null, pageGrade: "N/A", aiVisibilityScore: null,
+      categories: scoreCategories, failCount: 1, warnCount: 0, httpStatus: 200, indexable: false,
+      indexability: { metaNoindex: true, headerNoindex: false, indexable: false, googleDirectives: { noindex: "observed", nofollow: "not-observed", observations: [] } },
+    };
+    const { container } = render(<SeoReport result={{ ...result, pagesScanned: 1, pages: [unsafePage] }} onReset={vi.fn()} hideCta />);
+    const disclosure = screen.getByText("View evidence for 1 affected page");
+    expect(disclosure.tagName).toBe("SUMMARY");
+    const pageEvidence = screen.getByText(/Google exclusion observed/);
+    expect(pageEvidence.tagName).toBe("P");
+    expect(pageEvidence.getAttribute("data-ui-copy")).toBe("supporting");
+    expect(pageEvidence.closest("details")?.open).toBe(false);
+    fireEvent.click(disclosure);
+    expect(pageEvidence.closest("details")?.open).toBe(true);
+    expect(container.querySelector('a[href^="javascript:"]')).toBeNull();
+    expect(container.querySelector("img[onerror]")).toBeNull();
+  });
+
+  it("renders R1 source-field evidence verbatim in a wrapped, accessible disclosure", () => {
+    const description = "ENPT 905 393 2999Schedule your consultation Immigration Lawyer in Toronto for Brazilians";
+    const sourcePage: NonNullable<SeoCheckResult["pages"]>[number] = {
+      url: "https://example.com/en/service/", title: "Immigration Lawyer", pageType: "practice", pageScore: null, pageGrade: "N/A", aiVisibilityScore: null,
+      categories: scoreCategories, failCount: 0, warnCount: 0, httpStatus: 200, indexable: true,
+      indexability: { metaNoindex: false, headerNoindex: false, indexable: true, googleDirectives: { noindex: "not-observed", nofollow: "not-observed", observations: [] } },
+      pageAudit: { metaDescription: description, phoneEvidence: ["905 393 2999"] },
+    };
+    const { container } = render(<SeoReport result={{ ...result, pagesScanned: 1, pages: [sourcePage] }} onReset={vi.fn()} hideCta />);
+
+    const r1Finding = container.querySelector("#description-navigation-prefix") as HTMLElement;
+    const summary = within(r1Finding).getByText("View evidence for 1 affected page");
+    fireEvent.click(summary);
+    const record = screen.getByText(`Saved meta description: “${description}”`, { selector: "pre" });
+    expect(record.tagName).toBe("PRE");
+    expect(record.textContent).toBe(`Saved meta description: “${description}”`);
+    expect(record.hasAttribute("data-ui-copy")).toBe(false);
+    expect(record.closest("details")?.open).toBe(true);
+    expect(container.querySelector("style")?.textContent).toContain("white-space:pre-wrap");
+    expect(container.querySelector("style")?.textContent).toContain("overflow-wrap:anywhere");
+  });
   it("shows and copies the concise AI observation in the visible AI section", async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
@@ -126,7 +178,7 @@ describe("SeoReport score scope", () => {
       ...result,
       aiBots: [{
         token: "Googlebot", name: "Googlebot", blocked: false,
-        policyObservation: "no-blocking-rule-observed", robotsSemantics: "respects",
+        policyObservation: "no-blocking-rule-observed", robotsSemantics: "unknown",
         actualFetchAccess: "not-verified", purposes: ["search"], isControlToken: false,
         sourceUrl: null, reviewedAt: null, sourceVerification: "unavailable",
       }],
@@ -200,7 +252,7 @@ describe("SeoReport score scope", () => {
     expect(copy).toContain("Obtain usable page evidence before choosing improvements");
     expect(copy).not.toContain("Decisions and recommended work");
     expect(copy).toContain("Your next steps");
-    expect(copy).toContain("AI mentions and citations: Not measured");
+    expect(copy).toContain("AI mentions and citations: Actual AI mentions and citations were not measured.");
     expect(copy).toContain("CaseLoad Select");
     expect(copy).not.toContain("98/100");
     expect(result.overallScore).toBe(98);
@@ -326,10 +378,11 @@ describe("SeoReport score scope", () => {
     const summary = screen.getByText("Page-level AEO and AI observations (1 observation group)");
     fireEvent.click(summary);
 
-    expect(aiSection.getByText(/2 headings look like questions/)).toBeTruthy();
+    expect(aiSection.getByText(/Headings matching the question format: 2/)).toBeTruthy();
     expect(aiSection.getByRole("link", { name: "/services/" }).getAttribute("href")).toBe(pageUrl);
-    expect(aiSection.getByText(/These notes describe patterns found in the page code/)).toBeTruthy();
-    expect(aiSection.getByText(/Discuss the listed pages with your web provider/)).toBeTruthy();
+    expect(aiSection.getByText(/These patterns are unscored/)).toBeTruthy();
+    expect(aiSection.getByText(/Question-style headings are optional. Sentence counts are broad wording-pattern matches; answer quality was not assessed. AI use, identities and credentials in page code were not verified/)).toBeTruthy();
+    expect(aiSection.getByText(/Discuss these pages with a human reviewer and your web provider/)).toBeTruthy();
     expect(aiSection.queryByText("Root-only robots policy detail.")).toBeNull();
     expect(aiSection.queryByText("Site-level crawler policy detail.")).toBeNull();
     expect(aiSection.queryByText("Site-level llms.txt detail.")).toBeNull();
