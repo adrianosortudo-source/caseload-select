@@ -83,39 +83,32 @@ try {
     assert.equal(await page.locator('.cls-basic-list li').count(), 5);
     assert.equal(await page.locator('.cls-reviewed-pages li').count(), 25);
     assert.equal(await page.locator('.cls-ai-search-table tbody tr').count(), 3);
+    const reportText = await page.locator('.cls-report-current').innerText();
+    assert(!reportText.includes('98/100'));
+    const evidenceLinks = await page.locator('.cls-decision-pages a').evaluateAll(links => links.map(link => link.href));
     if (firm === 'soni') {
-      assert.equal(await page.locator('.cls-decision-pages a').count(), 6);
-      assert.match(await page.locator('[data-check-id="seo.indexability.indexable"]').innerText(), /19 of 25/);
+      for (const path of ['/team/', '/practice/employment-law/', '/team/thanh-justin-pham/', '/team/ummuhani-khaleel/', '/team/haya-tariq/', '/team/harjot-dosanjh/', '/breach-of-contract-lawyer/', '/contract-lawyer/', '/disability-insurance-lawyer/', '/employment-insurance-lawyer/']) assert(evidenceLinks.includes(`https://sonilaw.ca${path}`), `Missing Soni evidence: ${path}`);
     } else {
-      assert.equal(await page.getByRole('heading', { name: 'The basic checks passed.', exact: true }).count(), 1);
-      assert.equal(await page.getByRole('heading', { name: 'Priority findings', exact: true }).count(), 0);
-      assert.equal(await page.getByRole('button', { name: 'Copy findings', exact: true }).count(), 0);
+      for (const path of ['/en/immigration-lawyer/', '/en/real-estate-lawyer/', '/en/wills-estates-lawyer/', '/en/civil-litigation-lawyer/', '/en/immigration/', '/imigracao/']) assert(evidenceLinks.includes(`https://sakurabalaw.ca${path}`), `Missing Sakuraba evidence: ${path}`);
     }
     await page.getByRole('button', { name: 'Copy report summary', exact: true }).click();
     await page.getByRole('button', { name: 'Summary copied', exact: true }).waitFor();
     const copied = await page.evaluate(() => navigator.clipboard.readText());
     assert(copied.includes('25-page sample limit reached'));
     assert(!copied.includes('98/100'));
-    assert(copied.includes('The clarity and relevance of each title need a content review.'));
+    assert(copied.includes(firm === 'soni' ? 'https://sonilaw.ca/team/' : 'https://sakurabalaw.ca/en/immigration-lawyer/'));
     for (const width of [1440, 1024, 768, 640, 375, 349, 320, 294]) {
       await page.setViewportSize({ width, height: 1000 });
       await page.evaluate(() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))));
-      for (const state of ['default', 'ai-expanded']) {
-        if (state === 'ai-expanded') await page.locator('.cls-ai-page-observations > summary').click();
+      for (const state of ['default', 'expanded']) {
+        await page.locator('details').evaluateAll((nodes, open) => nodes.forEach(node => { node.open = open; }), state === 'expanded');
         checks.push({ firm, width, state, ...await page.evaluate(gate, { selector: '.cls-report [data-ui-copy]' }) });
-        if (state === 'ai-expanded') await page.locator('.cls-ai-page-observations > summary').click();
       }
+      await page.locator('details').evaluateAll(nodes => nodes.forEach(node => { node.open = false; }));
       if ([1440, 375, 294].includes(width)) {
         await page.evaluate(() => scrollTo(0, 0));
         await page.screenshot({ path: join(output, `${firm}-${width}.png`), fullPage: true });
       }
-      await page.getByText('See the 25 pages reviewed', { exact: true }).click();
-      await page.getByText('How this check works', { exact: true }).click();
-      assert(await page.getByRole('heading', { name: 'Scan limits', exact: true }).isVisible());
-      assert(await page.locator('.cls-reviewed-pages li').first().isVisible());
-      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
-      await page.getByText('How this check works', { exact: true }).click();
-      await page.getByText('See the 25 pages reviewed', { exact: true }).click();
     }
     assert.deepEqual(errors, []);
     assert.deepEqual(events, { replayed: 1, blockedPosts: 0, firmRequests: 0 });
