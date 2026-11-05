@@ -55,7 +55,7 @@ describe("buildSeoReportModel", () => {
     const model = buildSeoReportModel({ ...base, domain: "sonilaw.ca", pagesScanned: 25, pages, issues: [] });
     expect(model.accessSummary).toMatchObject({ checkedPageCount: 25, noindexCount: 6 });
     expect(model.overview?.title).toBe("6 pages ask Google to leave them out of search");
-    expect(model.overview?.attention).toContain("1 of those 6 pages also appear in the inspected sitemap");
+    expect(model.overview?.attention).toContain("One of those 6 pages also appears in the inspected sitemap");
     expect(model.overview?.attention).toContain("overlap is part of the total, not an extra page");
     expect(model.overview?.attention).toContain("other 5 excluded pages");
     expect(model.overview?.findings.map(item => item.id)).toContain("sitemap-exclusion");
@@ -621,7 +621,7 @@ describe("decision-led lawyer report", () => {
     expect(model.overview?.findings.map(f=>f.pages.length)).toEqual([1,1,4]);
     expect(model.overview?.findings[0]).toMatchObject({state:"Observed mismatch",pages:[{url:affected[1].url}]});
     expect(model.overview?.findings.slice(1).every(f=>f.state==="Confirm intended use")).toBe(true);
-    expect(model.overview?.attention).toContain("5 other excluded pages");
+    expect(model.overview?.attention).toContain("other 5 excluded pages");
     expect(model.overview?.nextSteps).toHaveLength(4);
     expect(model.overview?.findings.every(f=>f.owner && f.verification)).toBe(true);
     expect(model.scoreExplanation.score).toBe(98);
