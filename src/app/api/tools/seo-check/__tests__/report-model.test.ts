@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildSeoReportModel, checkObservationDisplayText, getDisplayedCategoryWeights, type ReportInput } from "../report-model";
+import { buildSeoReportModel, checkObservationDisplayText, getDisplayedCategoryWeights, type ReportInput, type ReportPage } from "../report-model";
 
 const base: ReportInput = {
   domain: "example.com",
