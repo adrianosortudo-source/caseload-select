@@ -1,8 +1,6 @@
-# Dedicated CRM agent read QA (disabled implementation)
+# Dedicated CRM agent read QA
 
-This implementation is local and disabled. No production grant, configuration,
-session, database migration, workflow run, push, PR, or deployment is part of
-this task. Existing human operator membership and session checks remain in place.
+The code for this read-only workflow is merged on `main`. Access requires a Production deployment built after `CRM_AGENT_READ_ENABLED=true`, the `CRM_AGENT_READ_WORKFLOW_ENABLED=true` repository variable, the main-only protected GitHub environment, and a short-lived Redis grant pinned to the exact workflow SHA. Missing or mismatched gates fail closed. This runbook does not authorize a run; every run must follow its approved scope and GitHub environment review. Existing human operator membership and session checks remain in place.
 
 ## Identity and permission boundary
 
@@ -175,6 +173,15 @@ Sources:
    for this exact read scope, then dispatch a controlled first QA run on main.
    Confirm fixed public diagnostics, valid cookie scope, renewal, and revocation
    through private nonsecret audit. Never upload CRM artifacts as evidence.
+
+   Deployment ordering is part of this gate: setting the Production flag does
+   not change an existing deployment. Use the normal PR merge to `main` to
+   produce a fresh Vercel Production deployment after the flag is set. Before
+   dispatch, confirm that deployment is READY and its Git SHA exactly matches
+   the `main` SHA selected for the workflow. Pin the short-lived Redis grant to
+   that SHA immediately before the one controlled run. Keep the environment
+   restricted to `main` with required-review protection; do not bypass it or
+   trigger a direct Vercel production deployment.
 6. Approve ongoing unattended dispatch under the chosen environment policy.
    Renew grant expiry/SHA only under approved trust-change policy. Each future
    project gets its own identity/audience/origin/grant/namespace/allowlist and
