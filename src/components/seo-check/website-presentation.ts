@@ -53,7 +53,7 @@ export function buildWebsitePresentation(input: ReportInput, model: SeoReportMod
   const interpretation = allPassed
     ? "These five checks found no specific repair to prioritise in this sample. Use the firm's search and enquiry records to choose a useful next review."
     : firstFinding?.ruleId === "R1"
-      ? "Review and approve concise replacements for these search descriptions before the provider publishes them. Google may choose different wording for search results."
+      ? "Review and approve concise replacements for these search descriptions before the provider publishes them."
       : firstFinding?.ruleId === "R4"
         ? "Agree the role of each page before changing its introduction or navigation. Both pages may remain if their purposes are clear."
         : firstFinding?.ruleId === "R2"

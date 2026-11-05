@@ -208,7 +208,7 @@ function ruleThree(pages: InsightPage[]): ReportDecision[] {
     out.push(makeInsight({
       id: `service-heading-context-${candidate.page.url}`, ruleId: "R3", family: "content-context", sortClass: 3, state: "Check context",
       title: "Check how related services are grouped on this page",
-      observed: `One retrieved page is identified as ${candidate.primary} by its title and H1. Its saved H2 headings also name ${familySet.join(", ")}. These headings could be part of a related-services section; the scan cannot establish their page structure or full context.`,
+      observed: `One retrieved page is identified as ${candidate.primary} by its page title and main heading. Its section headings also name ${familySet.join(", ")}. These headings could be part of a related-services section; the scan cannot establish their page structure or full context.`,
       whyItMatters: "A reader should be able to tell which service the page explains and how related services connect to it.",
       nextStep: "Review whether these topics are clearly grouped as related services or were unintentionally placed in the main service explanation. Do not change the headings until that context is confirmed.",
       owner: "The firm and a qualified content reviewer confirm the intended page structure. The web provider implements any approved changes.",

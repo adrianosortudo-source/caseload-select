@@ -70,7 +70,12 @@ describe("report insights", () => {
     });
     const r3 = buildReportInsights([saku]).find(item => item.ruleId === "R3");
     expect(r3).toMatchObject({ state: "Check context", pages: [{ url: saku.url }] });
+    expect(r3?.observed).toContain("page title and main heading");
+    expect(r3?.observed).toContain("section headings");
+    expect(r3?.observed).not.toMatch(/\bH1\b|\bH2\b/);
     expect(r3?.pages[0].evidence).toContain("Separação, guarda de filhos, pensão e questões transnacionais Brasil-Canadá.");
+    expect(r3?.pages[0].evidence).toContain("H1:");
+    expect(r3?.pages[0].evidence).toContain("H2 evidence:");
     expect(r3?.nextStep).toContain("related services");
   });
 

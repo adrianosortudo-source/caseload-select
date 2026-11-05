@@ -42,6 +42,7 @@ describe("website report presentation", () => {
     expect(report.title).toBe("Review the search exclusions");
     expect(report.checks.find(c => c.id.endsWith(".indexable"))?.detail).toContain("excluded pages named");
     expect(report.direction).toContain("Start with");
+    expect(report.interpretation).not.toContain("Google may choose different wording");
   });
   it("uses an issue-specific CTA deliverable without joining an imperative title into a sentence", () => {
     const data = input();
