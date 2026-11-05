@@ -174,6 +174,7 @@ export default function SeoReport({result,onReset,hideCta=false,showInternal=fal
 .cls-report .cls-main{padding-inline:0}.cls-decision-order{list-style:decimal inside;margin:0;padding:0}.cls-decision-order>li{border-top:1px solid var(--ink);padding-top:20px}.cls-decision{padding:8px 0 28px}.cls-decision-state{color:var(--navy);font-weight:700}.cls-decision-block{margin-top:20px}.cls-decision-block h4{margin:0;font:800 1rem/1.35 Manrope,Arial,sans-serif;letter-spacing:-.01em}.cls-decision-pages{list-style:none;margin:20px 0;padding:0}.cls-decision-pages li+li{margin-top:14px}.cls-decision-pages a{display:block;font-weight:700}.cls-report .cls-decision-pages p{margin-top:4px}.cls-focus-first{padding:18px 0 24px}.cls-focus-first h3{font-size:1.15rem}.cls-focus-first ol{margin:12px 0 0;padding-left:24px}.cls-focus-first li{padding:5px 0;overflow-wrap:anywhere}.cls-focus-first a{font-weight:700}.cls-useful-content ul{list-style:none;padding:0;margin:20px 0}.cls-useful-content li{padding:16px 0;border-top:1px solid var(--ink)}.cls-useful-content li p{margin-top:6px}.cls-sequence ol{list-style:decimal inside;margin:24px 0 0;padding:0}.cls-sequence h3{margin-top:8px}.cls-sequence li+li{margin-top:24px}.cls-sequence h3,.cls-ai-assessment h3{font-size:1.2rem;line-height:1.3}.cls-ai-assessment{margin-top:24px}
 .cls-report-current .cls-useful-content h2,.cls-report-current .cls-cta h2,.cls-report-current .cls-focus-first h3{ text-wrap:pretty }
 .cls-report-current .cls-useful-content [data-ui-copy]{text-wrap:pretty}
+.cls-report-current .cls-useful-content p{font-size:18px}
 
 @media(max-width:480px){.cls-report-current .cls-cta h2{font-size:19px}.cls-report-current .cls-useful-content h2{font-size:20px}.cls-report-current .cls-decision h3{font-size:18px}}
 
@@ -319,7 +320,7 @@ export default function SeoReport({result,onReset,hideCta=false,showInternal=fal
 
 .cls-report-current .cls-overview h2[data-ui-copy]{text-wrap:wrap}
 @media(max-width:480px){.cls-report-current .cls-wrap{width:calc(100% - 24px)}.cls-report-current .cls-overview,.cls-report-current .cls-basic-list li,.cls-report-current .cls-cta{padding-inline:12px}}
-@media(max-width:330px){.cls-report-current .cls-overview h2{font-size:18px}}
+@media(max-width:330px){.cls-report-current .cls-overview h2{font-size:18px}.cls-report-current .cls-useful-content p{font-size:16px}}
 
 
 
