@@ -1,34 +1,19 @@
-# Clear website report review
+# SEO and AEO report review
 
-## Scope
+The current-method report presents evidence-based priorities, page-specific findings, meaningful observed examples, AI search crawler rules and next steps. Metadata and heading observations are review prompts; they are not validated ranking tests. Findings remain tied to saved page fields and do not measure traffic, enquiries, search ranking or AI citations.
 
-The current methodology-v5 report uses the approved report format: a plain-language overview, five visible check results, named AI search crawler observations, an ordered next-step plan and expandable supporting evidence. The report distinguishes a 25-page sample limit from a retrieval failure. Empty priority sections and the empty Copy findings action are omitted.
+The existing crawler, 25-page public limit, core checks, scoring, storage and email flow are unchanged. Historical results retain their existing interpretation. Missing observations must not be presented as passes or website defects.
 
-Passing statements require the recorded check and supporting page observation. Missing evidence is not a pass. Soni retains its six named Google-excluded pages and recommended decisions; Sakuraba explains which basic checks passed. Published crawler rules remain separate from actual AI answers, mentions and citations, which were not tested.
+## Saved-result browser review
 
-The crawler, scoring rules, API, scan limits and lead collection are unchanged. Historical reports retain their original interpretation. No production change or new firm scan is part of this review.
-
-## Saved-result browser regression
-
-Run the existing app locally or use its protected preview, then run:
+Run the app or use an authorized protected preview, then run:
 
 ```text
 node scripts/seo-report-rendered-check.mjs --url APP_URL/tools/seo-check?embed=1 --soni SAVED_SONI_JSON --sakuraba SAVED_SAKURABA_JSON --output ARTIFACT_DIRECTORY
 ```
 
-The test requires the saved 25-page Soni and Sakuraba results. It fulfills the scan response locally, skips the email step, blocks other POST requests and all requests to the firms, and checks both reports at 1440, 1024, 768, 640, 375, 349, 320 and 294 CSS pixels. It checks the default and expanded AEO states, real clipboard readback, page and methodology disclosures, horizontal overflow and rendered copy widths/line breaks. Screenshots and the measurement record are written to the specified output directory, outside the repository.
+The script replays the saved results inside the browser, skips email, blocks other POST requests and firm-domain requests, and checks eight viewport widths with both normal and expanded disclosures. It verifies page links and clipboard readback and records rendered copy failures and screenshots outside the repository. For protected previews, provide an origin-scoped Vercel OIDC token using the linked project's development environment; never write it to artifacts.
 
-For an authenticated preview, supply VERCEL_OIDC_TOKEN through the linked project's development environment. The script sends it only to the exact app origin and never writes it to its artifacts.
+Use the original scan dates and fixture hashes in the review receipt. The 25-page cap is a sample limit, not a retrieval failure; a discovered-candidate count is not the size of the whole website. Soni's sitemap mismatch is part of its six excluded pages. Its saved data includes the FAQ heading on four service pages. Sakuraba's saved result supports four description reviews, one contextual heading review and a decision about two English immigration pages.
 
-The header's `report-heading` marker identifies its own full-width content box. The AI table is a functional two-column comparison; page URLs may break inside a long path. There are no narrow paragraph-width exceptions.
-
-## Acceptance
-
-- Both saved-result flows pass, with no new scan or email.
-- All 32 rendered states pass, plus page/methodology disclosure overflow checks.
-- Soni shows six linked excluded pages and 19 of 25 passing the exclusion check.
-- Sakuraba shows five passing check counts, no empty priority finding, and no overall grade.
-- Focused model, component and presentation tests cover historical reports, partial results, missing evidence and search-versus-training crawler scope.
-- Review both final reports before merging; merge approval is separate.
-
-The 349px width covers the actual embedded frame inside the public page at a 375px viewport. The check-count introduction and page-title explanation use separate paragraphs for their distinct ideas. The clean-result next step points to search and enquiry records.
+Check the actual public-page embed separately, including its mobile frame. Review each final rendered report with the user before seeking approval to merge the specific PR. Do not perform a new website audit or submit email during saved-result review.
