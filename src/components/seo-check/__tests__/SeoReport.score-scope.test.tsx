@@ -345,10 +345,11 @@ describe("SeoReport score scope", () => {
     const summary = screen.getByText("Page-level AEO and AI observations (1 observation group)");
     fireEvent.click(summary);
 
-    expect(aiSection.getByText(/2 headings look like questions/)).toBeTruthy();
+    expect(aiSection.getByText(/Headings matching the question format: 2/)).toBeTruthy();
     expect(aiSection.getByRole("link", { name: "/services/" }).getAttribute("href")).toBe(pageUrl);
-    expect(aiSection.getByText(/These notes describe patterns found in the page code/)).toBeTruthy();
-    expect(aiSection.getByText(/Discuss the listed pages with your web provider/)).toBeTruthy();
+    expect(aiSection.getByText(/These patterns are unscored/)).toBeTruthy();
+    expect(aiSection.getByText(/Question-style headings are optional. The scan did not assess answer quality or AI use, or verify identities and credentials in page code/)).toBeTruthy();
+    expect(aiSection.getByText(/Discuss these pages with a human reviewer and your web provider/)).toBeTruthy();
     expect(aiSection.queryByText("Root-only robots policy detail.")).toBeNull();
     expect(aiSection.queryByText("Site-level crawler policy detail.")).toBeNull();
     expect(aiSection.queryByText("Site-level llms.txt detail.")).toBeNull();

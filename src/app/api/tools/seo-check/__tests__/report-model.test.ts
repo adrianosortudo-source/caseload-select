@@ -433,12 +433,12 @@ describe("buildSeoReportModel", () => {
     const snapshot = JSON.stringify(raw);
     const model = buildSeoReportModel({ ...base, pages: [{ ...base.pages![0], categories: [{ name: "AI Visibility", score: 0, maxScore: 0, items: raw }] }] });
     expect(model.aiPageObservations.map(item => item.label)).toEqual(["Person information", "Question headings", "Answer wording", "Page structure", "Firm information", "Author information"]);
-    expect(model.aiPageObservations[0].detail).toContain("No identity or qualifications were verified");
-    expect(model.aiPageObservations[1].detail).toContain("1 heading looks like a question");
-    expect(model.aiPageObservations[2].detail).toContain("2 sentences matched");
+    expect(model.aiPageObservations[0].detail).toBe("The page code contains a person or lawyer data type.");
+    expect(model.aiPageObservations[1].detail).toBe("Headings matching the question format: 1.");
+    expect(model.aiPageObservations[2].detail).toBe("Sentences matching the wording pattern: 2.");
     expect(model.aiPageObservations[3].detail).toContain("includes 4 of the structure types");
     expect(model.aiPageObservations[4].detail).toContain("Other formats and visible content were not checked");
-    expect(model.aiPageObservations[5].detail).toContain("Authorship and credentials were not verified");
+    expect(model.aiPageObservations[5].detail).toBe("An author field or person data type was found in the page code.");
     expect(JSON.stringify(raw)).toBe(snapshot);
     expect(model.scoreExplanation.score).toBe(74);
   });
