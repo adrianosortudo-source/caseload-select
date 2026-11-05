@@ -523,7 +523,7 @@ function buildCurrentOverview(pages: ReportPage[], actions: ReportAction[], cove
     const overlap = mismatchCount === 1
       ? `One of those ${excludedCount} pages also appears in the inspected sitemap.`
       : `${mismatchCount} of those ${excludedCount} pages also appear in the inspected sitemap.`;
-    attention = `${excludedCount} checked pages ask Google to leave them out of search. ${overlap} This overlap is part of the total, not an extra page.`;
+    attention = `${excludedCount} checked ${excludedCount === 1 ? "page asks Google to leave it" : "pages ask Google to leave them"} out of search. ${overlap} This overlap is part of the total, not an extra page.`;
     if (remainingCount) attention += ` The other ${remainingCount} excluded ${remainingCount === 1 ? "page is" : "pages are"} separate from that sitemap mismatch. Review each page's intended role, then align its setting and sitemap entry with that decision.`;
   } else if (priorityExcluded.length) {
     title = "Review the search exclusions";
@@ -548,7 +548,7 @@ function buildCurrentOverview(pages: ReportPage[], actions: ReportAction[], cove
       if (finding.ruleId === "R1") return { title: "Approve search descriptions", detail: `Draft a search description for each listed page, then ask the provider to publish the approved text.` };
       if (finding.ruleId === "R2") return { title: "Review FAQ answers", detail: "Have a qualified reviewer check whether the answers fit each page. Keep relevant sections; change only confirmed problems." };
       if (finding.ruleId === "R3") return { title: "Review service headings", detail: "Check whether the service headings belong with related services or in the page's main explanation." };
-      if (finding.ruleId === "R4") return { title: "Agree page roles", detail: "Keep both pages only if their introductions explain their separate roles." };
+      if (finding.ruleId === "R4") return { title: "Agree page roles", detail: "Decide what each page is for. If you keep both, make their roles clear." };
       if (finding.id === "sitemap-exclusion") return { title: "Align search settings", detail: "Decide whether the listed page should appear in search. Ask your provider to align its settings and sitemap entry." };
       if (finding.id === "service-exclusions") return { title: "Confirm service pages", detail: `Decide whether each excluded service page is current and should appear in search.` };
       if (finding.id === "team-exclusions") return { title: "Confirm team pages", detail: `Confirm which listed profiles are current and keep deliberate exclusions.` };
