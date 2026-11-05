@@ -178,6 +178,20 @@ describe("buildSeoReportModel", () => {
     expect(checkObservationDisplayText({ detail, scored: false, disposition: "unscored" }, 3)).toBe(detail);
   });
 
+  it("renders saved v5 noindex caveats in plain language without changing other saved details", () => {
+    const stored = "The inspected HTML or response headers contain a noindex instruction addressed to Google. Google can act on it only if it retrieves this response; this does not confirm current indexing status.";
+    const expected = "A noindex instruction for Google was observed in the inspected HTML or response headers. Google can act on it only after retrieving this response; this does not confirm the page's current Google indexing status.";
+    expect(checkObservationDisplayText({ detail: stored, scored: true }, 5)).toBe(expected);
+    expect(stored).toContain("this does not confirm current indexing status");
+    expect(checkObservationDisplayText({ detail: "A custom saved detail.", scored: true }, 5)).toBe("A custom saved detail.");
+    expect(checkObservationDisplayText({ detail: `${stored} Custom note.`, scored: true }, 5)).toBe(`${stored} Custom note.`);
+    expect(checkObservationDisplayText({ detail: stored, scored: true }, 4)).toBe(stored);
+    const inputIssue = { id: "indexability-1", category: "Indexability", status: "fail" as const, title: "Indexable", detail: stored, affectedUrls: ["https://example.com/service/"], affectedCount: 1, totalPages: 1 };
+    const model = buildSeoReportModel({ ...base, issues: [inputIssue] });
+    expect(model.findingGroups[0].detail).toBe(expected);
+    expect(inputIssue.detail).toBe(stored);
+  });
+
   it("uses singular and plural wording for observed Google instructions", () => {
     const observedPage = (page: NonNullable<ReportInput["pages"]>[number], url: string) => ({
       ...page,

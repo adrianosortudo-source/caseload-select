@@ -29,7 +29,17 @@ export interface ReportCheckItem {
   applicability?: "applicable" | "not-applicable" | "unknown";
 }
 
+const SAVED_GOOGLE_NOINDEX_DETAILS = [
+  "The inspected HTML or response headers contain a noindex instruction addressed to Google. Google can act on it only if it retrieves this response; this does not confirm current indexing status.",
+];
+const GOOGLE_NOINDEX_DISPLAY_DETAIL = "A noindex instruction for Google was observed in the inspected HTML or response headers. Google can act on it only after retrieving this response; this does not confirm the page's current Google indexing status.";
+function checkDetailForDisplay(detail: string, methodologyVersion?: number): string {
+  return methodologyVersion === 5 && SAVED_GOOGLE_NOINDEX_DETAILS.includes(detail) ? GOOGLE_NOINDEX_DISPLAY_DETAIL : detail;
+}
+
 export function checkObservationDisplayText(item: Pick<ReportCheckItem, "detail" | "scored" | "disposition">, methodologyVersion?: number): string {
+  const displayDetail = checkDetailForDisplay(item.detail, methodologyVersion);
+  if (displayDetail !== item.detail) return displayDetail;
   if (methodologyVersion !== 4 && methodologyVersion !== 5 || item.scored !== false) return item.detail;
   const explanation = item.disposition === "pending-review"
     ? "This check is excluded until its source and meaning are verified; it does not establish a search defect. No fix is recommended from this check."
@@ -777,7 +787,7 @@ export function buildSeoReportModel(input: ReportInput): SeoReportModel {
     aiPageObservations,
     crawlerPolicies,
     limitations,
-    findingGroups: reportIssues.map((issue) => ({ category: issue.category, title: issue.title, detail: issue.detail, affectedUrls: issue.affectedUrls, status: issue.status })),
+    findingGroups: reportIssues.map((issue) => ({ category: issue.category, title: issue.title, detail: checkDetailForDisplay(issue.detail, version), affectedUrls: issue.affectedUrls, status: issue.status })),
     scoreExplanation: {
       assessed: current ? assessed : scoreMethodSupported && Number.isFinite(input.overallScore),
       score: scoreMethodSupported && Number.isFinite(input.overallScore) && (!current || assessed) ? input.overallScore! : null,
