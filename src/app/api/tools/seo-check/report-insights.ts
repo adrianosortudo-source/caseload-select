@@ -243,7 +243,7 @@ function ruleFour(pages: InsightPage[]): ReportDecision[] {
     out.push(makeInsight({
       id: `page-role-${topic}-${firstLanguage}`, ruleId: "R4", family: "intent-decision", sortClass: 2, state: "Confirm intent",
       title: `Agree the roles of these ${topic} pages`,
-      observed: `Two retrieved pages are identified as ${topic} pages by their titles and H1s, but their public wording differs. This scan does not measure search performance or establish that either page should be removed.`,
+      observed: `Two retrieved pages are identified as ${topic} pages by their titles and main headings, but their public wording differs. This scan does not measure search performance or establish that either page should be removed.`,
       whyItMatters: "Clear page roles can help the firm and its visitors understand which page provides a broad overview and which addresses a particular audience or need.",
       nextStep: "Decide what each page is for. A valid decision is to keep both, with introductions and navigation that explain their separate roles.",
       owner: "The firm confirms the audience and role of each page. A content reviewer and web provider update approved wording and navigation.",
