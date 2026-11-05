@@ -254,7 +254,7 @@ function ruleFour(pages: InsightPage[]): ReportDecision[] {
       title: `Give each ${topic} page a clear purpose`,
       observed: `Two retrieved pages are identified as ${topic} pages by their titles and main headings, but their public wording differs. This scan does not measure search performance or establish that either page should be removed.`,
       whyItMatters: "Clear page roles can help the firm and its visitors understand which page provides a broad overview and which addresses a particular audience or need.",
-      nextStep: "Decide whether these pages serve separate audiences. If both stay, explain their roles in each introduction and link.",
+      nextStep: "Decide what each page is for. Both may remain; if so, make their purposes clear to visitors.",
       owner: "The firm confirms the audience and role of each page. A content reviewer and web provider update approved wording and navigation.",
       verification: "Record an agreed role for each URL and check its published introduction and navigation after any approved update.",
       pages: [first, second].map(page => pageFor(page, `${exactEvidence("Title", page.title ?? page.url)}; H1: ${(audit(page).h1s ?? []).map(value => `“${value}”`).join("; ")}`)),

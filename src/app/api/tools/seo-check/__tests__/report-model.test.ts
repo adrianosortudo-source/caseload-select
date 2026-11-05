@@ -660,13 +660,13 @@ describe("decision-led lawyer report", () => {
     expect(model.overview?.basics.join(" ")).toContain("contact-detail or enquiry-invitation pattern");
     expect(model.overview?.basics.join(" ")).not.toContain("service information");
   });
-  it("names the drafting and approval work in the search-description step",()=>{
+  it("retains the mobile-tested search-description step title",()=>{
     const page: ReportPage = {
       ...base.pages![0], url: "https://example.com/en/service/", pageType: "practice",
       pageAudit: { metaDescription: "ENPT 905 393 2999Schedule your consultation Immigration Lawyer in Toronto for Brazilians", phoneEvidence: ["905 393 2999"] },
     };
     const model = buildSeoReportModel({ ...base, pages: [page], pagesScanned: 1 });
-    expect(model.overview?.nextSteps[0].title).toBe("Draft and approve search descriptions");
+    expect(model.overview?.nextSteps[0].title).toBe("Approve search descriptions");
   });
   it("keeps contact-positive copy tied to its saved call to action and phone evidence",()=>{
     const page: ReportPage = {
@@ -674,7 +674,7 @@ describe("decision-led lawyer report", () => {
       pageAudit: { ctaEvidence: ["contact us"], phoneEvidence: ["905 222 1234"] },
     };
     const model = buildSeoReportModel({ ...base, pages: [page], pagesScanned: 1 });
-    expect(model.overview?.positiveExamples[0].text).toBe("The contact page lists a phone number and invites visitors to “contact us”.");
+    expect(model.overview?.positiveExamples[0].text).toBe("Contact page: “contact us” and a phone number.");
   });
   it("publishes one material finding without filling three slots",()=>{
     const model=buildSeoReportModel({...base,pages:[excludedPage("https://example.com/service/","practice",true)],pagesScanned:1});

@@ -543,7 +543,7 @@ function buildCurrentOverview(pages: ReportPage[], actions: ReportAction[], cove
   ] : findings.length ? [
     ...findings.map((finding): { title: string; detail: string } => {
       const count = new Set(finding.pages.map(page => page.url)).size;
-      if (finding.ruleId === "R1") return { title: "Draft and approve search descriptions", detail: `Draft a search description for each listed page, then ask the provider to publish the approved text.` };
+      if (finding.ruleId === "R1") return { title: "Approve search descriptions", detail: `Draft a search description for each listed page, then ask the provider to publish the approved text.` };
       if (finding.ruleId === "R2") return { title: "Review FAQ answers", detail: "Have a qualified reviewer check whether the answers fit each page. Keep relevant sections; change only confirmed problems." };
       if (finding.ruleId === "R3") return { title: "Review service headings", detail: "Check whether the service headings belong with related services or in the page's main explanation." };
       if (finding.ruleId === "R4") return { title: "Agree page roles", detail: "Decide what each page is for. If you keep both, make their roles clear." };
@@ -570,7 +570,7 @@ function buildCurrentOverview(pages: ReportPage[], actions: ReportAction[], cove
     const audiencePhrase = audienceHeading?.match(/^.*?\bfor\s+[^\s]+/i)?.[0];
     if (audiencePhrase && positiveExamples.length < 3) positiveExamples.push({ text: `Audience wording: “${audiencePhrase}”.`, pageTitle: page.title?.trim() || page.url, url: page.url });
     const contactPhrase = page.pageAudit?.ctaEvidence?.find(value => value.trim());
-    if (/contact/i.test(page.url) && contactPhrase && page.pageAudit?.phoneEvidence?.length && positiveExamples.length < 3) positiveExamples.push({ text: `The contact page lists a phone number and invites visitors to “${contactPhrase}”.`, pageTitle: page.title?.trim() || page.url, url: page.url });
+    if (/contact/i.test(page.url) && contactPhrase && page.pageAudit?.phoneEvidence?.length && positiveExamples.length < 3) positiveExamples.push({ text: `Contact page: “${contactPhrase}” and a phone number.`, pageTitle: page.title?.trim() || page.url, url: page.url });
     const specificH1 = headings.find(value => /\b(?:employment|immigration|real estate|wills|estates|civil litigation|contract)\b/i.test(value) && /\b(?:law|lawyer|attorney|service)\b/i.test(value));
     if (specificH1 && positiveExamples.length < 3 && !positiveExamples.some(example => example.url === page.url)) positiveExamples.push({ text: `The heading names a legal service: “${specificH1}”.`, pageTitle: page.title?.trim() || page.url, url: page.url });
     if (positiveExamples.length >= 3) break;

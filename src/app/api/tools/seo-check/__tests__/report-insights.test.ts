@@ -102,7 +102,7 @@ describe("report insights", () => {
     const r4 = buildReportInsights(pages).find(item => item.ruleId === "R4");
     expect(r4).toMatchObject({ state: "Confirm intent" });
     expect(r4?.pages).toHaveLength(2);
-    expect(r4?.nextStep).toContain("If both stay");
+    expect(r4?.nextStep).toBe("Decide what each page is for. Both may remain; if so, make their purposes clear to visitors.");
     const translationOnly = [pages[0], pages[2]];
     expect(ids(translationOnly)).not.toContain("R4");
   });
