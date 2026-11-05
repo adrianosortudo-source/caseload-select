@@ -2,6 +2,7 @@ import { normalizeLegacyPurposes } from "./crawler-policy";
 import { CATEGORY_WEIGHTS } from "./category-weights";
 import type { AiBotPurpose } from "./engine-core";
 import { CURRENT_METHODOLOGY_VERSION, isLimitedScoreMethodology, isCurrentMethodology } from "./methodology-version";
+import { buildReportInsights, type ReportPageAudit } from "./report-insights";
 
 /**
  * Deterministic public report model for the in-tool SEO check.
@@ -64,6 +65,7 @@ export interface ReportPage {
     practiceAreaIntent: boolean;
     trust?: { credentials: boolean };
   };
+  pageAudit?: ReportPageAudit | null;
   categories: ReportCategory[];
 }
 
@@ -144,7 +146,7 @@ export interface ReportAction {
 
 export interface ReportDecision {
   id: string;
-  state: "Observed mismatch" | "Confirm intended use" | "Evidence incomplete" | "Observed finding";
+  state: "Observed mismatch" | "Confirm intended use" | "Evidence incomplete" | "Observed finding" | "Resolve first" | "Improve first" | "Check context" | "Confirm intent";
   title: string;
   observed: string;
   whyItMatters: string;
@@ -152,12 +154,20 @@ export interface ReportDecision {
   owner: string;
   verification: string;
   pages: Array<{ title: string; url: string; evidence: string }>;
+  ruleId?: string;
+  family?: string;
+  sortClass?: number;
+  sourceFieldRefs?: string[];
+  evidenceBasis?: string;
+  relatedPages?: Array<{ title: string; url: string; evidence: string }>;
 }
 
 export interface ReportOverview {
   title: string;
   attention: string;
   findings: ReportDecision[];
+  focusLinks: Array<{ id: string; title: string; pageCount: number }>;
+  positiveExamples: Array<{ text: string; pageTitle: string; url: string }>;
   nextSteps: Array<{ title: string; detail: string }>;
   basics: string[];
   aiAccess: string;
@@ -252,7 +262,7 @@ function describeAeoPageObservation(label: string, detail: string): { label: str
 const METHOD_NOTE = "This saved scan used an earlier scoring method. Run a new scan for the current report. Scores from different methods should not be compared.";
 const UNSUPPORTED_METHOD_NOTE = "This saved scan records a scoring method this report does not interpret. Run a new scan for the current report.";
 const SCORE_NOTE = "Not a whole-site grade or ranking prediction.";
-const LIMITATION = (n: number) => `Only the initial HTML of ${n} ${n === 1 ? "page" : "pages"} was checked. This is not a full site audit and does not verify indexing, rankings, enquiries, legal accuracy, or AI citations of the firm.`;
+const LIMITATION = (n: number) => `Only the initial HTML of ${n} ${n === 1 ? "page" : "pages"} was checked. This is not a full site audit and does not verify indexing, rankings, enquiries or legal accuracy.`;
 const PARTIAL_LIMITATION = "The scan is incomplete. Findings apply only to inspected pages.";
 const CTA_HREF = "https://cal.com/adriano-caseloadselect/conversation";
 
@@ -416,7 +426,7 @@ function makeAction(family: Family, issues: ReportIssue[], pages: ReportPage[], 
   };
 }
 
-function buildCurrentOverview(pages: ReportPage[], actions: ReportAction[], coverage: ReportInput["coverage"]): ReportOverview {
+function buildCurrentOverview(pages: ReportPage[], actions: ReportAction[], coverage: ReportInput["coverage"], insights: ReportDecision[]): ReportOverview {
   const usable = pages.filter(page => page.httpStatus >= 200 && page.httpStatus < 300);
   const excluded = usable.filter(page => page.indexability?.googleDirectives?.noindex === "observed");
   const priorityExcluded = excluded.filter(page => !utilityPage(page));
@@ -444,6 +454,9 @@ function buildCurrentOverview(pages: ReportPage[], actions: ReportAction[], cove
     owner: "The firm decides which pages should appear in search. The web provider applies that decision.",
     verification: "Check the page settings and the updated sitemap together. Use Google Search Console to review the page's reported indexing status.",
     pages: pageEvidence(mismatches, true),
+    relatedPages: pages.filter(page => {
+      try { return new URL(page.url).pathname.replace(/\/+$/, "") === "/our-team"; } catch { return false; }
+    }).map(page => ({ title: page.title?.trim() || page.url, url: page.url, evidence: "A separate page in the saved inventory to compare. The scan does not establish that it replaces the listed team page." })),
   });
   if (restricted.length) findings.push({
     id: "crawler-access", state: "Confirm intended use", title: "Confirm access to pages meant to attract clients",
@@ -488,7 +501,6 @@ function buildCurrentOverview(pages: ReportPage[], actions: ReportAction[], cove
     verification: "Obtain page-level settings and check the relevant URLs in the firm's search account.", pages: pageEvidence(uncertain),
   });
   for (const action of actions.filter(action => !["search-exclusion", "robots-access"].includes(action.family))) {
-    if (findings.length >= 3) break;
     findings.push({id: action.id, state: action.evidenceLabel === "Observed in this scan" ? "Observed finding" : "Evidence incomplete",
       title: action.title, observed: action.observed, whyItMatters: action.whyItMatters, nextStep: action.nextStep,
       owner: "The firm agrees the priority. The web provider or responsible content reviewer establishes the work required.",
@@ -496,6 +508,11 @@ function buildCurrentOverview(pages: ReportPage[], actions: ReportAction[], cove
       pages: action.affectedUrls.map(url => ({title: pages.find(page => page.url === url)?.title?.trim() || url, url, evidence: action.evidenceLabel})),
     });
   }
+  findings.push(...insights);
+  const findingsOrder = new Map([["Resolve first", 0], ["Observed mismatch", 0], ["Confirm intended use", 1], ["Confirm intent", 1], ["Improve first", 2], ["Check context", 3], ["Evidence incomplete", 4], ["Observed finding", 5]]);
+  findings.sort((a, b) => (a.sortClass ?? 0) - (b.sortClass ?? 0)
+    || (findingsOrder.get(a.state) ?? 9) - (findingsOrder.get(b.state) ?? 9)
+    || (a.pages[0]?.url ?? "").localeCompare(b.pages[0]?.url ?? ""));
   let title = "No priority finding in this scan";
   let attention = "Use the result as a technical baseline. A further review should examine how your main service pages answer client questions and perform in search, using the firm's search and enquiry records.";
   if (mismatches.length) {
@@ -520,21 +537,46 @@ function buildCurrentOverview(pages: ReportPage[], actions: ReportAction[], cove
     {title: "Verify page access", detail: "Have the provider check the important service and contact pages in a browser and review their access settings."},
     {title: "Obtain reliable evidence", detail: "Complete the page review before choosing website improvements."},
   ] : findings.length ? [
-    {title: "Agree the page priorities", detail: "Review the listed pages and confirm their current purpose. Decide which should appear in search and record deliberate exclusions."},
-    {title: "Commission the work", detail: "Have the web provider or content reviewer scope the changes for those pages. Agree an owner and a clear completion check for each item."},
-    {title: "Verify before expanding the work", detail: "Check the changed pages and use the firm's search account to confirm their reported status. Review enquiry performance separately."},
+    ...findings.map((finding): { title: string; detail: string } => {
+      const count = new Set(finding.pages.map(page => page.url)).size;
+      if (finding.ruleId === "R1") return { title: "Approve description drafts", detail: `Draft and approve descriptions for ${count} pages, then ask the provider to publish them.` };
+      if (finding.ruleId === "R2") return { title: "Review the FAQ sections", detail: `Have a qualified reviewer read the FAQ sections on the ${count} listed service pages and confirm whether the answers fit each page.` };
+      if (finding.ruleId === "R3") return { title: "Confirm the page structure", detail: "Review whether the named service headings belong in a related-services section or the main explanation on the listed page." };
+      if (finding.ruleId === "R4") return { title: "Agree the two page roles", detail: "Decide what each listed page is for. Both pages may remain if their introductions explain their separate roles." };
+      if (finding.id === "sitemap-exclusion") return { title: "Align the team-page settings", detail: "Decide whether the listed team directory should appear in search, then align its sitemap listing with that decision." };
+      if (finding.id === "service-exclusions") return { title: "Confirm current service pages", detail: `Decide whether the ${count} excluded service page${count === 1 ? "" : "s"} is current and should be discoverable.` };
+      if (finding.id === "team-exclusions") return { title: "Confirm current team pages", detail: `Confirm which ${count} listed profiles are current. Keep deliberate exclusions.` };
+      return { title: finding.title, detail: `Review the ${count} listed page${count === 1 ? "" : "s"} and decide what should happen next.` };
+    }),
+    {title: "Verify agreed changes", detail: "Check the published page settings, descriptions or sections against each recorded decision."},
   ] : [
-    {title: "Choose the services to assess", detail: "Identify the matters and locations the firm wants its website to support."},
-    {title: "Review the evidence", detail: "Assess the priority service pages alongside search performance, client questions and enquiry quality."},
-    {title: "Agree the improvement plan", detail: "Use that review to decide which changes are warranted and how their results will be measured."},
+    {title: "Optional service-page review", detail: "Compare up to three clearly identified service pages with the firm's search and enquiry records. Review how people find those pages, what enquiries follow and whether the public wording fits the work the firm wants. This review needs the firm's own search and enquiry data."},
   ];
   const secure = usable.filter(page => page.url.startsWith("https://")).length;
   const contact = usable.filter(page => page.lawFirm?.phoneVisible || page.lawFirm?.contactFormPresent || page.lawFirm?.consultationCta).length;
+  const positiveExamples: ReportOverview["positiveExamples"] = [];
+  const examplePages = [...usable].sort((a, b) => {
+    const audience = (page: ReportPage) => (page.pageAudit?.h1s ?? []).find(value => /\bfor\s+(?:brazilians|families|businesses|employees|employers|workers)\b/i.test(value) && /\b(?:law|lawyer|attorney|immigration|service)\b/i.test(value)) ?? "";
+    const priority = (page: ReportPage) => audience(page) ? 0 : /contact/i.test(page.url) ? 1 : 2;
+    return priority(a) - priority(b) || (audience(a).length - audience(b).length) || a.url.localeCompare(b.url);
+  });
+  for (const page of examplePages) {
+    const headings = page.pageAudit?.h1s ?? [];
+    const audienceHeading = headings.find(value => /\bfor\s+(?:brazilians|families|businesses|employees|employers|workers)\b/i.test(value) && /\b(?:law|lawyer|attorney|immigration|service)\b/i.test(value));
+    const audiencePhrase = audienceHeading?.match(/^.*?\bfor\s+[^\s]+/i)?.[0];
+    if (audiencePhrase && positiveExamples.length < 3) positiveExamples.push({ text: `Audience wording: “${audiencePhrase}”.`, pageTitle: page.title?.trim() || page.url, url: page.url });
+    const contactPhrase = page.pageAudit?.ctaEvidence?.find(value => value.trim());
+    if (/contact/i.test(page.url) && contactPhrase && page.pageAudit?.phoneEvidence?.length && positiveExamples.length < 3) positiveExamples.push({ text: `Contact page: “${contactPhrase}” and a phone number.`, pageTitle: page.title?.trim() || page.url, url: page.url });
+    const specificH1 = headings.find(value => /\b(?:employment|immigration|real estate|wills|estates|civil litigation|contract)\b/i.test(value) && /\b(?:law|lawyer|attorney|service)\b/i.test(value));
+    if (specificH1 && positiveExamples.length < 3 && !positiveExamples.some(example => example.url === page.url)) positiveExamples.push({ text: `The heading names a legal service: “${specificH1}”.`, pageTitle: page.title?.trim() || page.url, url: page.url });
+    if (positiveExamples.length >= 3) break;
+  }
   const basics = [`${usable.length} of ${pages.length} inspected pages returned a successful response.`, `${secure} inspected pages loaded over HTTPS.`, `${contact} inspected pages matched a contact-detail or enquiry-invitation pattern.`];
   if (excluded.some(utilityPage)) basics.push("Search exclusions were also observed on utility pages. A utility-page exclusion alone is not a marketing defect.");
-  return {title, attention, findings: findings.slice(0,3), nextSteps, basics,
+  const focusLinks = findings.slice(0, 3).map(finding => ({ id: finding.id, title: finding.title, pageCount: new Set(finding.pages.map(page => page.url)).size }));
+  return {title, attention, findings, focusLinks, positiveExamples, nextSteps, basics,
     aiAccess: "The scan inspected page instructions and published crawler rules. These describe access settings, not proof that an AI service fetched a page.",
-    aiVisibility: "Not measured. This scan did not collect AI answers, brand recommendations or citations of the firm.",
+    aiVisibility: "Actual AI mentions and citations were not measured.",
     aiNextStep: "Review actual answers about your services and the locations you serve. Check whether AI services mention and link to the firm, and describe it accurately.",
   };
 }
@@ -688,7 +730,8 @@ export function buildSeoReportModel(input: ReportInput): SeoReportModel {
       : "No scored checks contributed to this scan. This scan does not grade the whole site or predict rankings."
     : METHOD_NOTE;
   const limitations = [LIMITATION(pages.length || input.pagesScanned), ...(resolvedPartial ? [PARTIAL_LIMITATION] : [])];
-  const overview = current ? buildCurrentOverview(pages, priorityActions, input.coverage) : null;
+  const insights = version === 5 ? buildReportInsights(pages) : [];
+  const overview = current ? buildCurrentOverview(pages, priorityActions, input.coverage, insights) : null;
   return {
     methodology: { version, label: current ? "Website checks" : typeof input.methodologyVersion !== "number" ? "Method not recorded" : supported || version <= 3 ? "Historical score" : "Unsupported method", notice: current ? null : version > CURRENT_METHODOLOGY_VERSION ? UNSUPPORTED_METHOD_NOTE : METHOD_NOTE },
     coverage: {

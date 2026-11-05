@@ -41,7 +41,7 @@ describe("website report presentation", () => {
     expect(report.checks.find(c => c.id.endsWith('.indexable'))?.review).toBe(1);
     expect(report.title).toBe("Review the search exclusions");
     expect(report.checks.find(c => c.id.endsWith(".indexable"))?.detail).toContain("excluded pages named");
-    expect(report.direction).toContain("which pages belong in search");
+    expect(report.direction).toContain("Start with");
   });
   it("distinguishes a page limit from a retrieval failure and never invents a site total", () => {
     const data = input();
@@ -71,7 +71,7 @@ describe("website report presentation", () => {
     expect(view(data).aiSearch.every(b => b.result === "Rules not assessed")).toBe(true);
     expect(view(data).aiIntro).toContain("not assessed");
     data.aiBots.push({ name: "ChatGPT", token: "OAI-SearchBot", blocked: true, purposes: ["search"], policyObservation: "blocking-rule-observed" });
-    expect(view(data).aiSearch[0].result).toBe("Blocking rule found");
+    expect(view(data).aiSearch[0].result).toBe("Blocking rule observed");
     expect(view(data).aiIntro).toContain("intentional");
   });
   it("only uses observed service pages as examples and never mutates saved data", () => {

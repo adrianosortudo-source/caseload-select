@@ -45,38 +45,47 @@ export function buildWebsitePresentation(input: ReportInput, model: SeoReportMod
   ].filter(Boolean).join(" ");
   const hasFindings = Boolean(model.overview?.findings.length);
   const allPassed = total > 0 && total === input.pagesScanned && coverage.successfulPages === total && checks.every(c => c.passed === total) && !coverage.failedPages && !hasFindings;
-  const title = allPassed ? "The basic checks passed." : model.overview?.title === "No priority finding in this scan" ? "Some checks need a closer review." : model.overview?.title ?? "Review the available evidence.";
+  const title = allPassed ? "No specific repair identified in this sample." : model.overview?.title === "No priority finding in this scan" ? "No specific repair identified in this sample." : model.overview?.title ?? "Review the available evidence.";
   const introduction = allPassed
     ? `All ${total} reviewed pages loaded successfully, used secure connections and had page titles. We found no published instructions telling Google to stay away from these pages or leave them out of search.`
     : model.overview?.attention ?? "Review the recorded observations before choosing website changes.";
+  const firstFinding = model.overview?.findings[0];
   const interpretation = allPassed
-    ? "These five checks found no technical repair to prioritise in this sample. Use your search and enquiry records to identify which service pages need attention."
-    : "Agree the purpose of each affected page before changing its settings. Use your search and enquiry records to judge the effect on the firm.";
-  const direction = hasFindings ? "Your next step: decide which pages belong in search and have your provider update the settings." : "Your next step: review whether your service pages help attract the cases your firm wants.";
+    ? "These five checks found no specific repair to prioritise in this sample. Use the firm's search and enquiry records to choose a useful next review."
+    : firstFinding?.ruleId === "R1"
+      ? "Review and approve concise replacements for these search descriptions before the provider publishes them. Google may choose different wording for search results."
+      : firstFinding?.ruleId === "R4"
+        ? "Agree the role of each page before changing its introduction or navigation. Both pages may remain if their purposes are clear."
+        : firstFinding?.ruleId === "R2"
+          ? "Have a qualified reviewer check whether the shared FAQ answers fit each listed service page before changing the sections."
+          : firstFinding?.ruleId === "R3"
+            ? "Review whether the service headings belong in a related-services section before changing the page wording."
+            : "Confirm the intended purpose of each affected page before asking a provider to change its settings.";
+  const firstFocus = model.overview?.focusLinks[0];
+  const direction = hasFindings && firstFocus ? `Start with “${firstFocus.title}” below, affecting ${firstFocus.pageCount} page${firstFocus.pageCount === 1 ? "" : "s"}.` : "Optional next review: compare priority service pages with the firm's search and enquiry records.";
   const aiSearch = [
     { name: "ChatGPT", token: "OAI-SearchBot" },
     { name: "Claude", token: "Claude-SearchBot" },
     { name: "Perplexity", token: "PerplexityBot" },
   ].map(service => {
     const record = model.crawlerPolicies.find(bot => bot.token === service.token);
-    return { ...service, observation: record?.policyObservation ?? "not-assessed", result: record?.policyObservation === "no-blocking-rule-observed" ? "No blocking rule found" : record?.policyObservation === "blocking-rule-observed" ? "Blocking rule found" : "Rules not assessed" };
+    return { ...service, observation: record?.policyObservation ?? "not-assessed", result: record?.policyObservation === "no-blocking-rule-observed" ? "No blocking rule observed" : record?.policyObservation === "blocking-rule-observed" ? "Blocking rule observed" : "Rules not assessed" };
   });
   const aiIntro = aiSearch.every(b => b.observation === "no-blocking-rule-observed")
     ? "The published rules we checked did not block these three search crawlers. This result gives us no reason to recommend changing those rules."
     : aiSearch.some(b => b.observation === "blocking-rule-observed")
       ? "A published blocking rule was recorded for at least one search crawler below. Confirm whether that restriction is intentional before changing it."
       : "Some search crawler rules were not assessed. Establish the missing information before recommending changes to access settings.";
-  const nextSteps = hasFindings || !total ? model.overview?.nextSteps.map(step => ({...step, title: step.title === "Verify before expanding the work" ? "Verify the changes" : step.title})) ?? [] : [
-    { title: "Choose your priorities", detail: "Agree which services, locations and client languages the website should support. Identify the corresponding pages before commissioning changes." },
-    { title: "Review the client journey", detail: "Review those pages alongside search and enquiry records. Establish whether people can find the service, understand who it is for and see a clear route to contacting the firm. Include a review of actual AI answers about these services." },
-    { title: "Agree the work", detail: "Commission changes where the review identifies a gap. Each recommendation should name the affected page, the reason to act, who will do the work and how the firm will judge the result." },
-  ];
+  const nextSteps = model.overview?.nextSteps ?? [];
   const serviceExamples = hasFindings ? [] : pages.filter(p => ["practice", "practice-area"].includes(p.pageType) && usable(p)).slice(0,3).map(p => ({ title: p.title?.trim() || p.url, url: p.url }));
-  return { checks, allPassed, title, introduction, interpretation, direction, stopLabel, coverageNote, aiSearch, aiIntro, nextSteps, serviceExamples };
+  const helpDeliverable = hasFindings
+    ? `CaseLoad Select can help prepare the decisions, review notes and publication checks for ${model.overview?.findings.map(finding => `${finding.title.toLowerCase()} (${finding.pages.length} page${finding.pages.length === 1 ? "" : "s"})`).join("; ")}. These are proposed deliverables based on this report.`
+    : "CaseLoad Select can compare up to three service pages with the firm's search and enquiry records and prepare a focused review. Those records were not read by this scan.";
+  return { checks, allPassed, title, introduction, interpretation, direction, stopLabel, coverageNote, aiSearch, aiIntro, nextSteps, serviceExamples, helpDeliverable };
 }
 
 export const websiteReviewCta = {
-  heading: "Plan your next step",
-  body: "CaseLoad Select can review your priority services, search evidence and enquiry journey, then recommend the work worth commissioning. The aim is a clear plan tied to the matters your firm wants to attract.",
-  linkLabel: "Discuss your website priorities",
+  heading: "Help from CaseLoad Select",
+  body: "CaseLoad Select can help turn these findings into clear decisions and scoped website work.",
+  linkLabel: "Discuss this report",
 };
