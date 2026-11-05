@@ -77,6 +77,15 @@ function serviceCandidate(page: InsightPage): boolean {
   return !isArticle(page) && (page.pageType === "practice" || page.pageType === "practice-area" || primaryTopic(page) !== null || /\b(?:lawyer|law firm|attorney|service|practice area)\b/i.test(label));
 }
 function serviceDescriptor(page: InsightPage): string | null {
+  // A clear “service lawyer in location” heading describes the same service
+  // across locations. Do not treat a city name alone as a separate service.
+  for (const h1 of audit(page).h1s ?? []) {
+    const match = normalizeEvidence(h1).match(/^(.+?)\b(?:lawyers?|attorneys?)\s+(?:in|near|serving|at)\s+(.+)$/);
+    if (match && !/\b(?:for|with|para|com)\b/.test(match[2])) {
+      const service = match[1].replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+      if (service.length >= 3) return service;
+    }
+  }
   const title = (page.title ?? "").replace(/\s*(?:\||-|–|—)\s*[^|–—-]*\b(?:law|firm)\b.*$/i, "");
   const text = `${title} ${(audit(page).h1s ?? []).join(" ")}`;
   let descriptor = normalizeEvidence(text);

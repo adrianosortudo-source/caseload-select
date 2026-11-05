@@ -114,6 +114,15 @@ describe("report insights", () => {
     expect(buildReportInsights(noisy)).toEqual(buildReportInsights([...noisy].reverse()));
   });
 
+  it("does not confuse other Canadian city variants with separate services", () => {
+    const heading = "Frequently Asked Questions About Wrongful Dismissal";
+    const pages = [
+      page("https://firm.test/en/immigration-ottawa/", { title: "Immigration Lawyer Ottawa", audit: { h1s: ["Immigration Lawyer in Ottawa"], h2s: [heading] } }),
+      page("https://firm.test/en/immigration-kingston/", { title: "Immigration Lawyer Kingston", audit: { h1s: ["Immigration Lawyer in Kingston"], h2s: [heading] } }),
+    ];
+    expect(ids(pages)).not.toContain("R2");
+    expect(ids(pages)).not.toContain("R4");
+  });
   it("decodes exactly one layer safely and normalizes comparison without changing display evidence", () => {
     expect(decodeEvidenceOnce("A &amp; B &#8217; &#x1F600;")).toBe("A & B ’ 😀");
     expect(decodeEvidenceOnce("&amp;#39; &#99999999999999; &#x110000;")).toBe("&#39; &#99999999999999; &#x110000;");
