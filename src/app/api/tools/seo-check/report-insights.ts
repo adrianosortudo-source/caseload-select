@@ -138,7 +138,7 @@ function ruleOne(pages: InsightPage[]): ReportDecision[] {
   if (!matched.length) return [];
   return [makeInsight({
     id: "description-navigation-prefix", ruleId: "R1", family: "description-contamination", sortClass: 1, state: "Improve first",
-    title: "Rewrite affected search descriptions",
+    title: `${matched.length} search ${matched.length === 1 ? "description begins" : "descriptions begin"} with menu text`,
     observed: `The saved descriptions on ${matched.length} pages begin with language-switch and consultation text before the service wording. Google may choose different wording for search results.`,
     whyItMatters: "A searcher may see navigation and a contact prompt where a short explanation of the service and audience would help identify the page.",
     nextStep: "Have a content reviewer draft a concise service-and-audience description for each listed page. The firm should approve the wording before the web provider updates the published fields.",
