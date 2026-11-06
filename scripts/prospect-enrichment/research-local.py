@@ -20,7 +20,9 @@ if a.id:
 else:
  q=a.query or input('Search law-firm research: ').strip()
  if not q:raise SystemExit
- safe=' AND '.join('"'+word.replace('"','""')+'"' for word in q.split())
+ terms=[word for word in q.split() if any(char.isalnum() for char in word)]
+ if not terms:print('Enter a firm name or research words.');raise SystemExit(1)
+ safe=' AND '.join('"'+word.replace('"','""')+'"' for word in terms)
  rows=db.execute('SELECT table_name,source_ctid,substr(content,1,250) FROM research_search WHERE research_search MATCH ? LIMIT 20',(safe,)).fetchall()
  for table,tid,preview in rows:print(table,tid,preview)
  print(str(len(rows))+' results shown. Use --id with a candidate or revision ID to retrieve exact records.')
