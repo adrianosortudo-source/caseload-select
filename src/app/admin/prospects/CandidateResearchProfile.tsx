@@ -1,4 +1,6 @@
 "use client";
+import { PROSPECT_RESEARCH_STORAGE } from "@/lib/prospect-research-storage";
+import LocalResearchNotice from "./LocalResearchNotice";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -36,7 +38,7 @@ function CandidateRevision({ item: metadata, coverageRevision }: { item: Candida
     </div>}</details>
   </article>;
 }
-export default function CandidateResearchProfile({ candidateId, coverageRevision }: { candidateId: string; coverageRevision?: number }) {
+function OnlineCandidateResearchProfile({ candidateId, coverageRevision }: { candidateId: string; coverageRevision?: number }) {
   const [detail, setDetail] = useState<CandidateDetail | null>(null), [history, setHistory] = useState<CandidateHistory | null>(null);
   const [error, setError] = useState<string | null>(null), [historyError, setHistoryError] = useState<string | null>(null), [busy, setBusy] = useState(false), [retry, setRetry] = useState(0);
   const base = "/api/admin/prospect-enrichment/candidates/" + encodeURIComponent(candidateId);
@@ -72,4 +74,9 @@ export default function CandidateResearchProfile({ candidateId, coverageRevision
       {history && <><CandidateWarnings warnings={history.readWarnings} complete={history.complete} />{!history.items.length && <p>No retained revisions were returned for this snapshot.</p>}<div className="space-y-4">{history.items.map(item => <CandidateRevision key={item.id} item={item} coverageRevision={history.coverageRevision} />)}</div>{history.nextCursor && <button type="button" className={researchButton} disabled={busy} onClick={() => void more()}>{busy ? "Loading revisions…" : "Load older retained records"}</button>}</>}
     </>}
   </ResearchPanel>;
+}
+
+export default function CandidateResearchProfile({ candidateId, coverageRevision }: { candidateId: string; coverageRevision?: number }) {
+  if (PROSPECT_RESEARCH_STORAGE === "local") return <LocalResearchNotice />;
+  return <OnlineCandidateResearchProfile candidateId={candidateId} coverageRevision={coverageRevision} />;
 }

@@ -1,4 +1,6 @@
 "use client";
+import { PROSPECT_RESEARCH_STORAGE } from "@/lib/prospect-research-storage";
+import LocalResearchNotice from "./LocalResearchNotice";
 import Link from "next/link";
 import { CandidateWarnings } from "./CandidateResearchWarnings";
 import CandidateResearchProfile from "./CandidateResearchProfile";
@@ -15,7 +17,7 @@ function InlineCandidateProfile({ candidateId, coverageRevision }: { candidateId
   const [open, setOpen] = useState(false);
   return <details className="mt-3 min-w-0" onToggle={event => setOpen(event.currentTarget.open)}><summary className="cursor-pointer font-semibold text-navy">Research revisions and source evidence</summary>{open && <div className="mt-3 min-w-0"><CandidateResearchProfile candidateId={candidateId} coverageRevision={coverageRevision} /></div>}</details>;
 }
-export default function CandidateResearchList({ firmId, embeddedProfiles = false }: { firmId?: string; embeddedProfiles?: boolean } = {}) {
+function OnlineCandidateResearchList({ firmId, embeddedProfiles = false }: { firmId?: string; embeddedProfiles?: boolean } = {}) {
   const query = useSearchParams(), router = useRouter(), pathname = usePathname();
   const [data, setData] = useState<CandidateList | null>(null), [error, setError] = useState<string | null>(null);
   const [retry, setRetry] = useState(0);
@@ -61,4 +63,9 @@ export default function CandidateResearchList({ firmId, embeddedProfiles = false
       <div className="flex flex-wrap gap-2"><button className={researchButton} type="button" disabled={!query.has("cr_cursor")} onClick={() => { const next = new URLSearchParams(query.toString()); next.delete("cr_cursor"); navigate(next); }}>First page</button><button className={researchButton} type="button" disabled={!data.nextCursor} onClick={() => { if (data.nextCursor) { const next = new URLSearchParams(query.toString()); next.set("cr_cursor", data.nextCursor); navigate(next); } }}>Next candidates</button></div>
     </>}
   </ResearchPanel>;
+}
+
+export default function CandidateResearchList({ firmId, embeddedProfiles = false }: { firmId?: string; embeddedProfiles?: boolean } = {}) {
+  if (PROSPECT_RESEARCH_STORAGE === "local") return <LocalResearchNotice />;
+  return <OnlineCandidateResearchList firmId={firmId} embeddedProfiles={embeddedProfiles} />;
 }
