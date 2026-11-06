@@ -47,6 +47,7 @@ export default defineConfig({
     env: {
       ...process.env,
       PROSPECT_QUALIFICATION_PREVIEW: "1",
+      NEXT_PUBLIC_PROSPECT_RESEARCH_STORAGE: "online",
       NEXT_PUBLIC_SUPABASE_URL: supabaseUrl,
       SUPABASE_SERVICE_ROLE_KEY: serviceRoleKey,
       PORTAL_SECRET: portalSecret,

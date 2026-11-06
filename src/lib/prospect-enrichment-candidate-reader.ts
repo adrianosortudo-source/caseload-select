@@ -1,4 +1,5 @@
 import "server-only";
+import { PROSPECT_RESEARCH_STORAGE, LOCAL_RESEARCH_MESSAGE } from "./prospect-research-storage";
 import { createHash } from "node:crypto";
 import {
   CandidateContractError, parseCandidateDetail, parseCandidateHistoryItem, parseCandidateMetadata, parseCandidateSummary,
@@ -7,7 +8,7 @@ import {
 
 export type CandidateReadClient = { rpc(name: string, args: Record<string, unknown>): PromiseLike<{ data: unknown; error: unknown }> };
 export class CandidateReadError extends Error {
-  constructor(message: string, readonly status: 404 | 422 | 503) { super(message); this.name = "CandidateReadError"; }
+  constructor(message: string, readonly status: 404 | 410 | 422 | 503) { super(message); this.name = "CandidateReadError"; }
 }
 type CandidateReadRpc = "list_prospect_research_candidates_v1" | "get_prospect_research_candidate_v1" | "list_prospect_research_candidate_history_v1" | "get_prospect_research_candidate_revision_chunk_v1";
 function candidateRpcErrorDetails(error: unknown, rpc: CandidateReadRpc) {
@@ -37,6 +38,7 @@ function decode(cursor: string | undefined, expectedScope: string): { afterId: s
   } catch { throw new CandidateReadError("The cursor does not belong to these research filters.", 422); }
 }
 async function rpc(name: CandidateReadRpc, args: Record<string, unknown>, client?: CandidateReadClient): Promise<unknown> {
+  if (PROSPECT_RESEARCH_STORAGE === "local") throw new CandidateReadError(LOCAL_RESEARCH_MESSAGE, 410);
   let result; try {
     const db: CandidateReadClient = client ?? (await import("@/lib/supabase-admin")).supabaseAdmin as unknown as CandidateReadClient;
     result = await db.rpc(name, args);

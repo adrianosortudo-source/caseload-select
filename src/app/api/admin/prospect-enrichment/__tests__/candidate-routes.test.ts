@@ -1,3 +1,4 @@
+// Exercise the retained online adapter independently of the local-storage release.
 import { createHash } from "node:crypto";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
@@ -10,6 +11,7 @@ import { GET as detail } from "../candidates/[candidateId]/route";
 import { GET as history } from "../candidates/[candidateId]/history/route";
 import { GET as content } from "../candidates/[candidateId]/history/[revisionId]/content/route";
 import { candidateDetail, candidateHistory, candidateList, candidateSummaries } from "../../../../../../tests/prospect-enrichment/candidate-fixtures";
+vi.mock("@/lib/prospect-research-storage", () => ({ PROSPECT_RESEARCH_STORAGE: "online", LOCAL_RESEARCH_MESSAGE: "Research is stored locally." }));
 const id = candidateSummaries[0].id;
 const req = (query = "") => new NextRequest("http://127.0.0.1:3100/api/admin/prospect-enrichment/candidates" + query);
 const ctx = { params: Promise.resolve({ candidateId: id }) };

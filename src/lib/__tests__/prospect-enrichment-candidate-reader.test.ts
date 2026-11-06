@@ -1,7 +1,9 @@
+// Exercise the retained online adapter independently of the local-storage release.
 import { describe, expect, it, vi } from "vitest";
 import { CandidateContractError, parseCandidateDetail, parseCandidateProfileChoice, parseCandidateField, parseCandidateFilters, parseCandidateHistoryItem, parseCandidateMetadata, parseCandidateSummary } from "../prospect-enrichment-candidate-contract";
 import { candidateDetail, candidateHistory, candidateList, candidateSummaries } from "../../../tests/prospect-enrichment/candidate-fixtures";
 import { getCandidateHistory, getCandidateResearch, listCandidateResearch } from "../prospect-enrichment-candidate-reader";
+vi.mock("@/lib/prospect-research-storage", () => ({ PROSPECT_RESEARCH_STORAGE: "online", LOCAL_RESEARCH_MESSAGE: "Research is stored locally." }));
 const id = candidateSummaries[0].id;
 const client = (data: unknown) => ({ rpc: vi.fn(async (name: string, args: Record<string, unknown>) => { void name; void args; return { data, error: null }; }) });
 describe("all-candidate retained research contract", () => {
