@@ -1,4 +1,5 @@
 import pathlib,json,urllib.request,urllib.error,sqlite3,zlib,hashlib,time,datetime,sys
+from concurrent.futures import ThreadPoolExecutor
 ROOT=pathlib.Path(r'D:\00_Work\01_CaseLoad_Select\07_Prospects\LocalResearch\migration-20261106')
 ROOT.mkdir(parents=True,exist_ok=True)
 REF='ssxryjxifwiivghglqer'
@@ -24,17 +25,21 @@ for name,q in [('columns',"SELECT table_name,column_name,ordinal_position,data_t
 con.commit()
 for table in meta:
  name=table['name'];qualified='public.'+qi(name)
- for start in range(0,table['blocks'],512):
+ pending=[b for b in range(0,table['blocks'],512) if not con.execute('SELECT 1 FROM blocks WHERE table_name=? AND start_block=?',(name,b)).fetchone()]
+ def fetch_block(start):
   end=start+512
-  if con.execute('SELECT 1 FROM blocks WHERE table_name=? AND start_block=?',(name,start)).fetchone():continue
   where=f"ctid >= '({start},0)'::tid AND ctid < '({end},0)'::tid"
   data=sql(f"SELECT coalesce(json_agg(x),'[]'::json) AS rows FROM (SELECT ctid::text AS tid,row_to_json(t)::text AS j FROM {qualified} t WHERE {where} ORDER BY ctid) x")[0]['rows']
-  digest=hashlib.md5();rows=[]
-  for item in data:
-   raw=item['j'].encode();h=hashlib.md5(raw).hexdigest();digest.update(h.encode());rows.append((name,item['tid'],zlib.compress(raw),h))
-  con.executemany('INSERT INTO records VALUES (?,?,?,?)',rows)
-  con.execute('INSERT INTO blocks(table_name,start_block,end_block,row_count,digest) VALUES(?,?,?,?,?)',(name,start,end,len(rows),digest.hexdigest()));con.commit()
-  if start%8192==0:print(json.dumps({'table':name,'block':start,'rows_saved':con.execute('SELECT count(*) FROM records WHERE table_name=?',(name,)).fetchone()[0]}),flush=True)
+  return start,end,data
+ with ThreadPoolExecutor(max_workers=3) as pool:
+  for batch in range(0,len(pending),3):
+   for start,end,data in pool.map(fetch_block,pending[batch:batch+3]):
+    digest=hashlib.md5();rows=[]
+    for item in data:
+     raw=item['j'].encode();h=hashlib.md5(raw).hexdigest();digest.update(h.encode());rows.append((name,item['tid'],zlib.compress(raw),h))
+    con.executemany('INSERT INTO records VALUES (?,?,?,?)',rows)
+    con.execute('INSERT INTO blocks(table_name,start_block,end_block,row_count,digest) VALUES(?,?,?,?,?)',(name,start,end,len(rows),digest.hexdigest()));con.commit()
+    if start%8192==0:print(json.dumps({'table':name,'block':start,'rows_saved':con.execute('SELECT count(*) FROM records WHERE table_name=?',(name,)).fetchone()[0]}),flush=True)
  print('EXPORTED '+name,flush=True)
 for name,start,end,count,digest in con.execute('SELECT table_name,start_block,end_block,row_count,digest FROM blocks WHERE verified=0').fetchall():
  result=sql(f"SELECT count(*) AS n,md5(coalesce(string_agg(md5(row_to_json(t)::text),'' ORDER BY ctid),'')) AS digest FROM public.{qi(name)} t WHERE ctid >= '({start},0)'::tid AND ctid < '({end},0)'::tid")[0]
