@@ -19,3 +19,5 @@ Run the focused confirmation and widget component tests, TypeScript, ESLint, the
 The page shell and screenshot placement are structural widths. They are not copy exceptions. Governed copy fills its component content box. No editorial copy exceptions are introduced.
 
 Release through a pushed PR. Merge requires Adriano's approval of the specific PR after required checks pass. No migrations or direct production deployment.
+
+The split presentation pairs the panels from 1200px upward and stacks them below that. The report has a single content inset, with a compact 12px inset on phones and 16px supporting notes, matching the website’s feature-list scale. No authored line breaks or non-breaking spaces are introduced.

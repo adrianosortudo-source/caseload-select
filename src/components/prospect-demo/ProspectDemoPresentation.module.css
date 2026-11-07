@@ -117,13 +117,13 @@
 .caseload [aria-label="Lawyer review"] footer p { color: #c4cdd9; font-size: 14px; }
 .caseload [data-ui-component-content="demo-ai-status"] { margin: 0; font-size: 15px; }
 .caseload [aria-label="Lawyer review"] section h3 { font-family: var(--font-manrope), sans-serif !important; }
-@media (min-width: 1024px) { .caseload .split { grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); } }
+@media (min-width: 1200px) { .caseload .split { grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); } }
 @media (max-width: 639px) {
   .caseload > header { padding: 24px 20px; }
   .caseload .presentationBody { padding: 24px 16px 40px; }
   .caseload [data-shell-layout="contained"] > main { padding: 20px 20px 28px; }
   .caseload [data-shell-layout="contained"] > header { padding-inline: 20px; }
-  .caseload [aria-label="Lawyer review"] { padding: 20px; }
+  .caseload [aria-label="Lawyer review"] { padding: 12px; }
   .caseload .panels { gap: 20px; }
 }
 
@@ -158,4 +158,8 @@
 }
 
 /* The status is a short state label; long brief notes use orphan-safe flow. */
-.caseload [aria-label="Lawyer review"] [data-ui-component-content="demo-brief-next-steps"] li { text-wrap: pretty !important; }
+.caseload [aria-label="Lawyer review"] [data-ui-component-content="demo-brief-next-steps"] li { font-size: 16px !important; text-wrap: pretty !important; }
+
+@media (max-width: 639px) {
+  .caseload [data-ui-component-content="demo-fact-review"] h2 { font-size: 22px; }
+}
