@@ -127,12 +127,19 @@
   .caseload .panels { gap: 20px; }
 }
 
-/* First rendered pass: repair measured orphans without narrowing copy. */
-.caseload > header :is(h1, .introduction),
-.caseload [data-ui-component-content="demo-text-prompt"] p,
-.caseload [data-ui-component-content="demo-ai-status"],
-.caseload [data-ui-component-content="demo-empty-brief"] p { text-wrap: pretty !important; }
-.caseload [data-ui-component-content="demo-brief-next-steps"] li { text-wrap: wrap; }
-
 .caseload > header :is(button,a,select):focus-visible,
 .caseload [aria-label="Lawyer review"] :is(button,a):focus-visible { outline-color: #c4b49a; }
+
+/* Use the website's 17px body scale with natural line flow. */
+.caseload [data-shell-layout="contained"] p,
+.caseload [aria-label="Lawyer review"] section p,
+.caseload [aria-label="Lawyer review"] section dd,
+.caseload [aria-label="Lawyer review"] section li,
+.caseload [data-ui-component-content="demo-ai-status"] { font-size: 17px; text-wrap: wrap !important; }
+.caseload [data-ui-component-content="demo-empty-brief"] p,
+.caseload [data-ui-component-content="demo-brief-next-steps"] li { text-wrap: wrap !important; }
+.intakeSurface { min-width: 0; }
+@media (max-width: 639px) {
+  .caseload > header h1 { font-size: 30px; }
+  .caseload > header .introduction { text-wrap: pretty; }
+}
