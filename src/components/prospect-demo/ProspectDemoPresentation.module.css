@@ -126,3 +126,10 @@
   .caseload [aria-label="Lawyer review"] { padding: 20px; }
   .caseload .panels { gap: 20px; }
 }
+
+/* First rendered pass: repair measured orphans without narrowing copy. */
+.caseload > header :is(h1, .introduction),
+.caseload [data-ui-component-content="demo-text-prompt"] p,
+.caseload [data-ui-component-content="demo-ai-status"],
+.caseload [data-ui-component-content="demo-empty-brief"] p { text-wrap: pretty !important; }
+.caseload [data-ui-component-content="demo-brief-next-steps"] li { text-wrap: wrap; }
