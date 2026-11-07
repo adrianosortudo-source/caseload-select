@@ -111,7 +111,7 @@
 .caseload [aria-label="Lawyer review"] section { border-radius: 0; padding: 20px 0; border: 0; border-bottom: 1px solid #465365; background: transparent; }
 .caseload [aria-label="Lawyer review"] section p, .caseload [aria-label="Lawyer review"] section dd, .caseload [aria-label="Lawyer review"] section li { font-size: 16px; line-height: 1.6; }
 .caseload [aria-label="Lawyer review"] :is(p,dt,dd,li) { color: #e0e6ef; }
-.caseload [aria-label="Lawyer review"] section > p:first-child { color: #c4b49a; font: 600 12px/1.55 var(--font-oxanium), sans-serif; }
+.caseload [aria-label="Lawyer review"] section > p:first-child:not([data-ui-copy]) { color: #c4b49a; font: 600 12px/1.55 var(--font-oxanium), sans-serif; }
 .caseload [data-ui-component-content="demo-known-answer"] { border-left: 0; padding-left: 0; }
 .caseload [aria-label="Lawyer review"] footer { padding: 20px 0 0; }
 .caseload [aria-label="Lawyer review"] footer p { color: #c4cdd9; font-size: 14px; }
