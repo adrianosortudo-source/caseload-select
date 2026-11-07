@@ -174,7 +174,7 @@ export async function llmExtractServer(
     const cleaned: Record<string, string> = {};
     const dropped: Record<string, string> = {};
     const normalize = (s: string) =>
-      s.toLowerCase().replace(/[–—]/g, '-').replace(/\s+/g, ' ').trim();
+      s.toLowerCase().replace(/[–—]/g, '-').replace(/\s+/g, ' ').replace(/\s*-\s*/g, '-').trim();
     for (const [k, v] of Object.entries(parsed)) {
       const slot = slotsById.get(k);
       if (!slot) continue;
