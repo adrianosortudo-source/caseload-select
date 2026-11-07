@@ -143,3 +143,16 @@
   .caseload > header h1 { font-size: 30px; }
   .caseload > header .introduction { text-wrap: pretty; }
 }
+
+/* Keep one content inset in the brief and use the full mobile page width. */
+:global(html):has(.caseload) { scrollbar-gutter: stable; }
+.caseload [data-demo-brief-content] { padding-inline: 0; }
+.caseload .introduction { font-size: 16px; text-wrap: wrap; }
+.caseload [data-ui-component-content="demo-text-prompt"] p,
+.caseload [data-demo-matter-snapshot],
+.caseload [data-ui-component-content="demo-brief-next-steps"] li { text-wrap: pretty !important; }
+.caseload [data-demo-decision-note] { font-size: 18px !important; text-wrap: wrap !important; }
+@media (max-width: 639px) {
+  .caseload .presentationBody { padding-inline: 0; }
+  .caseload > header h1 { font-size: clamp(24px, calc(7vw + 1.6px), 32px); }
+}

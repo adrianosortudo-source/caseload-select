@@ -117,7 +117,7 @@ async function assertLayout(page: Page, rootSelector = ROOT) {
         const line = lines.find((candidate) => Math.abs(candidate[0].top - word.top) <= 1);
         if (line) line.push(word); else lines.push([word]);
       }
-      if (lines.length > 1 && new Set(lines.at(-1)?.map((word) => word.id)).size === 1) failures.push(`${name} has a one-word final line`);
+      if (lines.length > 1 && new Set(lines.at(-1)?.map((word) => word.id)).size === 1) failures.push(`${name} has a one-word final line (width ${Math.round(box.width)}, font ${getComputedStyle(copy).fontSize})`);
       for (let index = 0; index < lines.length - 1; index += 1) {
         const line = lines[index];
         const next = lines[index + 1][0];

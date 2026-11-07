@@ -78,7 +78,7 @@ export function DemoOperatorPanel({ view, contained = false }: Props) {
         </div>
       </header>
 
-      <div className={`flex flex-1 flex-col gap-5 py-6 ${contained ? "min-w-0 px-4 sm:px-6" : "overflow-y-auto px-6"}`}>
+      <div data-demo-brief-content className={`flex flex-1 flex-col gap-5 py-6 ${contained ? "min-w-0 px-4 sm:px-6" : "overflow-y-auto px-6"}`}>
         <p className="sr-only" aria-live="polite">
           {state
             ? `${STAGE_LABELS[view.stage]}. ${view.currentQuestion?.question ?? "The firm review brief is ready."}`
@@ -139,18 +139,15 @@ export function DemoOperatorPanel({ view, contained = false }: Props) {
             {report && (
               <>
                 <section className="rounded-2xl border border-emerald-300/25 bg-emerald-300/[0.07] p-5" data-ui-component-content="demo-lawyer-brief">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-emerald-200">
-                    Lawyer brief
-                  </p>
-                  <h3 className="mt-2 w-full text-lg font-bold leading-snug text-white" data-ui-copy="heading" style={{ fontFamily: "Manrope, sans-serif" }}>
-                    {report.matter_snapshot}
-                  </h3>
-                  <p className="mt-3 w-full text-sm leading-relaxed text-white/70" data-ui-copy="body">
-                    {report.lawyer_time_priority}
-                  </p>
-                  <p className="mt-2 w-full text-sm leading-relaxed text-white/70" data-ui-copy="body">
-                    The lawyer makes the final engagement decision.
-                  </p>
+                  <h3 className="w-full text-xl font-bold leading-snug text-white" data-ui-copy="heading">Lawyer brief</h3>
+                  <p className="mt-4 w-full text-base leading-relaxed text-white" data-ui-copy="body" data-demo-matter-snapshot>{report.matter_snapshot}</p>
+                  <dl className="mt-4 grid gap-4 sm:grid-cols-2">
+                    {report.lawyer_time_priority.split("·").map((value, index) => <div key={index} data-ui-component-content="demo-review-priority">
+                      <dt className="text-xs text-white/70">{index === 0 ? "Review priority" : "Response cadence"}</dt>
+                      <dd className="mt-1 w-full text-base text-white" data-ui-copy="supporting">{value.trim()}</dd>
+                    </div>)}
+                  </dl>
+                  <p className="mt-4 w-full leading-relaxed text-white/80" data-ui-copy="body" data-demo-decision-note>The lawyer makes the final engagement decision.</p>
                 </section>
 
                 <section className="rounded-2xl border border-white/10 bg-white/[0.04] p-5" data-ui-component-content="demo-review-signals">
