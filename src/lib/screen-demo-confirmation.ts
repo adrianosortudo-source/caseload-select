@@ -6,6 +6,7 @@ export interface DemoReviewFact { id: string; label: string; value: string }
 const LABELS: Record<string, string> = {
   amount_at_stake: "Amount involved", decision_authority: "Hiring decision",
   hiring_timeline: "Hiring timeline", dispute_reason: "Reason for non-payment",
+  desired_outcome_unpaid_invoice: "Requested next step",
 };
 
 /** Proposals are shown for readback, never silently treated as client answers. */
@@ -19,6 +20,9 @@ export function demoReviewFacts(state: EngineState): DemoReviewFact[] {
   // Owning a business alone is not evidence of authority to retain a lawyer.
   if (!state.slots.decision_authority && /\bI (?:(?:am the owner and )?can approve hiring a lawyer|alone (?:decide|can decide) (?:whether|to) hire a lawyer|make the (?:final )?decision (?:about hiring|to hire) a lawyer)\b/i.test(state.input)) {
     proposed.decision_authority = "Just me";
+  }
+  if (state.matter_type === "unpaid_invoice" && !state.slots.desired_outcome_unpaid_invoice && /\bI (?:want|would like)(?: advice about| help (?:with|sending)| to send)? (?:a )?demand letter\b/i.test(state.input)) {
+    proposed.desired_outcome_unpaid_invoice = "Send demand letter";
   }
   return SLOT_REGISTRY.flatMap((slot) => {
     const value = proposed[slot.id];
