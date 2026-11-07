@@ -163,3 +163,6 @@
 @media (max-width: 639px) {
   .caseload [data-ui-component-content="demo-fact-review"] h2 { font-size: 22px; }
 }
+/* Preserve readable final lines at the wider phone report width. */
+.caseload [aria-label="Lawyer review"] [data-demo-matter-snapshot],
+.caseload [aria-label="Lawyer review"] [data-demo-decision-note] { text-wrap: pretty !important; }
