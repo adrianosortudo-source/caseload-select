@@ -8,7 +8,7 @@ The standalone presentation adopts the current caseloadselect.ca palette, self-h
 
 The live engine intentionally treats `llm_inferred` values as unconfirmed. The AI demo now displays canonical selectable extracted facts together for one explicit readback. Only the user's Confirm details and continue action marks the displayed facts answered. Unstated facts still receive questions. Edit my description discards the pending result and allows correction and fresh extraction. Invalid options, unknown fields, contact details and routing proposals are excluded from readback promotion. No changes to global engine provenance, classification, scoring or readiness extraction rules are required.
 
-The phrase “I am the owner and can approve hiring a lawyer” can propose Just me for that same readback; business ownership alone never does. This is scoped to a fictional demo and requires user confirmation.
+The phrase “I am the owner and can approve hiring a lawyer” can propose Just me for that same readback; business ownership alone never does. An explicitly requested demand letter is offered in the same review, so that request is not asked again. This is scoped to a fictional demo and requires user confirmation.
 
 Live AI success, loading and fallback are separately labelled. Guided mode makes no AI request. Neither mode persists intake, sends messages, requests audio, captures consent or creates CRM records.
 

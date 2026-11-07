@@ -56,7 +56,7 @@ function extractionLabel(view: ScreenDemoView) {
     return "Live AI interpretation completed for this fictional description.";
   }
   if (view.extraction.status === "fallback") {
-    return `Live AI was unavailable. The deterministic fallback is active${view.extraction.reason ? `: ${view.extraction.reason}` : "."}`;
+    return "Live AI is unavailable. Guided questions are active.";
   }
   return "Live AI will read the fictional description when the intake begins.";
 }

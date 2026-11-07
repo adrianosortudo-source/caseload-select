@@ -142,6 +142,7 @@ it("reviews AI facts once, preserves missing questions, and supports correcting 
   expect(views.at(-1)?.currentQuestion).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "Edit my description" }));
   expect(screen.getByDisplayValue(/18,450/)).toBeTruthy();
+  expect(views.at(-1)?.extraction.status).toBe("not-requested");
   fireEvent.click(screen.getByRole("button", { name: "Continue matter review" }));
   fireEvent.click(await screen.findByRole("button", { name: "Confirm details and continue" }));
   await waitFor(() => expect(views.at(-1)?.state?.slot_meta.amount_at_stake.source).toBe("answered"));

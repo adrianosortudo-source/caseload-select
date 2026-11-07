@@ -698,7 +698,7 @@ export function ScreenEnginePublicWidget({
           </dl>
           <div className="flex flex-col gap-3">
             <button type="button" className="min-h-[48px] bg-[#1E2F58] px-5 py-3 font-semibold text-white" onClick={() => { setState(confirmDemoFacts(state)); setPendingDemoReview(false); }}>Confirm details and continue</button>
-            <button type="button" className="min-h-[48px] border border-[#1E2F58] px-5 py-3 font-semibold" onClick={() => { setPendingDemoReview(false); setState(null); setHistory([]); setStage("kickoff"); }}>Edit my description</button>
+            <button type="button" className="min-h-[48px] border border-[#1E2F58] px-5 py-3 font-semibold" onClick={() => { setPendingDemoReview(false); setState(null); setHistory([]); setExtraction({ status: "not-requested" }); setStage("kickoff"); }}>Edit my description</button>
           </div>
         </section>
       </Shell>

@@ -72,7 +72,7 @@
 /* This opt-in surface follows the current caseloadselect.ca design. */
 .caseload { color: #0d1520; font: 17px/1.55 "DM Sans Variable", sans-serif; --cls-bg: #f4f3ef; }
 .caseload ::selection { color: #0d1520; background: #c4b49a; }
-.caseload :is(button, a, select, textarea, input):focus-visible { outline: 3px solid #c4b49a; outline-offset: 4px; }
+.caseload :is(button, a, select, textarea, input):focus-visible { outline: 3px solid #1e2f58; outline-offset: 4px; }
 .caseload > header { position: static; padding: 28px 32px 32px; background: #0d1520; color: #fff; border: 0; }
 .caseload > header > div { max-width: 1200px; gap: 28px; }
 .brand { display: inline-block; margin-bottom: 26px; }
@@ -133,3 +133,6 @@
 .caseload [data-ui-component-content="demo-ai-status"],
 .caseload [data-ui-component-content="demo-empty-brief"] p { text-wrap: pretty !important; }
 .caseload [data-ui-component-content="demo-brief-next-steps"] li { text-wrap: wrap; }
+
+.caseload > header :is(button,a,select):focus-visible,
+.caseload [aria-label="Lawyer review"] :is(button,a):focus-visible { outline-color: #c4b49a; }
