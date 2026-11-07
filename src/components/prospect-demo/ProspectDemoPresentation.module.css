@@ -156,3 +156,6 @@
   .caseload .presentationBody { padding-inline: 0; }
   .caseload > header h1 { font-size: clamp(24px, calc(7vw + 1.6px), 32px); }
 }
+
+/* The status is a short state label; long brief notes use orphan-safe flow. */
+.caseload [aria-label="Lawyer review"] [data-ui-component-content="demo-brief-next-steps"] li { text-wrap: pretty !important; }

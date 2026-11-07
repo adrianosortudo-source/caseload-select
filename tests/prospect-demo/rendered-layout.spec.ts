@@ -266,7 +266,7 @@ for (const width of WIDTHS) {
     await page.locator(`${INTAKE} textarea`).fill("Fictional test. A business client owes us $18,450 for completed work. I can approve hiring a lawyer. We have an invoice and signed contract.");
     await page.getByRole("button", { name: "Continue matter review", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Check what we captured." })).toBeVisible();
-    await expect(page.getByText("Live AI interpretation completed for this fictional description.", { exact: true })).toBeVisible();
+    await expect(page.getByText("Live AI completed.", { exact: true })).toBeVisible();
     await expect(page.getByText("Just me", { exact: true })).toBeVisible();
     await assertLayout(page);
     await page.screenshot({ path: testInfo.outputPath(`ai-readback-${width}.png`), fullPage: true });

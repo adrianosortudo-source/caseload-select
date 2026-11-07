@@ -47,18 +47,18 @@ function widgetTheme(): WidgetTheme {
 
 function extractionLabel(view: ScreenDemoView) {
   if (view.runtime === "demo") {
-    return "Guided sample. The deterministic demonstration stays in this browser.";
+    return "Guided sample active.";
   }
   if (view.extraction.status === "reading") {
-    return "Reading the fictional description with live AI.";
+    return "AI is reading your description.";
   }
   if (view.extraction.status === "live") {
-    return "Live AI interpretation completed for this fictional description.";
+    return "Live AI completed.";
   }
   if (view.extraction.status === "fallback") {
-    return "Live AI is unavailable. Guided questions are active.";
+    return "AI unavailable. Guided mode.";
   }
-  return "Live AI will read the fictional description when the intake begins.";
+  return "Live AI selected.";
 }
 
 export function ProspectDemoStandaloneClient({ profileId }: { profileId: string }) {
