@@ -130,3 +130,25 @@ describe("ScreenEnginePublicWidget demo runtime", () => {
     });
   });
 });
+
+
+it("reviews AI facts once, preserves missing questions, and supports correcting the opening", async () => {
+  const views: ScreenDemoView[] = [];
+  vi.mocked(fetch).mockResolvedValue({ ok: true, json: async () => ({ mode: "live", extracted: { amount_at_stake: "$5,000–$25,000" } }) } as Response);
+  render(<ScreenEnginePublicWidget firmId="fictional" firmName="Fictional firm" runtime="demo-live-ai" layout="contained" initialDescription="A client owes us $18,450 for completed work. I can approve hiring a lawyer." onDemoStateChange={(view) => views.push(view)} />);
+  fireEvent.click(screen.getByRole("button", { name: "Continue matter review" }));
+  await screen.findByRole("heading", { name: "Check what we captured." });
+  expect(views.at(-1)?.state?.slot_meta.amount_at_stake.source).toBe("llm_inferred");
+  expect(views.at(-1)?.currentQuestion).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "Edit my description" }));
+  expect(screen.getByDisplayValue(/18,450/)).toBeTruthy();
+  expect(views.at(-1)?.extraction.status).toBe("not-requested");
+  fireEvent.click(screen.getByRole("button", { name: "Continue matter review" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Confirm details and continue" }));
+  await waitFor(() => expect(views.at(-1)?.state?.slot_meta.amount_at_stake.source).toBe("answered"));
+  expect(views.at(-1)?.state?.slot_meta.decision_authority.source).toBe("answered");
+  expect(views.at(-1)?.currentQuestion?.id).not.toBe("amount_at_stake");
+  expect(views.at(-1)?.currentQuestion?.id).not.toBe("decision_authority");
+  expect(views.at(-1)?.currentQuestion).not.toBeNull();
+  expect(vi.mocked(fetch).mock.calls.every(([url]) => url === "/api/extract")).toBe(true);
+});

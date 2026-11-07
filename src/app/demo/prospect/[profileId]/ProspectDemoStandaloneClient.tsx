@@ -17,7 +17,6 @@ import {
 } from "@/lib/prospect-demo/store";
 import type {
   ProspectDemoSessionAdapter,
-  ProspectDemoSessionContext,
 } from "@/lib/prospect-demo/types";
 import { themeToCssVars, type WidgetTheme } from "@/lib/widget-theme";
 
@@ -30,37 +29,36 @@ const EMPTY_VIEW: ScreenDemoView = {
   runtime: "demo",
 };
 
-function widgetTheme(context: ProspectDemoSessionContext): WidgetTheme {
-  const { theme } = context.profile;
+function widgetTheme(): WidgetTheme {
   return {
     colors: {
-      bg: theme.surface,
+      bg: "#F4F3EF",
       surface: "#FFFFFF",
-      text: theme.text,
+      text: "#0D1520",
       textMuted: "rgba(38, 38, 38, 0.64)",
-      accent: theme.accent,
-      accentText: theme.buttonText,
+      accent: "#1E2F58",
+      accentText: "#FFFFFF",
       border: "rgba(38, 38, 38, 0.16)",
-      borderHover: theme.accent,
+      borderHover: "#1E2F58",
     },
-    fonts: { display: "Manrope, sans-serif", body: "DM Sans, sans-serif" },
+    fonts: { display: "var(--font-manrope), sans-serif", body: "DM Sans Variable, sans-serif" },
   };
 }
 
 function extractionLabel(view: ScreenDemoView) {
   if (view.runtime === "demo") {
-    return "Guided sample. The deterministic demonstration stays in this browser.";
+    return "Guided sample active.";
   }
   if (view.extraction.status === "reading") {
-    return "Reading the fictional description with live AI.";
+    return "AI is reading your description.";
   }
   if (view.extraction.status === "live") {
-    return "Live AI interpretation completed for this fictional description.";
+    return "Live AI completed.";
   }
   if (view.extraction.status === "fallback") {
-    return `Live AI was unavailable. The deterministic fallback is active${view.extraction.reason ? `: ${view.extraction.reason}` : "."}`;
+    return "AI unavailable. Guided mode.";
   }
-  return "Live AI will read the fictional description when the intake begins.";
+  return "Live AI selected.";
 }
 
 export function ProspectDemoStandaloneClient({ profileId }: { profileId: string }) {
@@ -107,7 +105,7 @@ export function ProspectDemoStandaloneClient({ profileId }: { profileId: string 
   const receiveView = useCallback((next: ScreenDemoView) => setView(next), []);
   const adapter = useMemo<ProspectDemoSessionAdapter>(() => ({
     renderIntake: (context) => (
-      <div style={themeToCssVars(widgetTheme(context))}>
+      <div style={themeToCssVars(widgetTheme())}>
         <ScreenEnginePublicWidget
           key={`${context.profile.id}-${context.sessionKey}-${context.mode}`}
           firmId={`prospect-demo-${context.profile.slug}`}
@@ -122,7 +120,7 @@ export function ProspectDemoStandaloneClient({ profileId }: { profileId: string 
     ),
     renderReview: () => (
       <div className="space-y-4">
-        <p className="w-full border-b border-white/15 pb-3 text-xs leading-5 text-white/70">
+        <p role="status" className="w-full border-b border-white/15 pb-3 text-sm leading-6 text-white/80" data-ui-component-content="demo-ai-status" data-ui-copy="supporting">
           {extractionLabel(view)}
         </p>
         <DemoOperatorPanel view={view} contained />
@@ -156,6 +154,7 @@ export function ProspectDemoStandaloneClient({ profileId }: { profileId: string 
       registrations={registrations}
       initialProfileId={profileId}
       strictInitialProfile
+      appearance="caseload"
     />
   );
 }

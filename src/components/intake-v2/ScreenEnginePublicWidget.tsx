@@ -29,6 +29,7 @@ import { renderBriefHtmlServer } from "@/lib/screen-brief-html";
 import { getWebAttribution } from "@/lib/screen-engine/persist";
 import type { EngineState, LawyerReport, MatterType, SlotDefinition } from "@/lib/screen-engine/types";
 import { answerDemoState, buildDemoReport, startDemoState } from "@/lib/screen-demo";
+import { confirmDemoFacts, demoReviewFacts } from "@/lib/screen-demo-confirmation";
 
 export type ScreenWidgetStage = "kickoff" | "questions" | "contact" | "done";
 export type ScreenWidgetRuntime = "live" | "demo" | "demo-live-ai";
@@ -286,6 +287,7 @@ export function ScreenEnginePublicWidget({
   const policy = SCREEN_WIDGET_EXECUTION_POLICY[runtime];
   const isDemo = policy.isGuidedDemo;
   const [stage, setStage] = useState<Stage>("kickoff");
+  const [pendingDemoReview, setPendingDemoReview] = useState(false);
   const [description, setDescription] = useState(initialDescription);
   const [state, setState] = useState<EngineState | null>(null);
   const [history, setHistory] = useState<EngineState[]>([]);
@@ -368,7 +370,7 @@ export function ScreenEnginePublicWidget({
   }, [next, language, i18n]);
 
   const demoReport = useMemo(() => {
-    if (!isDemo || !state) return null;
+    if (!isDemo || !state || pendingDemoReview) return null;
     if (
       stage !== "done" &&
       next?.type !== "present_insight" &&
@@ -376,19 +378,19 @@ export function ScreenEnginePublicWidget({
       next?.type !== "stop"
     ) return null;
     return buildDemoReport(state);
-  }, [isDemo, stage, state, next?.type]);
+  }, [isDemo, stage, state, next?.type, pendingDemoReview]);
 
   useEffect(() => {
     if (!isDemo) return;
     onDemoStateChange?.({
       stage,
       state,
-      currentQuestion: currentItem,
+      currentQuestion: pendingDemoReview ? null : currentItem,
       report: demoReport,
       extraction,
       runtime,
     });
-  }, [isDemo, runtime, onDemoStateChange, stage, state, currentItem, demoReport, extraction]);
+  }, [isDemo, runtime, onDemoStateChange, stage, state, currentItem, demoReport, extraction, pendingDemoReview]);
 
   async function start() {
     await runStart(description);
@@ -401,6 +403,7 @@ export function ScreenEnginePublicWidget({
   async function runStart(rawText: string) {
     const text = rawText.trim();
     if (text.length < 10) return;
+    setPendingDemoReview(false);
 
     if (policy.usesFixtureEngine) {
       setState(startDemoState(text));
@@ -428,6 +431,7 @@ export function ScreenEnginePublicWidget({
       if (extracted.mode === "live") {
         nextState = scoreState(mergeLlmResults(nextState, extracted.extracted));
         setState(nextState);
+        if (runtime === "demo-live-ai") setPendingDemoReview(demoReviewFacts(nextState).length > 0);
       }
       if (isDemo) {
         setExtraction(
@@ -644,7 +648,7 @@ export function ScreenEnginePublicWidget({
             id: "situation",
             question: ws("kickoff_heading", "Tell us how a lawyer can help you today."),
             description: isDemo
-              ? `A few plain-language sentences are enough. Include what is happening, any deadline, and the documents you have. After that, we usually ask ${WEB_DISCOVERY_TARGET_MIN} to ${WEB_DISCOVERY_TARGET_MAX} short questions and never more than ${WEB_DISCOVERY_HARD_CAP}.`
+              ? `Describe what happened, any deadline, and the documents you have. Review the captured facts, then answer only what is missing. There are never more than ${WEB_DISCOVERY_HARD_CAP} follow-up questions.`
               : ws(
                   "kickoff_helper",
                   `A few plain-language sentences are enough. Include what is happening, any deadline, and the documents you have. After that, the Screen usually asks ${WEB_DISCOVERY_TARGET_MIN}–${WEB_DISCOVERY_TARGET_MAX} short questions and never more than ${WEB_DISCOVERY_HARD_CAP}.`,
@@ -679,6 +683,27 @@ export function ScreenEnginePublicWidget({
   // the legacy CaseLoad Select chrome.
   const fontDisplay = "var(--cls-font-display, Manrope, sans-serif)";
   const fontBody = "var(--cls-font-body, DM Sans, sans-serif)";
+
+  if (runtime === "demo-live-ai" && pendingDemoReview && !isReading) {
+    return (
+      <Shell totalScreens={1} currentScreen={0} roundLabel="Check the captured facts" layout={layout}>
+        <section className="space-y-5" data-ui-component-content="demo-fact-review">
+          <h2 className="w-full text-2xl font-extrabold" data-ui-copy="heading" style={{ fontFamily: fontDisplay }}>Check what we captured.</h2>
+          <p className="w-full text-base leading-relaxed" data-ui-copy="body">Review these details before continuing. We will only ask for information that is still missing.</p>
+          <dl className="divide-y divide-[#D4D6D9] border-y border-[#D4D6D9]">
+            {demoReviewFacts(state).map((fact) => <div key={fact.id} className="py-4" data-ui-component-content="demo-review-fact">
+              <dt className="text-sm text-[#465365]">{fact.label}</dt>
+              <dd className="mt-1 w-full text-base font-semibold" data-ui-copy="supporting">{fact.value}</dd>
+            </div>)}
+          </dl>
+          <div className="flex flex-col gap-3">
+            <button type="button" className="min-h-[48px] bg-[#1E2F58] px-5 py-3 font-semibold text-white" onClick={() => { setState(confirmDemoFacts(state)); setPendingDemoReview(false); }}>Confirm details and continue</button>
+            <button type="button" className="min-h-[48px] border border-[#1E2F58] px-5 py-3 font-semibold" onClick={() => { setPendingDemoReview(false); setState(null); setHistory([]); setExtraction({ status: "not-requested" }); setStage("kickoff"); }}>Edit my description</button>
+          </div>
+        </section>
+      </Shell>
+    );
+  }
 
   if (stage === "done" || next?.type === "stop") {
     if (next?.type === "stop" && policy.allowsPersistence) void persist(state);
