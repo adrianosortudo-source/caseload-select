@@ -954,7 +954,11 @@ function truthWarningsHtml(warnings: readonly string[]): string {
  * full layout. When the caller passes nothing, those affordances degrade
  * gracefully — the brief still renders end-to-end.
  */
+export const DEMO_BRIEF_PROJECTION_VERSION = "production-demo-v1";
+
 export interface BriefRenderOptions {
+  /** Read-only demo projection: same report body, without a real queue, timer or action rail. */
+  presentation?: 'portal' | 'demo';
   /** ISO timestamp of the decision deadline. Drives the live timer attrs on
    *  the cover decision band and the sidebar Queue posture row. */
   decisionDeadlineIso?: string | null;
@@ -1186,7 +1190,7 @@ export function renderBriefHtmlServer(
     // 3 most important scope checks as a compact grid (no nested section
     // subtitles). The axis grid sits directly below as the "why this band"
     // block, with its own internal hierarchy.
-    const scopeItems = (report.strategic_considerations ?? []).slice(0, 3);
+    const scopeItems = options.presentation === 'demo' ? (report.strategic_considerations ?? []) : (report.strategic_considerations ?? []).slice(0, 3);
     const scopeGrid =
       scopeItems.length > 0
         ? `<div class="callback-scope-grid">${scopeItems.map((s) => `<div class="callback-scope-item">${esc(s)}</div>`).join('')}</div>`
@@ -1226,9 +1230,9 @@ export function renderBriefHtmlServer(
     // (the same items that drive the Decision scope grid; useful here as a
     // callback walkthrough). Do not quote until -> the what-to-confirm
     // gates that protect the fee quote from being premature.
-    const openWith = (report.call_openers ?? []).slice(0, 3);
-    const confirmNext = (report.strategic_considerations ?? []).slice(0, 4);
-    const doNotQuote = (report.what_to_confirm ?? []).slice(0, 4);
+    const openWith = options.presentation === 'demo' ? (report.call_openers ?? []) : (report.call_openers ?? []).slice(0, 3);
+    const confirmNext = options.presentation === 'demo' ? (report.strategic_considerations ?? []) : (report.strategic_considerations ?? []).slice(0, 4);
+    const doNotQuote = options.presentation === 'demo' ? (report.what_to_confirm ?? []) : (report.what_to_confirm ?? []).slice(0, 4);
     const callPrepGrid = `
       <div class="callprep-grid">
         <div class="callprep-block">
@@ -1301,6 +1305,30 @@ export function renderBriefHtmlServer(
       ${sidebar}
     </div>
   `;
+
+  if (options.presentation === 'demo') {
+    // Share the actual report sections and axis/provenance formatting with the
+    // portal. A demo has no saved lead, decision deadline or operational rail.
+    const groups = leftBody.replace(
+      /<section class="brief-group" data-group="([^"]+)">\s*<h3 class="brief-group-title">([^<]+)<\/h3>([\s\S]*?)<\/section>/g,
+      (_match, group: string, title: string, body: string) =>
+        `<details class="brief-group" data-group="${group}"${group === 'headline' || group === 'routing' ? ' open' : ''}><summary>${title}</summary><div class="brief-group-content">${body}</div></details>`,
+    );
+    return [
+      languageCalloutHtml(intakeLanguage),
+      classificationNote,
+      truthWarningsHtml(report.truth_warnings),
+      `<p class="demo-report-boundary">Fictional inquiry. The lawyer makes the engagement decision.</p>`,
+      groups,
+      `<details class="brief-group" data-group="reasoning"><summary>Reasons and uncertainty</summary><div class="brief-group-content">
+        <h4>Band reasoning</h4>${bullets(report.band_reasoning_bullets)}
+        <h4>Open questions</h4>${bullets(report.open_questions, 'No additional open questions identified.')}
+        <h4>Inferred signals</h4>${bullets(report.inferred_signals, 'No additional inferred signals.')}
+        <h4>Standing watchpoints</h4>${riskFlagsBlock(report.risk_flags)}
+      </div></details>`,
+      `<details class="brief-group" data-group="contact"><summary>Contact details</summary><div class="brief-group-content"><p>Contact details are not collected in this demonstration. A real intake asks for a name and a way for the firm to reply.</p></div></details>`,
+    ].join('\n');
+  }
 
   // The ACTION_RAIL_SLOT marker is the split point for the React page
   // (page.tsx). The TriageActionBar mounts between contactStrip and mainGrid

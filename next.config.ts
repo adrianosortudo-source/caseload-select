@@ -220,6 +220,10 @@ const nextConfig: NextConfig = {
         // Screen demo, including its quiz subpath, are framed inline by
         // Version3_CaseLoadSelect/tools.html. Scoped to our own origins,
         // not the open '*' the widget uses.
+        source: "/tools/screen",
+        headers: toolsEmbedSecurityHeaders,
+      },
+      {
         source: "/tools/seo-check",
         headers: toolsEmbedSecurityHeaders,
       },
@@ -278,7 +282,7 @@ const nextConfig: NextConfig = {
         // both their embeddable set AND the strict main-app set, and the
         // latter's X-Frame-Options: DENY would block iframe embedding.
         source:
-          "/((?!widget/|widget-public/|tools/seo-check|tools/firm-voice-builder|tools/start-a-conversation|tools/website-design-check|tools/why-your-firm|tools/desired-client-matter/?$|screen-demo).*)",
+          "/((?!widget/|widget-public/|tools/screen/?$|tools/seo-check|tools/firm-voice-builder|tools/start-a-conversation|tools/website-design-check|tools/why-your-firm|tools/desired-client-matter/?$|screen-demo).*)",
         headers: mainSecurityHeaders,
       },
     ];
@@ -290,6 +294,12 @@ const nextConfig: NextConfig = {
   // (308) so search engines re-index / as canonical, not /home.
   async redirects() {
     return [
+      {
+        // Keep the existing tools-page iframe and bookmarks on the current real-engine demo.
+        source: "/screen-demo",
+        destination: "/tools/screen",
+        permanent: false,
+      },
       {
         source: "/home",
         destination: "/",

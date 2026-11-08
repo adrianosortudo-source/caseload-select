@@ -29,11 +29,12 @@ import { renderBriefHtmlServer } from "@/lib/screen-brief-html";
 import { getWebAttribution } from "@/lib/screen-engine/persist";
 import type { EngineState, LawyerReport, MatterType, SlotDefinition } from "@/lib/screen-engine/types";
 import { answerDemoState, buildDemoReport, startDemoState } from "@/lib/screen-demo";
-import { confirmDemoFacts, demoReviewFacts } from "@/lib/screen-demo-confirmation";
+import { DemoFactReview } from "./DemoFactReview";
+import { confirmDemoFacts, demoCapturedFacts, demoReviewFacts } from "@/lib/screen-demo-confirmation";
 
 export type ScreenWidgetStage = "kickoff" | "questions" | "contact" | "done";
 export type ScreenWidgetRuntime = "live" | "demo" | "demo-live-ai";
-export type ScreenWidgetExtractionStatus = "not-requested" | "reading" | "live" | "fallback";
+export type ScreenWidgetExtractionStatus = "not-requested" | "reading" | "live" | "fallback" | "not-needed";
 
 /**
  * Runtime capabilities are deliberately defined at the widget boundary so a
@@ -138,6 +139,8 @@ export interface ScreenEnginePublicWidgetProps {
   runtime?: ScreenWidgetRuntime;
   /** Content-sized widget frame for a mockup column or card. Defaults to the existing viewport-aware frame. */
   layout?: ShellLayout;
+  /** A parent demo workspace owns iframe height when false. */
+  reportEmbeddedHeight?: boolean;
   /** Read-only state bridge for the separate sales presentation panel. */
   onDemoStateChange?: (view: ScreenDemoView) => void;
   /** Optional fictional opening used by the presentation toolbar. */
@@ -281,6 +284,7 @@ export function ScreenEnginePublicWidget({
   onSubmitResult,
   runtime = "live",
   layout = "default",
+  reportEmbeddedHeight = true,
   onDemoStateChange,
   initialDescription = "",
 }: ScreenEnginePublicWidgetProps) {
@@ -294,6 +298,8 @@ export function ScreenEnginePublicWidget({
   const [isReading, setIsReading] = useState(false);
   const [persistStatus, setPersistStatus] = useState<string | null>(null);
   const persistedRef = useRef(false);
+  const extractionRun = useRef(0);
+  useEffect(() => () => { extractionRun.current += 1; }, []);
   // Clarify state (DR-071, 2026-06-11). When the engine cannot classify
   // the lead's input (matter_type stays 'unknown' after the LLM merge,
   // per the DR-070 no-force-fit rule), `getNextStep` returns
@@ -370,15 +376,9 @@ export function ScreenEnginePublicWidget({
   }, [next, language, i18n]);
 
   const demoReport = useMemo(() => {
-    if (!isDemo || !state || pendingDemoReview) return null;
-    if (
-      stage !== "done" &&
-      next?.type !== "present_insight" &&
-      next?.type !== "capture_contact" &&
-      next?.type !== "stop"
-    ) return null;
+    if (!isDemo || !state || pendingDemoReview || isReading) return null;
     return buildDemoReport(state);
-  }, [isDemo, stage, state, next?.type, pendingDemoReview]);
+  }, [isDemo, state, pendingDemoReview, isReading]);
 
   useEffect(() => {
     if (!isDemo) return;
@@ -404,9 +404,12 @@ export function ScreenEnginePublicWidget({
     const text = rawText.trim();
     if (text.length < 10) return;
     setPendingDemoReview(false);
+    const run = ++extractionRun.current;
 
     if (policy.usesFixtureEngine) {
-      setState(startDemoState(text));
+      const fixtureState = startDemoState(text);
+      setState(fixtureState);
+      setPendingDemoReview(demoCapturedFacts(fixtureState).length > 0);
       setStage("questions");
       setIsReading(false);
       setExtraction({ status: "not-requested" });
@@ -428,29 +431,33 @@ export function ScreenEnginePublicWidget({
 
     try {
       const extracted = await llmExtract(text, nextState);
+      if (run !== extractionRun.current) return;
       if (extracted.mode === "live") {
         nextState = scoreState(mergeLlmResults(nextState, extracted.extracted));
         setState(nextState);
-        if (runtime === "demo-live-ai") setPendingDemoReview(demoReviewFacts(nextState).length > 0);
+        if (runtime === "demo-live-ai") setPendingDemoReview(demoCapturedFacts(nextState).length > 0);
       }
       if (isDemo) {
+        setPendingDemoReview(demoCapturedFacts(nextState).length > 0);
         setExtraction(
           extracted.mode === "live"
-            ? { status: "live" }
+            ? extracted.reason === "out_of_scope" || extracted.reason === "no_applicable_slots" ? { status: "not-needed" } : { status: "live" }
             : { status: "fallback", reason: extracted.reason ?? "Live extraction was unavailable." },
         );
       }
     } catch (error) {
+      if (run !== extractionRun.current) return;
       // llmExtract normally resolves failures as { mode: "error" }, but keep
       // the presentation state truthful if that contract is ever violated.
       if (isDemo) {
+        setPendingDemoReview(demoCapturedFacts(nextState).length > 0);
         setExtraction({
           status: "fallback",
           reason: error instanceof Error ? error.message : "Live extraction was unavailable.",
         });
       }
     } finally {
-      setIsReading(false);
+      if (run === extractionRun.current) setIsReading(false);
     }
   }
 
@@ -496,17 +503,22 @@ export function ScreenEnginePublicWidget({
   }
 
   function back() {
+    extractionRun.current += 1;
+    setIsReading(false);
+    setPendingDemoReview(false);
     const prev = history.at(-1);
     if (!prev) {
       // Returning all the way to kickoff resets the clarify counter so a
       // re-submitted description gets a fresh two-round budget (DR-071).
       setStage("kickoff");
+      if (isDemo) { setState(null); setExtraction({ status: "not-requested" }); }
       setClarifyAttempts(0);
       setClarifyFallback(false);
       return;
     }
     setHistory((items) => items.slice(0, -1));
     setState(prev);
+    if (isDemo) setPendingDemoReview(demoReviewFacts(prev).length > 0);
     setStage("questions");
   }
 
@@ -623,6 +635,10 @@ export function ScreenEnginePublicWidget({
     void persist(nextState);
   }
 
+  const demoReviewFooter = isDemo && state && !pendingDemoReview && !isReading && demoCapturedFacts(state).length > 0
+    ? <button type="button" className="min-h-[44px] w-full border border-[#1E2F58] bg-white px-4 py-3 text-[#1E2F58]" onClick={() => setPendingDemoReview(true)}>Review captured facts</button>
+    : undefined;
+
   if (stage === "kickoff") {
     // Kickoff language: seeded by `initialLang` (the embedding page's
     // locale hint via ?lang=). English embeds default to "en"; a /pt
@@ -641,7 +657,7 @@ export function ScreenEnginePublicWidget({
     // a workflow step ("Continue matter review"), not a generic CTA, so
     // visitors understand they have not finished submitting yet.
     return (
-      <Shell totalScreens={1} currentScreen={0} roundLabel={roundLabel} layout={layout}>
+      <Shell totalScreens={1} currentScreen={0} roundLabel={roundLabel} layout={layout} reportHeight={reportEmbeddedHeight} footer={demoReviewFooter}>
         <TextCard
           contained={layout === "contained"}
           item={{
@@ -684,23 +700,22 @@ export function ScreenEnginePublicWidget({
   const fontDisplay = "var(--cls-font-display, Manrope, sans-serif)";
   const fontBody = "var(--cls-font-body, DM Sans, sans-serif)";
 
-  if (runtime === "demo-live-ai" && pendingDemoReview && !isReading) {
+  if (isDemo && isReading) {
+    return <Shell totalScreens={1} currentScreen={0} roundLabel="Reading" onBack={back} backLabel={backLabel} layout={layout} reportHeight={reportEmbeddedHeight} footer={demoReviewFooter}>
+      <section aria-busy="true" role="status" className="flex flex-col gap-4 py-8" data-ui-component-content="demo-reading">
+        <h2 className="w-full text-2xl font-extrabold" data-ui-copy="heading" style={{ fontFamily: fontDisplay }}>Reading your description</h2>
+        <p className="w-full" data-ui-copy="body">The AI is identifying details for you to review. No intake is being submitted.</p>
+      </section>
+    </Shell>;
+  }
+
+  if (isDemo && pendingDemoReview && !isReading) {
     return (
-      <Shell totalScreens={1} currentScreen={0} roundLabel="Check the captured facts" layout={layout}>
-        <section className="space-y-5" data-ui-component-content="demo-fact-review">
-          <h2 className="w-full text-2xl font-extrabold" data-ui-copy="heading" style={{ fontFamily: fontDisplay }}>Check what we captured.</h2>
-          <p className="w-full text-base leading-relaxed" data-ui-copy="body">Review these details before continuing. We will only ask for information that is still missing.</p>
-          <dl className="divide-y divide-[#D4D6D9] border-y border-[#D4D6D9]">
-            {demoReviewFacts(state).map((fact) => <div key={fact.id} className="py-4" data-ui-component-content="demo-review-fact">
-              <dt className="text-sm text-[#465365]">{fact.label}</dt>
-              <dd className="mt-1 w-full text-base font-semibold" data-ui-copy="supporting">{fact.value}</dd>
-            </div>)}
-          </dl>
-          <div className="flex flex-col gap-3">
-            <button type="button" className="min-h-[48px] bg-[#1E2F58] px-5 py-3 font-semibold text-white" onClick={() => { setState(confirmDemoFacts(state)); setPendingDemoReview(false); }}>Confirm details and continue</button>
-            <button type="button" className="min-h-[48px] border border-[#1E2F58] px-5 py-3 font-semibold" onClick={() => { setPendingDemoReview(false); setState(null); setHistory([]); setExtraction({ status: "not-requested" }); setStage("kickoff"); }}>Edit my description</button>
-          </div>
-        </section>
+      <Shell totalScreens={1} currentScreen={0} roundLabel="Check the captured facts" layout={layout} reportHeight={reportEmbeddedHeight} footer={demoReviewFooter}>
+        <DemoFactReview state={state}
+          onConfirm={(corrections) => { setHistory((items) => [...items, state]); setState(confirmDemoFacts(state, corrections)); setPendingDemoReview(false); }}
+          onEditDescription={() => { setPendingDemoReview(false); setState(null); setHistory([]); setExtraction({ status: "not-requested" }); setStage("kickoff"); }}
+        />
       </Shell>
     );
   }
@@ -731,10 +746,10 @@ export function ScreenEnginePublicWidget({
       <Shell
         totalScreens={1}
         currentScreen={0}
-        roundLabel={ws("shell_round_submitted", "Submitted")}
+        roundLabel={isDemo ? "Demo complete" : ws("shell_round_submitted", "Submitted")}
         onBack={back}
         backLabel={backLabel}
-        layout={layout}
+        layout={layout} reportHeight={reportEmbeddedHeight} footer={demoReviewFooter}
       >
         <div className="flex flex-col items-center text-center gap-5 py-10">
           <div className="w-16 h-16 rounded-full bg-[var(--cls-accent,#1E2F58)] text-[var(--cls-accent-text,#FFFFFF)] flex items-center justify-center">
@@ -770,7 +785,7 @@ export function ScreenEnginePublicWidget({
         roundLabel={ws("shell_round_review", "Review")}
         onBack={back}
         backLabel={backLabel}
-        layout={layout}
+        layout={layout} reportHeight={reportEmbeddedHeight} footer={demoReviewFooter}
       >
         <div className="flex flex-col gap-5">
           <h2 className="text-[28px] font-extrabold text-balance text-[var(--cls-text,#1E2F58)]" style={{ fontFamily: fontDisplay }}>
@@ -796,7 +811,7 @@ export function ScreenEnginePublicWidget({
             style={{ fontFamily: fontBody }}
           >
             {isDemo
-              ? "Continue to see how the intake collects contact details. Nothing entered here will be saved or sent."
+              ? "See the contact step without entering any personal information."
               : ws(
                   "insight_contact_note",
                   "A lawyer reviews what you share and reaches out directly. Add your contact details below so the firm can get back to you.",
@@ -813,7 +828,7 @@ export function ScreenEnginePublicWidget({
             style={{ fontFamily: fontBody }}
           >
             {isDemo
-              ? "Continue to contact details"
+              ? "See the contact step"
               : ws("insight_cta", "Share my contact details so the firm can reply")}
           </button>
         </div>
@@ -822,6 +837,15 @@ export function ScreenEnginePublicWidget({
   }
 
   if (stage === "contact" || next?.type === "capture_contact") {
+    if (isDemo) return (
+      <Shell totalScreens={1} currentScreen={0} roundLabel="Contact step" onBack={back} backLabel={backLabel} layout={layout} reportHeight={reportEmbeddedHeight} footer={demoReviewFooter}>
+        <section className="flex flex-col gap-5" data-ui-component-content="demo-contact-step">
+          <h2 className="w-full text-2xl font-extrabold" data-ui-copy="heading" style={{ fontFamily: fontDisplay }}>How the firm would reply</h2>
+          <p className="w-full" data-ui-copy="body">A real intake asks for a name and either an email address or phone number. This demonstration does not collect contact details.</p>
+          <button type="button" className="min-h-[48px] bg-[#1E2F58] px-5 py-3 text-white" onClick={() => { setHistory((items) => [...items, state]); setStage("done"); }}>Finish demonstration</button>
+        </section>
+      </Shell>
+    );
     const contactHeading = isDemo
       ? "How would the firm reach this client?"
       : clarifyFallback
@@ -842,7 +866,7 @@ export function ScreenEnginePublicWidget({
         roundLabel={ws("shell_round_your_details", "Your details")}
         onBack={back}
         backLabel={backLabel}
-        layout={layout}
+        layout={layout} reportHeight={reportEmbeddedHeight} footer={demoReviewFooter}
       >
         <form action={submitContact} className="flex flex-col gap-5">
           <div>
@@ -935,12 +959,12 @@ export function ScreenEnginePublicWidget({
         roundLabel={roundLabel}
         onBack={back}
         backLabel={backLabel}
-        layout={layout}
+        layout={layout} reportHeight={reportEmbeddedHeight} footer={demoReviewFooter}
       >
         <div className="flex flex-col items-center justify-center text-center gap-4 py-16">
           <div
             aria-hidden="true"
-            className="w-10 h-10 rounded-full border-2 border-[color-mix(in_srgb,var(--cls-accent,#1E2F58)_20%,transparent)] border-t-[var(--cls-accent,#1E2F58)] animate-spin"
+            className="w-10 h-10 rounded-full motion-reduce:animate-none border-2 border-[color-mix(in_srgb,var(--cls-accent,#1E2F58)_20%,transparent)] border-t-[var(--cls-accent,#1E2F58)] animate-spin"
           />
           <p
             className="text-[13px] uppercase tracking-[0.18em] text-[color-mix(in_srgb,var(--cls-text,#1E2F58)_60%,transparent)]"
@@ -1024,7 +1048,7 @@ export function ScreenEnginePublicWidget({
         roundLabel={roundLabel}
         onBack={back}
         backLabel={backLabel}
-        layout={layout}
+        layout={layout} reportHeight={reportEmbeddedHeight} footer={demoReviewFooter}
       >
         <DecisionCard
           contained={layout === "contained"}
@@ -1054,12 +1078,12 @@ export function ScreenEnginePublicWidget({
         roundLabel={roundLabel}
         onBack={back}
         backLabel={backLabel}
-        layout={layout}
+        layout={layout} reportHeight={reportEmbeddedHeight} footer={demoReviewFooter}
       >
         <div className="flex flex-col items-center justify-center text-center gap-4 py-16">
           <div
             aria-hidden="true"
-            className="w-10 h-10 rounded-full border-2 border-[color-mix(in_srgb,var(--cls-accent,#1E2F58)_20%,transparent)] border-t-[var(--cls-accent,#1E2F58)] animate-spin"
+            className="w-10 h-10 rounded-full motion-reduce:animate-none border-2 border-[color-mix(in_srgb,var(--cls-accent,#1E2F58)_20%,transparent)] border-t-[var(--cls-accent,#1E2F58)] animate-spin"
           />
           <p
             className="text-[13px] uppercase tracking-[0.18em] text-[color-mix(in_srgb,var(--cls-text,#1E2F58)_60%,transparent)]"
@@ -1092,7 +1116,7 @@ export function ScreenEnginePublicWidget({
       onSkip={skip}
       backLabel={backLabel}
       skipLabel={skipLabel}
-      layout={layout}
+      layout={layout} reportHeight={reportEmbeddedHeight} footer={demoReviewFooter}
     >
       {isPureFreeText ? (
         <FreeTextAnswerCard

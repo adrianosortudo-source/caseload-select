@@ -69,103 +69,26 @@
   }
 }
 
-/* This opt-in surface follows the current caseloadselect.ca design. */
-.caseload { color: #0d1520; font: 17px/1.55 "DM Sans Variable", sans-serif; --cls-bg: #f4f3ef; }
-.caseload ::selection { color: #0d1520; background: #c4b49a; }
-.caseload :is(button, a, select, textarea, input):focus-visible { outline: 3px solid #1e2f58; outline-offset: 4px; }
-.caseload > header { position: static; padding: 28px 32px 32px; background: #0d1520; color: #fff; border: 0; }
-.caseload > header > div { max-width: 1200px; gap: 28px; }
-.brand { display: inline-block; margin-bottom: 26px; }
-.brand img { display: block; width: 210px; height: auto; }
-.caseload > header h1 { width: 100%; margin: 0; font: 800 clamp(32px, 3.6vw, 50px)/1.15 var(--font-manrope), sans-serif; letter-spacing: -.035em; text-wrap: wrap; }
-.introduction { width: 100%; margin: 18px 0 0; color: #dce1e8; font-size: 18px; line-height: 1.6; }
-.caseload > header label { color: #dce1e8; font: 600 12px/1.5 var(--font-oxanium), sans-serif; }
-.caseload > header select { min-height: 48px; margin-top: 8px; border: 1px solid #747b86; background: #0d1520; color: #fff; font: 16px/1.5 "DM Sans Variable", sans-serif; }
-.caseload > header button { min-height: 44px; padding: 10px 16px; border: 1px solid #747b86; background: transparent; color: #fff; font-size: 14px; }
-.caseload > header button[aria-pressed="true"] { border-color: #c4b49a; background: #c4b49a; color: #0d1520; }
-.caseload > header button:hover { border-color: #c4b49a; }
-.caseload > header span[aria-hidden="true"] { background: #747b86; }
-.caseload .presentationBody { max-width: 1264px; padding: 40px 32px 64px; }
-.caseload .panels { gap: 28px; }
-.caseload .split { grid-template-columns: minmax(0, 1fr); }
-.caseload [data-demo-layout="split"] .websiteStage { border: 0; background: #fff !important; }
-.caseload [data-demo-layout="split"] :is(.screenshotSlice, .formBackdrop) { display: none; }
+.caseload { composes: surface from "../intake-v2/ScreenDemo.module.css"; }
+.caseload > header { position: static; background: #0d1520; color: white; padding: 28px 24px; }
+.caseload > header > div { max-width: 1200px; margin-inline: auto; gap: 24px; }
+.brand { display: inline-block; margin-bottom: 24px; }
+.brand img { width: 210px; height: auto; }
+.caseload > header h1 { width: 100%; margin: 0; font: 800 36px/1.2 var(--font-manrope),sans-serif; letter-spacing: normal; text-wrap: wrap; }
+.introduction { width: 100%; margin: 16px 0 0; font: 400 17px/1.6 "DM Sans Variable",sans-serif; color: white; }
+.caseload > header label { font: 600 13px/1.5 var(--font-oxanium),sans-serif; color: white; }
+.caseload > header :is(button,select) { min-height: 44px; border: 1px solid #c4b49a; border-radius: 0; background: #0d1520; color: white; font: 400 16px/1.5 "DM Sans Variable",sans-serif; }
+.caseload > header button[aria-pressed="true"], .caseload > header button:hover { background: #c4b49a; color: #0d1520; }
+.caseload > header :is(a,button,select):focus-visible { outline-color: #c4b49a; }
+.caseload .presentationBody { padding: 24px; max-width: 1280px; }
+.caseload .panels { gap: 24px; }
+.caseload .split { grid-template-columns: minmax(0,1fr); }
+.caseload [data-demo-layout="split"] .websiteStage { border: 1px solid #1e2f58; background: white !important; }
+.caseload [data-demo-layout="split"] :is(.screenshotSlice,.formBackdrop) { display: none; }
 .caseload [data-demo-layout="split"] .formRegion { min-height: 0 !important; }
-.caseload [data-demo-layout="split"] .intake { width: 100% !important; margin-left: 0 !important; min-height: 0 !important; background: #fff !important; }
-.caseload [data-shell-layout="contained"] { background: #fff; }
-.caseload [data-shell-layout="contained"] > main { padding: 16px 28px 32px; }
-.caseload [data-shell-layout="contained"] > header { padding: 20px 28px 12px; border-bottom: 1px solid #d4d6d9; }
-.caseload [data-shell-layout="contained"] h2 { font-family: var(--font-manrope), sans-serif !important; font-size: clamp(24px, 2.2vw, 30px); line-height: 1.25; letter-spacing: -.025em; }
-.caseload [data-shell-layout="contained"] p { font-size: 16px; color: #465365; line-height: 1.6; }
-.caseload [data-shell-layout="contained"] :is(p,h2,ul) { text-wrap: wrap; }
-.caseload [data-shell-layout="contained"] :is(button,textarea,input) { border-radius: 0; }
-.caseload [data-shell-layout="contained"] textarea { border-color: #aeb5bf; caret-color: #1e2f58; }
-.caseload [data-shell-layout="contained"] textarea::placeholder { color: #596679; }
-.caseload [data-shell-layout="contained"] button { min-height: 44px; }
-.caseload [aria-label="Lawyer review"] { padding: 24px; background: #0d1520; }
-.caseload [aria-label="Lawyer review"] > div > div { background: transparent; }
-.caseload [aria-label="Lawyer review"] header { padding: 8px 0 24px; }
-.caseload [aria-label="Lawyer review"] header > div > div > p { color: #c4b49a; font-family: var(--font-oxanium), sans-serif; }
-.caseload [aria-label="Lawyer review"] header h2 { font-family: var(--font-manrope), sans-serif !important; font-size: 25px; line-height: 1.25; }
-.caseload [aria-label="Lawyer review"] header span { border-radius: 0; border: 0; padding: 0; background: transparent; color: #c4b49a; font-size: 14px; }
-.caseload [aria-label="Lawyer review"] section { border-radius: 0; padding: 20px 0; border: 0; border-bottom: 1px solid #465365; background: transparent; }
-.caseload [aria-label="Lawyer review"] section p, .caseload [aria-label="Lawyer review"] section dd, .caseload [aria-label="Lawyer review"] section li { font-size: 16px; line-height: 1.6; }
-.caseload [aria-label="Lawyer review"] :is(p,dt,dd,li) { color: #e0e6ef; }
-.caseload [aria-label="Lawyer review"] section > p:first-child:not([data-ui-copy]) { color: #c4b49a; font: 600 12px/1.55 var(--font-oxanium), sans-serif; }
-.caseload [data-ui-component-content="demo-known-answer"] { border-left: 0; padding-left: 0; }
-.caseload [aria-label="Lawyer review"] footer { padding: 20px 0 0; }
-.caseload [aria-label="Lawyer review"] footer p { color: #c4cdd9; font-size: 14px; }
-.caseload [data-ui-component-content="demo-ai-status"] { margin: 0; font-size: 15px; }
-.caseload [aria-label="Lawyer review"] section h3 { font-family: var(--font-manrope), sans-serif !important; }
-@media (min-width: 1200px) { .caseload .split { grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); } }
-@media (max-width: 639px) {
-  .caseload > header { padding: 24px 20px; }
-  .caseload .presentationBody { padding: 24px 16px 40px; }
-  .caseload [data-shell-layout="contained"] > main { padding: 20px 20px 28px; }
-  .caseload [data-shell-layout="contained"] > header { padding-inline: 20px; }
-  .caseload [aria-label="Lawyer review"] { padding: 12px; }
-  .caseload .panels { gap: 20px; }
-}
-
-.caseload > header :is(button,a,select):focus-visible,
-.caseload [aria-label="Lawyer review"] :is(button,a):focus-visible { outline-color: #c4b49a; }
-
-/* Use the website's 17px body scale with natural line flow. */
-.caseload [data-shell-layout="contained"] p,
-.caseload [aria-label="Lawyer review"] section p,
-.caseload [aria-label="Lawyer review"] section dd,
-.caseload [aria-label="Lawyer review"] section li,
-.caseload [data-ui-component-content="demo-ai-status"] { font-size: 17px; text-wrap: wrap !important; }
-.caseload [data-ui-component-content="demo-empty-brief"] p,
-.caseload [data-ui-component-content="demo-brief-next-steps"] li { text-wrap: wrap !important; }
-.intakeSurface { min-width: 0; }
-@media (max-width: 639px) {
-  .caseload > header h1 { font-size: 30px; }
-  .caseload > header .introduction { text-wrap: pretty; }
-}
-
-/* Keep one content inset in the brief and use the full mobile page width. */
-:global(html):has(.caseload) { scrollbar-gutter: stable; }
-.caseload [data-demo-brief-content] { padding-inline: 0; }
-.caseload .introduction { font-size: 16px; text-wrap: wrap; }
-.caseload [data-ui-component-content="demo-text-prompt"] p,
-.caseload [data-demo-matter-snapshot],
-.caseload [data-ui-component-content="demo-brief-next-steps"] li { text-wrap: pretty !important; }
-.caseload [data-demo-decision-note] { font-size: 18px !important; text-wrap: wrap !important; }
-@media (max-width: 639px) {
-  .caseload .presentationBody { padding-inline: 0; }
-  .caseload > header h1 { font-size: clamp(24px, calc(7vw + 1.6px), 32px); }
-}
-
-/* The status is a short state label; long brief notes use orphan-safe flow. */
-.caseload [aria-label="Lawyer review"] [data-ui-component-content="demo-brief-next-steps"] li { font-size: 16px !important; text-wrap: pretty !important; }
-
-@media (max-width: 639px) {
-  .caseload [data-ui-component-content="demo-fact-review"] h2 { font-size: 22px; }
-}
-/* Preserve readable final lines at the wider phone report width. */
-.caseload [aria-label="Lawyer review"] [data-demo-matter-snapshot] { text-wrap: pretty !important; }
-
-@media (max-width: 639px) {
-  .caseload [aria-label="Lawyer review"] [data-demo-decision-note] { font-size: 19px !important; text-wrap: wrap !important; }
-}
+.caseload [data-demo-layout="split"] .intake { width: 100% !important; margin-left: 0 !important; min-height: 0 !important; background: white !important; }
+.intakeSurface { composes: widget from "../intake-v2/ScreenDemo.module.css"; min-width: 0; }
+.caseload [aria-label="Lawyer review"] { background: white; border: 1px solid #1e2f58; padding: 0; color: #0d1520; }
+.caseload [data-ui-component-content="demo-ai-status"] { width: 100%; margin: 0; border-bottom: 1px solid #1e2f58; padding: 20px 24px; color: #1e2f58; font: 400 17px/1.6 "DM Sans Variable",sans-serif; }
+@media (min-width: 1180px) { .caseload .split { grid-template-columns: minmax(0,1fr) minmax(0,1fr); } }
+@media (max-width: 639px) { .caseload > header { padding: 24px 16px; } .caseload .presentationBody { padding: 20px 16px; } .caseload > header h1 { font-size: 30px; } }

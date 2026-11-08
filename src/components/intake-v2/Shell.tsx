@@ -34,6 +34,8 @@ import styles from "./contained-widget.module.css";
 export type ShellLayout = "default" | "contained";
 
 interface ShellProps {
+  /** A containing demo reports its full height, rather than a nested pane height. */
+  reportHeight?: boolean;
   /** Total number of screens in the current round. Drives dot count. */
   totalScreens: number;
   /** 0-indexed current screen position. */
@@ -67,9 +69,9 @@ interface ShellProps {
   layout?: ShellLayout;
 }
 
-export function Shell({ totalScreens, currentScreen, roundLabel, onBack, onSkip, backLabel = "Back", skipLabel = "Skip", children, footer, layout = "default" }: ShellProps) {
+export function Shell({ totalScreens, currentScreen, roundLabel, onBack, onSkip, backLabel = "Back", skipLabel = "Skip", children, footer, layout = "default", reportHeight = true }: ShellProps) {
   const outerRef = useRef<HTMLDivElement | null>(null);
-  const isEmbedded = useEmbeddedWidgetResize(outerRef);
+  const isEmbedded = useEmbeddedWidgetResize(outerRef, reportHeight);
   const flowsToContent = isEmbedded || layout === "contained";
 
   // Outer chrome: min-h-screen ONLY in standalone, never when embedded.

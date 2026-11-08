@@ -1,0 +1,38 @@
+# Current SCREEN demonstration
+
+Status: preview only. PR #468 must remain unmerged until Adriano reviews the completed preview and approves publication.
+
+## Entry points
+
+- `/tools/screen`: canonical CaseLoad Select demonstration, defaults to live AI, with an explicit guided option. Static, no firm database lookup. `?embed=1` removes the extra logo in the website tools iframe.
+- `/screen-demo`: temporary redirect to the canonical route; incoming query values, including `embed`, are retained. Existing quiz and report subpaths remain available for previous bookmarks.
+- `/widget-v2/demo/[firmId]`: same workspace with the existing firm's colour and font theme. Only the CaseLoad-owned shell and report use CaseLoad branding. The demonstration geometry is square. No production intake route is changed.
+- `/demo/prospect/[profileId]`: existing prospect mockup, sharing the correction flow and production report projection.
+- `/widget-public/demo`: separate deterministic demonstration, retained for existing consumers. It is not the canonical live-AI tool.
+
+## Pinned authorities and boundaries
+
+- Engine baseline: production `7ace743c004c7e1026c335173eb39da6495f2e5f`; all 17 manifest-governed engine TS/JSON files remain unchanged. Existing engine-manifest CI continues to verify them.
+- Web experience policy: read `WEB_EXPERIENCE_POLICY_VERSION` and the bounded-discovery constants from the engine. Target 5 to 7 adaptive follow-ups, maximum 8 including routing, earlier completion when sufficient facts are known. Business routing stays in the engine.
+- Report: `renderBriefHtmlServer` with `presentation: demo`, projection `production-demo-v1`. Same axis, prose and provenance functions as the portal; no queue, lead ID, operational action rail or real deadline. All resolved facts and quote checks remain available. The portal default is unchanged.
+- Brand: canonical ACTS Brand Book V2.0.2, effective August 18, 2026, `01_Brand/BrandBook/V2_Canonical/BrandBook_ACTS_V2.html`. Shared demo CSS opts in only on the demo. Square flat geometry, approved palette, Manrope 800 headings, DM Sans 400 interface/body, Oxanium 600 compact labels and numerals. No decorative terminal square on this utility page.
+- Runtime: `demo-live-ai` permits only `/api/extract`. Guided mode makes no extraction request. Neither creates a lead, checkpoint, consent record, audio recording, host completion signal or notification. Contact information is explained, not collected. No new telemetry collection is enabled.
+- Provider success, no-provider-needed, explicit guided mode and fallback are distinct states. Keys remain server-side. The existing Gemini key is authorized for this branch preview only; do not broaden its environment scope.
+
+## Confirmation and corrections
+
+Captured canonical facts are presented with their provenance. AI proposals remain unconfirmed until readback. A correction is held outside engine state until confirmation, then goes through `applyAnswer`, retaining its derived-slot behavior but restoring the real discovery question history so corrections do not consume hidden follow-ups. Incorrect proposals may be left unanswered. Unknown keys, contact fields, routing proposals and invented enum values cannot be acknowledged by the correction adapter.
+
+Ownership alone, negated authority and joint approval do not establish sole hiring authority. The original description remains available as evidence; changed facts carry explicit correction provenance. Review can be reopened without losing answers. Changing the sample or mode explicitly restarts the demo. Layout changes keep both panes mounted. Stale extraction responses cannot replace a restarted or backed-out session.
+
+This readback adapter remains demonstration-only. Introducing it into production public intake and refreshing the independent sandbox are separate releases.
+
+## Acceptance and visual exceptions
+
+Verify live provider success on the actual branch preview, then complete the fictional inquiry, correct a captured fact, inspect the report and confirm the absence of intake, checkpoint, notification and telemetry requests. Exercise guided and fallback states, missing facts, the routing ceiling, pane switching and reset.
+
+Run unit and component tests for report parity, provenance/escaping, corrections, no-write behavior, entry redirect and scoped frame headers, plus the existing brief/engine tests and repository CI. Verify 1440, 1024, 768, 640, 390, 375 and 320 CSS pixels, keyboard focus, contrast, font roles, reduced motion and expanded details. Test the real tools host and iframe through a local review harness pointing to the preview; do not change the live website for testing.
+
+Structural exceptions: `ScreenDemo.module.css` `.toolbarInner` and `.body` are page shells capped at 1280px, not copy measures. Report facts and controls remain full width inside each content inset. Shared client widget option grids are functional choice tracks; configured firm colours and fonts remain intentional client-theme exceptions on `/widget-v2/demo/[firmId]`. No general copy-width exception applies to the CaseLoad-owned demo.
+
+Production publication remains PR-merge-only after explicit approval. No direct production deployment, migration, provider activation or live client submission belongs to this update.

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { demoExtractionLabel } from "@/components/intake-v2/ScreenDemoWorkspace";
 import { DemoOperatorPanel } from "@/components/intake-v2/DemoOperatorPanel";
 import {
   ScreenEnginePublicWidget,
@@ -45,21 +46,6 @@ function widgetTheme(): WidgetTheme {
   };
 }
 
-function extractionLabel(view: ScreenDemoView) {
-  if (view.runtime === "demo") {
-    return "Guided sample active.";
-  }
-  if (view.extraction.status === "reading") {
-    return "AI is reading your description.";
-  }
-  if (view.extraction.status === "live") {
-    return "Live AI completed.";
-  }
-  if (view.extraction.status === "fallback") {
-    return "AI unavailable. Guided mode.";
-  }
-  return "Live AI selected.";
-}
 
 export function ProspectDemoStandaloneClient({ profileId }: { profileId: string }) {
   const [view, setView] = useState<ScreenDemoView>(EMPTY_VIEW);
@@ -121,7 +107,7 @@ export function ProspectDemoStandaloneClient({ profileId }: { profileId: string 
     renderReview: () => (
       <div className="space-y-4">
         <p role="status" className="w-full border-b border-white/15 pb-3 text-sm leading-6 text-white/80" data-ui-component-content="demo-ai-status" data-ui-copy="supporting">
-          {extractionLabel(view)}
+          {demoExtractionLabel(view)}
         </p>
         <DemoOperatorPanel view={view} contained />
       </div>
