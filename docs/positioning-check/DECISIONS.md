@@ -18,3 +18,7 @@ The first new-route Gene Colman request returned422 before report generation; di
 
 ## Analysis v3 decision (not semantic acceptance)
 After v1/v2 semantic failures, coordinator approved the same Gemini2.5Flash model/provider with thinking budget1024 and temperature0.2. Output maximum8192 and maximum two calls remain unchanged, as do USD0.25/run reservation and40/day ceiling; reservation covers the reasoning allowance. Terra owns implementation and actual usage checks. No semantic gate has passed. Version/source freeze must be recorded before bounded v3 runs.
+
+## v4 checkpoint provenance and limits
+Prompt version positioning-v4. Current gemini.ts source SHA256:857ca51f66c5508d5e2a09de7a02db22b3847762f8d385e7f11ded2fb3b0cc37 (includes approved punctuation postprocessing; original model request/body/candidate artifacts retained outside Git). Repair carries the prior candidate and field-specific feedback as untrusted draft material. Maximum two calls, same model/provider/budget remain. Authored punctuation is normalized; exact source quotations and collected evidence remain unchanged.
+Luna's offline normalized Gene candidate is acceptable semantic content but not a live route pass. MHC v4 still has unsupported skill/effectiveness wording. Gate2/4 semantic acceptance remains failed; no additional model calls or prompt changes are silently authorized.

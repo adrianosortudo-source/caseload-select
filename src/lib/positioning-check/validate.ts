@@ -1,5 +1,8 @@
+import { hasUnapprovedEmDash } from "./normalize";
 import { ELEMENT_KEYS, type Evidence, type PositioningResult } from "./types";
 
+const PROHIBITED_STATEMENT = /\b(?:guarantee(?:s|d)?|ensur(?:e|es|ing)|unparalleled|best\s+(?:firm|lawyer|attorney|practice|service)|most experienced|cutting[- ]edge)\b/i;
+const PROHIBITED_EXPECTATION = /\b(?:guarantee(?:s|d)?|ensur(?:e|es|ing))\b/i;
 const words = (value: unknown, max: number): value is string => typeof value === "string" && value.trim().length > 0 && value.trim().split(/\s+/u).length <= max;
 const isRecord = (v: unknown): v is Record<string, unknown> => !!v && typeof v === "object" && !Array.isArray(v);
 const hasIds = (ids: unknown, known: Map<string, Evidence>, allowEmpty = false): ids is string[] => Array.isArray(ids) && (allowEmpty || ids.length > 0) && ids.every(id => typeof id === "string" && known.has(id));
@@ -7,8 +10,7 @@ const hasIds = (ids: unknown, known: Map<string, Evidence>, allowEmpty = false):
 /** Validate model output against collector-owned evidence. Traceability is not proof of semantic support. */
 export function validateAnalysis(raw: unknown, evidence: Evidence[], substantivePages?: number): string[] {
   const errors: string[] = [];
-  const hasEmDash=(v:unknown):boolean => typeof v === "string" ? v.includes("—") : Array.isArray(v) ? v.some(hasEmDash) : isRecord(v) ? Object.values(v).some(hasEmDash) : false;
-  if(hasEmDash(raw)) errors.push("em_dash");
+  if(hasUnapprovedEmDash(raw,evidence)) errors.push("em_dash");
   if (!isRecord(raw)) return ["analysis_not_object"];
   const known = new Map(evidence.map(item => [item.id, item]));
   if (known.size !== evidence.length) errors.push("duplicate_evidence");
@@ -26,6 +28,7 @@ export function validateAnalysis(raw: unknown, evidence: Evidence[], substantive
       if (e.clarity !== null && ![0, 1, 2, 3].includes(e.clarity as number)) errors.push("element_clarity");
       if (e.confidence !== null && !["high", "moderate", "low"].includes(String(e.confidence))) errors.push("element_confidence");
       if (e.key === "consistency" && substantivePages !== undefined && substantivePages < 3 && e.status !== "not_assessable") errors.push("consistency_coverage");
+      if (e.key === "consistency" && substantivePages !== undefined && substantivePages >= 3 && [e.finding,e.reason,e.uncertainty].some(v=>typeof v === "string" && /\b(?:fewer|less) than (?:three|3)\b/i.test(v))) errors.push("false_coverage_count");
       if (e.status === "not_assessable" && (e.clarity !== null || e.confidence !== null)) errors.push("unassessable_scored");
       if (!words(e.finding, 45) || !words(e.reason, 45) || !words(e.uncertainty, 30) || typeof e.conflict !== "boolean") errors.push("element_copy");
       if (!hasIds(e.evidenceIds, known, e.status === "not_assessable" || e.status === "not_observed")) errors.push("element_evidence");
@@ -46,6 +49,8 @@ export function validateAnalysis(raw: unknown, evidence: Evidence[], substantive
       if (typeof d.id !== "string" || !d.id.trim() || ids.has(d.id)) errors.push("direction_id"); else ids.add(d.id);
       for (const k of ["label", "audienceSituation", "communicationImplication", "clientExpectation", "tradeoff"]) if (!words(d[k], 30)) errors.push("direction_copy");
       if (!words(d.possibleStatement, 35) || !hasIds(d.evidenceIds, known)) errors.push("direction_basis");
+      if (typeof d.possibleStatement === "string" && PROHIBITED_STATEMENT.test(d.possibleStatement)) errors.push("direction_guarantee_or_superlative");
+      if (typeof d.clientExpectation === "string" && PROHIBITED_EXPECTATION.test(d.clientExpectation)) errors.push("expectation_guarantee");
       if (!Array.isArray(d.validationQuestions) || d.validationQuestions.length !== 3 || !d.validationQuestions.every(q => words(q, 30))) errors.push("direction_questions");
     }
   }
@@ -54,5 +59,19 @@ export function validateAnalysis(raw: unknown, evidence: Evidence[], substantive
 export type AnalysisParts = Pick<PositioningResult, "part1" | "part2">;
 
 
+
+
+
+
+
+/** Repair feedback stays server-side and is sent only to the single permitted repair. */
+export function repairFeedback(raw:unknown):{path:string;phrase:string}[] {
+  if(!isRecord(raw) || !isRecord(raw.part2) || !Array.isArray(raw.part2.directions))return [];
+  const result:{path:string;phrase:string}[]=[];
+  const findEmDash=(value:unknown,path:string):void=>{if(typeof value==="string" && value.includes("—"))result.push({path,phrase:value.slice(0,500)});else if(Array.isArray(value))value.forEach((item,index)=>findEmDash(item,`${path}[${index}]`));else if(isRecord(value))Object.entries(value).forEach(([key,item])=>findEmDash(item,path?`${path}.${key}`:key));};
+  findEmDash(raw,"");
+  raw.part2.directions.forEach((d,index)=>{if(!isRecord(d))return;for(const [field,pattern] of [["possibleStatement",PROHIBITED_STATEMENT],["clientExpectation",PROHIBITED_EXPECTATION]] as const){const value=d[field];if(typeof value==="string"&&pattern.test(value))result.push({path:`part2.directions[${index}].${field}`,phrase:value.slice(0,500)});}});
+  return result;
+}
 
 

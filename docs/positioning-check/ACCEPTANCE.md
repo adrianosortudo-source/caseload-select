@@ -15,3 +15,5 @@
 - Cloud UI at11d:7/11 pass;640/390/375/320 fail only single-word endings. Light/dark consultation contrast passes; all width/overflow and natural-line-flow checks pass. Independent Luna review confirms readable contrast and no clipping.
 - Current-head global TypeScript, ESLint, full Vitest, Vercel builds and existing rendered regression jobs pass; final scoped UI confirmation and real-Postgres job status remain to be checked.
 - Final coordinator-approved bounded typography correction is entering one cloud matrix. Further blind UI changes are prohibited if this remains unresolved.
+- Latest respective focused runs: normalize/provider/validator21/21; collector6/6; quota7/7; capture2/2. Total36 across those runs, not a claim of one combined current-head suite. CI remains required.
+- v4 semantics: normalized Gene offline content acceptable to Luna, but no live new-route pass; MHC skill/effectiveness issues remain. Semantic gate is NOT PASSED. Holdouts remain sealed.

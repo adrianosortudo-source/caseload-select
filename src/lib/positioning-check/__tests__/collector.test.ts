@@ -15,6 +15,7 @@ describe("bounded positioning collection",()=>{
     expect(first.excerpt).toContain("Family Services");
     expect(first.excerpt).not.toContain("FamilyServices");
   });
+  it("keeps block text separate, decodes entities and excludes forms",async()=>{fetchOne.mockResolvedValue(html("<h1>Title</h1><p>A &amp; B</p><form><p>Submit personal information</p></form>"));const r=await collectSite("https://example.com/",Date.now()+5000);const item=r.evidence[0];if(item.kind!=="text")throw new Error("Expected text evidence");expect(item.excerpt).toBe("Title A & B");});
   it("does not invent links from anchors without href",async()=>{
     fetchOne.mockResolvedValue(html('<nav><a>About</a><a href="">Contact</a></nav><h1>Example</h1>'));
     const result=await collectSite("https://example.com/",Date.now()+5000);
@@ -37,6 +38,7 @@ describe("bounded positioning collection",()=>{
     expect(fetchOne).toHaveBeenCalledTimes(1);expect(result.pages[0].state).toBe("unreadable");
   });
 });
+
 
 
 

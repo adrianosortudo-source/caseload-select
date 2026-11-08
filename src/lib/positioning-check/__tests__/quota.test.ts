@@ -11,7 +11,10 @@ describe("positioning quota",()=>{
  it("recognizes an active request",async()=>{mock.set.mockResolvedValue(null);expect(await reserveAnalysis("a")).toEqual({status:"limited",reason:"active"});});
  it("distinguishes hourly and daily limits and releases the lock",async()=>{mock.limit.mockResolvedValueOnce({success:false});expect(await reserveAnalysis("a")).toEqual({status:"limited",reason:"hourly"});expect(mock.eval).toHaveBeenCalled();mock.limit.mockResolvedValueOnce({success:true}).mockResolvedValueOnce({success:false});expect(await reserveAnalysis("b")).toEqual({status:"limited",reason:"daily"});});
  it("fails closed and releases the lock on store errors",async()=>{mock.limit.mockRejectedValue(new Error("offline"));expect((await reserveAnalysis("a")).status).toBe("unavailable");expect(mock.eval).toHaveBeenCalled();});
+ it("releases a lock acquired after reservation times out",async()=>{vi.useFakeTimers();try{let resolveLock!:(v:string)=>void;mock.set.mockImplementation(()=>new Promise<string>(resolve=>{resolveLock=resolve;}));const pending=reserveAnalysis("a");await vi.advanceTimersByTimeAsync(8000);expect((await pending).status).toBe("unavailable");resolveLock("OK");for(let i=0;i<10;i++)await Promise.resolve();expect(mock.eval).toHaveBeenCalled();}finally{vi.useRealTimers();}});
  it("does not hang when lock cleanup stalls",async()=>{const start=Date.now();await releaseWithinDeadline(()=>new Promise<void>(()=>{}),Date.now()+100);expect(Date.now()-start).toBeLessThan(2000);});
  it("only returns a release handle after both reservations succeed",async()=>{const result=await reserveAnalysis("a");expect(result.status).toBe("ok");if(result.status==="ok")await result.release();expect(mock.limit).toHaveBeenCalledTimes(2);expect(mock.eval).toHaveBeenCalled();});
 });
+
+
 
