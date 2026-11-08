@@ -269,6 +269,9 @@ for (const width of WIDTHS) {
     await page.setViewportSize({ width, height: 1000 });
     await openDemo(page);
     await expect(page.getByRole("button", { name: "Live AI", exact: true })).toHaveAttribute("aria-pressed", "true");
+    await expect(page.getByRole("button", { name: "Website", exact: true })).toHaveAttribute("aria-pressed", "true");
+    await assertLayout(page);
+    await page.getByRole("button", { name: "Split view", exact: true }).click();
     await expect(page.getByRole("button", { name: "Split view", exact: true })).toHaveAttribute("aria-pressed", "true");
     await assertLayout(page);
     await page.locator(`${INTAKE} textarea`).fill("Fictional test. A business client owes us $18,450 for completed work. I can approve hiring a lawyer. We have an invoice and signed contract.");
