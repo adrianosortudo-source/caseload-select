@@ -45,7 +45,11 @@ export function ScreenDemoWorkspace({ firmId = "caseload-fictional-demo", firmNa
         {!embedded && <a href="https://caseloadselect.ca/" className={styles.brand}><Image src="/brand/logos/lockup-horizontal-dark-transparent.png" alt="CaseLoad Select" width={210} height={48} priority /></a>}
         <h1 data-ui-copy="heading">Try the SCREEN</h1>
         <p className={styles.intro} data-ui-copy="body">Follow a fictional inquiry from the first description to the lawyer’s brief.</p>
-        <p className={styles.dataNotice} data-ui-copy="body">Live AI can send the fictional description to Google Gemini. Guided samples run in your browser. Do not enter client or confidential information.</p>
+        <dl className={styles.dataNotice} aria-label="Demo information use">
+          <div data-ui-component-content="demo-live-data"><dt>Live AI via Google Gemini</dt><dd data-ui-copy="body">Uses your fictional description.</dd></div>
+          <div data-ui-component-content="demo-guided-data"><dt>Guided sample</dt><dd data-ui-copy="body">Runs in your browser.</dd></div>
+          <div data-ui-component-content="demo-fictional-data"><dt>Fictional examples only</dt><dd data-ui-copy="body">Exclude client information.</dd><dd data-ui-copy="body">Exclude confidential information.</dd></div>
+        </dl>
         <div className={styles.settings}>
           <label>Fictional scenario<select value={scenario} onChange={(event) => restart(Number(event.target.value))}>{SCREEN_DEMO_SCENARIOS.map((item, index) => <option key={item.label} value={index}>{item.label}</option>)}</select></label>
           <fieldset><legend>Demo mode</legend><div className={styles.modeControls}>

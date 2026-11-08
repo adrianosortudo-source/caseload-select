@@ -1327,7 +1327,7 @@ export function renderBriefHtmlServer(
       languageCalloutHtml(intakeLanguage),
       classificationNote,
       truthWarningsHtml(report.truth_warnings),
-      `<p class="demo-report-boundary">Fictional inquiry. The lawyer makes the engagement decision.</p>`,
+      `<dl class="demo-report-boundary" data-ui-component-content="demo-report-boundary"><dt>Fictional inquiry</dt><dd data-ui-copy="supporting">A lawyer decides whether to accept.</dd></dl>`,
       `<p class="kicker">Review priority</p>${textBlock(report.lawyer_time_priority)}`,
       groups,
       `<details class="brief-group" data-group="reasoning"><summary>Reasons and uncertainty</summary><div class="brief-group-content">
