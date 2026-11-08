@@ -954,7 +954,11 @@ function truthWarningsHtml(warnings: readonly string[]): string {
  * full layout. When the caller passes nothing, those affordances degrade
  * gracefully — the brief still renders end-to-end.
  */
+export const DEMO_BRIEF_PROJECTION_VERSION = "production-demo-v1";
+
 export interface BriefRenderOptions {
+  /** Read-only demo projection: same report body, without a real queue, timer or action rail. */
+  presentation?: 'portal' | 'demo';
   /** ISO timestamp of the decision deadline. Drives the live timer attrs on
    *  the cover decision band and the sidebar Queue posture row. */
   decisionDeadlineIso?: string | null;
@@ -1186,7 +1190,16 @@ export function renderBriefHtmlServer(
     // 3 most important scope checks as a compact grid (no nested section
     // subtitles). The axis grid sits directly below as the "why this band"
     // block, with its own internal hierarchy.
-    const scopeItems = (report.strategic_considerations ?? []).slice(0, 3);
+    // The broad $25,000-$100,000 bucket straddles Ontario's Small Claims
+    // jurisdiction. Do not turn the engine's legacy bucket hint into a court
+    // determination. Ontario O. Reg. 626/00, s.1 (current from 2025-10-01).
+    const scopeChecks = (report.strategic_considerations ?? []).map((item) =>
+      (item === 'Above Small Claims threshold. Superior Court action with proper pleadings; consider summary judgment if defence is thin.' ||
+       item === 'Within Small Claims jurisdiction (under $35k). Faster, cheaper, but no full discovery. Often the right venue when documents are tight.')
+        ? 'Confirm the exact claim amount, relief sought and appropriate court before choosing a procedure.'
+        : item,
+    );
+    const scopeItems = options.presentation === 'demo' ? scopeChecks : scopeChecks.slice(0, 3);
     const scopeGrid =
       scopeItems.length > 0
         ? `<div class="callback-scope-grid">${scopeItems.map((s) => `<div class="callback-scope-item">${esc(s)}</div>`).join('')}</div>`
@@ -1226,9 +1239,9 @@ export function renderBriefHtmlServer(
     // (the same items that drive the Decision scope grid; useful here as a
     // callback walkthrough). Do not quote until -> the what-to-confirm
     // gates that protect the fee quote from being premature.
-    const openWith = (report.call_openers ?? []).slice(0, 3);
-    const confirmNext = (report.strategic_considerations ?? []).slice(0, 4);
-    const doNotQuote = (report.what_to_confirm ?? []).slice(0, 4);
+    const openWith = options.presentation === 'demo' ? (report.call_openers ?? []) : (report.call_openers ?? []).slice(0, 3);
+    const confirmNext = options.presentation === 'demo' ? scopeChecks : scopeChecks.slice(0, 4);
+    const doNotQuote = options.presentation === 'demo' ? (report.what_to_confirm ?? []) : (report.what_to_confirm ?? []).slice(0, 4);
     const callPrepGrid = `
       <div class="callprep-grid">
         <div class="callprep-block">
@@ -1301,6 +1314,62 @@ export function renderBriefHtmlServer(
       ${sidebar}
     </div>
   `;
+
+  if (options.presentation === 'demo') {
+    // Share the actual report sections and axis/provenance formatting with the
+    // portal. A demo has no saved lead, decision deadline or operational rail.
+    const groups = leftBody.replace(
+      /<section class="brief-group" data-group="([^"]+)">\s*<h3 class="brief-group-title">([^<]+)<\/h3>([\s\S]*?)<\/section>/g,
+      (_match, group: string, title: string, body: string) =>
+        `<details class="brief-group" data-group="${group}"${group === 'headline' || group === 'routing' ? ' open' : ''}><summary>${title}</summary><div class="brief-group-content">${body}${group === 'callprep' && report.best_next_question ? `<h4>Suggested next question</h4>${textBlock(report.best_next_question)}` : ''}</div></details>`,
+    );
+    const demoHtml = [
+      languageCalloutHtml(intakeLanguage),
+      classificationNote,
+      truthWarningsHtml(report.truth_warnings),
+      `<dl class="demo-report-boundary" data-ui-component-content="demo-report-boundary"><dt>Fictional inquiry</dt><dd data-ui-copy="supporting">A lawyer decides whether to accept.</dd></dl>`,
+      `<p class="kicker">Review priority</p>${textBlock(report.lawyer_time_priority)}`,
+      groups,
+      `<details class="brief-group" data-group="reasoning"><summary>Reasons and uncertainty</summary><div class="brief-group-content">
+        <h4>Band reasoning</h4>${bullets(report.band_reasoning_bullets)}
+        <h4>Open questions</h4>${bullets(report.open_questions, 'No additional open questions identified.')}
+        <h4>Inferred signals</h4>${bullets(report.inferred_signals, 'No additional inferred signals.')}
+        <h4>Standing watchpoints</h4>${riskFlagsBlock(report.risk_flags)}
+      </div></details>`,
+      `<details class="brief-group" data-group="contact"><summary>Contact details</summary><div class="brief-group-content"><p>Contact details are not collected in this demonstration. A real intake asks for a name and a way for the firm to reply.</p></div></details>`,
+    ].join('\n');
+    // Tag real report content tracks for rendered copy gates. Compact source
+    // chips and labels remain metadata; each fact value owns a full-width row.
+    // Short display explanations preserve the report's meaning. Structured
+    // facts, source evidence, scores and the portal projection stay unchanged.
+    const demoCopy: Record<string, string> = {
+      'Strong commercial engagement signal. Likely a meaningful scoped mandate.': 'Likely commercial engagement. The scope appears meaningful.',
+      'Strong readiness. The lead has thought through their situation.': 'Strong readiness. The inquiry shows preparation.',
+      'Confirm whether there is a prior business relationship to preserve, which affects whether to lead with demand or settlement.': 'Confirm whether preserving the business relationship favours a demand letter or settlement.',
+      "The defendant's solvency. A judgment is only useful if collectable.": 'Check the ability to pay. A judgment needs to be collectable.',
+      'Written terms or agreement not confirmed.': 'Are written terms available?',
+      'Likely a business advisory or commercial matter.': 'Possible commercial matter.',
+      'Confirm the exact claim amount, relief sought and appropriate court before choosing a procedure.': 'Confirm the exact claim amount, relief and court before choosing a procedure.',
+    };
+    const readableDemoHtml = Object.entries(demoCopy).reduce((html, [before, after]) => html.split(esc(before)).join(esc(after)), demoHtml)
+      .replace(/<p class="axis-block-prose">([^<]+)<\/p>/g, (_tag, prose: string) =>
+        (prose.match(/[^.!?]+[.!?]+|[^.!?]+$/g) ?? [prose]).map(sentence => `<p class="axis-block-prose">${sentence.trim()}</p>`).join(''));
+    return readableDemoHtml
+      // Display the scope factors as the list encoded in the original note.
+      // Keep the fee range and the explicit not-a-quote qualification intact.
+      .replace(/<p class="fee-supporting">Internal estimate based on likely scope, not a quote\. \(([^<]+)\)\.<\/p>/g,
+        (_tag: string, basis: string) => `<div class="demo-fee-note"><p>Internal scope estimate, not a quote.</p><p class="kicker">Estimate basis</p><ul>${basis.split(',').map(factor => `<li>${factor.trim()}</li>`).join('')}</ul></div>`)
+      // An amount is a labelled data record, rather than an awkward sentence
+      // split across narrow report columns. The original value is retained.
+      .replace(/<li>Amount at stake: ([^<]+)\.<\/li>/g, '<li class="reasoning-amount"><dl><div><dt>Amount at stake</dt><dd data-ui-copy="supporting">$1</dd></div></dl></li>')
+      .replace(/<(div|ul)(\s[^>]*?)?>/g, '<$1$2 data-ui-component-content="demo-report-track">')
+      .replace(/<li class="fact-row">/g, '<li class="fact-row" data-ui-component-content="demo-report-fact">')
+      .replace(/<span class="fact-value">/g, '<span class="fact-value" data-ui-copy="supporting">')
+      .replace(/<(p|h4|li)(\s[^>]*?)?>/g, (tag: string, name: string, attrs: string = '') => {
+        if (/class="(?:kicker|section-title|fact-row|reasoning-amount)"/.test(attrs)) return tag;
+        return `<${name}${attrs} data-ui-copy="${name === 'h4' ? 'heading' : 'body'}">`;
+      });
+  }
 
   // The ACTION_RAIL_SLOT marker is the split point for the React page
   // (page.tsx). The TriageActionBar mounts between contactStrip and mainGrid

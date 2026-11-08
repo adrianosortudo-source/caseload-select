@@ -30,6 +30,9 @@ interface Props {
   initialProfileId?: string;
   /** Never substitute another browser-local profile when a direct presentation URL is missing. */
   strictInitialProfile?: boolean;
+  appearance?: "classic" | "caseload";
+  embedded?: boolean;
+  browserLocalProfiles?: boolean;
 }
 
 const VIEW_LABELS: Record<ProspectDemoView, string> = {
@@ -141,6 +144,9 @@ export function ProspectDemoPresentation({
   registrations,
   initialProfileId,
   strictInitialProfile = false,
+  appearance = "classic",
+  embedded = false,
+  browserLocalProfiles = true,
 }: Props) {
   const shippedProfiles = registrations ?? EMPTY_REGISTRATIONS;
   const [profiles, setProfiles] = useState<ProspectDemoProfile[]>([]);
@@ -154,8 +160,12 @@ export function ProspectDemoPresentation({
 
   const refreshProfiles = useCallback(async () => {
     try {
-      await Promise.all(shippedProfiles.map(({ profile, asset: screenshot }) => ensureProspectDemoProfile(profile, screenshot)));
-      const nextProfiles = await listProspectDemoProfiles();
+      if (browserLocalProfiles) {
+        await Promise.all(shippedProfiles.map(({ profile, asset: screenshot }) => ensureProspectDemoProfile(profile, screenshot)));
+      }
+      const nextProfiles = browserLocalProfiles
+        ? await listProspectDemoProfiles()
+        : shippedProfiles.map(({ profile }) => profile);
       setProfiles(nextProfiles);
       const initialProfileIsAvailable = Boolean(
         initialProfileId && nextProfiles.some((profile) => profile.id === initialProfileId),
@@ -178,7 +188,7 @@ export function ProspectDemoPresentation({
     } catch {
       setStatus("This browser could not open the local prospect preview library.");
     }
-  }, [initialProfileId, selectedId, shippedProfiles, strictInitialProfile]);
+  }, [browserLocalProfiles, initialProfileId, selectedId, shippedProfiles, strictInitialProfile]);
 
   useEffect(() => { void refreshProfiles(); }, [refreshProfiles]);
 
@@ -188,11 +198,15 @@ export function ProspectDemoPresentation({
   useEffect(() => {
     if (!profile) return;
     setView(profile.defaultView);
-    setMode(profile.defaultMode);
+    setMode(appearance === "caseload" ? "live-ai" : profile.defaultMode);
     setScenarioId(profile.scenarios[0]?.id ?? "");
     setSessionKey((current) => current + 1);
-    void readProspectDemoAsset(profile.screenshot.assetId).then(setAsset).catch(() => setAsset(null));
-  }, [profile?.id]); // changing prospects starts a fresh presentation session
+    if (browserLocalProfiles) {
+      void readProspectDemoAsset(profile.screenshot.assetId).then(setAsset).catch(() => setAsset(null));
+    } else {
+      setAsset(shippedProfiles.find((item) => item.profile.id === profile.id)?.asset ?? null);
+    }
+  }, [profile?.id, browserLocalProfiles]); // changing prospects starts a fresh presentation session
 
   const session = useMemo<ProspectDemoSessionContext | null>(() => profile && scenario ? {
     profile,
@@ -228,13 +242,15 @@ export function ProspectDemoPresentation({
   const review = sessionAdapter.renderReview(session);
 
   return (
-    <main className="min-h-screen bg-[#F4F3EF] text-[#182538]" data-prospect-demo-presentation>
-      <header className="border-b border-[#182538]/15 bg-white px-4 py-4 sm:px-6" data-ui-component-content="prospect-demo-toolbar">
-        <div className="mx-auto flex w-full max-w-[1440px] flex-col gap-4">
+    <main className={`min-h-screen bg-[#F4F3EF] text-[#182538] ${appearance === "caseload" ? styles.caseload : ""}`} data-prospect-demo-presentation data-demo-embedded={embedded}>
+      <header className="border-b border-[#182538]/15 bg-white px-4 py-4 sm:px-6">
+        <div className="mx-auto flex w-full max-w-[1440px] flex-col gap-4" data-ui-component-content="prospect-demo-toolbar">
           <div className="w-full">
-            <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#90734B]">CaseLoad Select prospect preview</p>
-            <h1 className="mt-1 w-full text-pretty text-[17px] font-extrabold leading-snug tracking-[-0.02em] sm:text-2xl" data-ui-copy="heading">{profile.firmName} intake preview</h1>
+            {appearance === "caseload" ? !embedded && <a href="https://caseloadselect.ca/" className={styles.brand}><Image src="/brand/logos/lockup-horizontal-dark-transparent.png" alt="CaseLoad Select" width={210} height={48} priority /></a> : <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#90734B]">CaseLoad Select prospect preview</p>}
+            <h1 className="mt-1 w-full text-pretty text-[17px] font-extrabold leading-snug tracking-[-0.02em] sm:text-2xl" data-ui-copy="heading">{appearance === "caseload" ? "Try the SCREEN" : `${profile.firmName} intake preview`}</h1>
+            {appearance === "caseload" && <p className={styles.introduction} data-ui-copy="body">Preview SCREEN on a prospect website. Follow a fictional inquiry through to the lawyer’s brief.</p>}
           </div>
+          {sessionAdapter.renderStatus?.(session)}
           <div className="grid w-full gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
             <label className="block text-xs font-semibold text-[#374457]">
               Prospect
@@ -256,7 +272,7 @@ export function ProspectDemoPresentation({
             ))}
             <span className="h-8 w-px bg-[#182538]/15" aria-hidden="true" />
             {(["guided", "live-ai"] as ProspectDemoMode[]).map((item) => (
-              <button key={item} type="button" onClick={() => { setMode(item); setSessionKey((current) => current + 1); }} aria-pressed={mode === item} className={mode === item ? "border border-[#B28B50] bg-[#F7F1E6] px-3 py-2 text-xs font-bold text-[#765724]" : "border border-[#182538]/20 bg-white px-3 py-2 text-xs font-bold text-[#374457] hover:border-[#182538]/50"}>{item === "guided" ? "Guided sample" : "Live AI"}</button>
+              <button key={item} type="button" onClick={() => { if (mode !== item) { setMode(item); setSessionKey((current) => current + 1); } }} aria-pressed={mode === item} className={mode === item ? "border border-[#B28B50] bg-[#F7F1E6] px-3 py-2 text-xs font-bold text-[#765724]" : "border border-[#182538]/20 bg-white px-3 py-2 text-xs font-bold text-[#374457] hover:border-[#182538]/50"}>{item === "guided" ? "Guided sample" : "Live AI"}</button>
             ))}
           </div>
         </div>
@@ -264,9 +280,9 @@ export function ProspectDemoPresentation({
 
       <section className={styles.presentationBody}>
         {/** Both sides stay mounted. Layout changes must never discard intake answers. */}
-        <div className={`${styles.panels} ${view === "split" ? styles.split : ""}`}>
+        <div className={`${styles.panels} ${view === "split" ? styles.split : ""}`} data-demo-layout={view}>
           <div className={view === "review" ? "hidden" : "min-w-0"} aria-hidden={view === "review"}>
-            <ScreenshotStage profile={profile} asset={asset}>{intake}</ScreenshotStage>
+            <div className={appearance === "caseload" ? styles.intakeSurface : undefined}><ScreenshotStage profile={profile} asset={asset}>{intake}</ScreenshotStage></div>
           </div>
           <div className={view === "website" ? "hidden" : "min-w-0"} aria-hidden={view === "website"}>
             <ReviewStage>{review}</ReviewStage>

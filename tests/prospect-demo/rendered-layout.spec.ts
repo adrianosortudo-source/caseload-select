@@ -70,7 +70,14 @@ async function assertLayout(page: Page, rootSelector = ROOT) {
   await settle(page);
   const failures = await page.locator(rootSelector).evaluate((root) => {
     const failures: string[] = [];
-    const visible = (element: Element) => element.getClientRects().length > 0 && getComputedStyle(element).visibility !== "hidden";
+    const visible = (element: Element) => {
+      // Chromium can retain layout boxes for closed disclosure descendants.
+      // Only their summary is visible and should enter rendered copy checks.
+      for (let parent = element.parentElement; parent; parent = parent.parentElement) {
+        if (parent.tagName === "DETAILS" && !parent.hasAttribute("open") && !parent.querySelector(":scope > summary")?.contains(element)) return false;
+      }
+      return element.getClientRects().length > 0 && getComputedStyle(element).visibility !== "hidden";
+    };
     if (document.documentElement.scrollWidth > document.documentElement.clientWidth + 1) failures.push("Document scrolls horizontally");
     if (document.body.scrollWidth > document.documentElement.clientWidth + 1) failures.push("Body scrolls horizontally");
     for (const element of Array.from(root.querySelectorAll<HTMLElement>("*"))) {
@@ -117,7 +124,7 @@ async function assertLayout(page: Page, rootSelector = ROOT) {
         const line = lines.find((candidate) => Math.abs(candidate[0].top - word.top) <= 1);
         if (line) line.push(word); else lines.push([word]);
       }
-      if (lines.length > 1 && new Set(lines.at(-1)?.map((word) => word.id)).size === 1) failures.push(`${name} has a one-word final line`);
+      if (lines.length > 1 && new Set(lines.at(-1)?.map((word) => word.id)).size === 1) failures.push(`${name} has a one-word final line (width ${Math.round(box.width)}, font ${getComputedStyle(copy).fontSize})`);
       for (let index = 0; index < lines.length - 1; index += 1) {
         const line = lines[index];
         const next = lines[index + 1][0];
@@ -182,25 +189,27 @@ test("Guided intake reaches the brief and keeps answers across view switches", a
   await page.setViewportSize({ width: 1440, height: 900 });
   await openDemo(page);
   await page.getByRole("button", { name: "Split view", exact: true }).click();
+  await page.getByRole("button", { name: "Guided sample", exact: true }).click();
   await page.getByRole("button", { name: "Continue matter review", exact: true }).click();
-  await expect(page.getByText("Review in progress", { exact: true }).first()).toBeVisible();
+  await expect(page.getByText("Draft brief", { exact: true }).first()).toBeVisible();
+  const readback = page.getByRole("button", { name: "Confirm details and continue" });
+  if (await readback.isVisible()) await readback.click();
   for (let count = 0; count < 12; count += 1) {
-    const contact = page.getByRole("button", { name: "Continue to contact details", exact: true });
+    const contact = page.getByRole("button", { name: "See the contact step", exact: true });
     if (await contact.isVisible()) { await contact.click(); break; }
-    if (await page.locator('input[name="client_name"]').isVisible()) break;
+    if (await page.getByRole("button", { name: "Finish demonstration", exact: true }).isVisible()) break;
     const skip = page.getByRole("button", { name: "Skip this question", exact: true });
     await expect(skip).toBeVisible();
     await skip.click();
     await settle(page);
   }
-  await page.locator('input[name="client_name"]').fill("Fictional Alex");
-  await page.locator('input[name="client_phone"]').fill("4165550123");
-  await page.locator('input[name="client_email"]').fill("alex@example.test");
+  await expect(page.getByRole("heading", { name: "Contact details" })).toBeVisible();
+  await expect(page.locator('input[name="client_name"],input[name="client_email"],input[name="client_phone"]')).toHaveCount(0);
   await page.getByRole("button", { name: "Lawyer view", exact: true }).click();
   await page.getByRole("button", { name: "Split view", exact: true }).click();
-  await expect(page.locator('input[name="client_name"]')).toHaveValue("Fictional Alex");
-  await page.getByRole("button", { name: "Complete demonstration", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "The demonstration is complete." })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Contact details" })).toBeVisible();
+  await page.getByRole("button", { name: "Finish demonstration", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Demo complete" })).toBeVisible();
   await expect(page.getByText("Brief ready", { exact: true }).first()).toBeVisible();
   await assertImages(page);
   await assertLayout(page);
@@ -235,16 +244,54 @@ test("Exported prospect package imports, persists, and reloads under the real im
   const standalone = await standalonePromise;
   await standalone.waitForLoadState("domcontentloaded");
   await expect(standalone).toHaveURL(/\/demo\/prospect\/qa-imported-prospect$/);
-  await expect(standalone.getByRole("heading", { name: "Imported Demo Firm intake preview" })).toBeVisible();
+  await expect(standalone.getByRole("heading", { name: "Try the SCREEN" })).toBeVisible();
+  await expect(standalone.getByRole("combobox", { name: "Prospect", exact: true })).toHaveValue("qa-imported-prospect");
   await assertStandaloneChrome(standalone);
   await assertImages(standalone);
   await assertLayout(standalone);
   await standalone.reload();
   await expect(standalone.locator(ROOT)).toBeVisible();
-  await expect(standalone.getByRole("heading", { name: "Imported Demo Firm intake preview" })).toBeVisible();
+  await expect(standalone.getByRole("heading", { name: "Try the SCREEN" })).toBeVisible();
+  await expect(standalone.getByRole("combobox", { name: "Prospect", exact: true })).toHaveValue("qa-imported-prospect");
   await assertStandaloneChrome(standalone);
   await assertImages(standalone);
   await assertLayout(standalone);
   await standalone.screenshot({ path: testInfo.outputPath("imported-profile-reloaded.png"), fullPage: true });
   expect(await standalone.evaluate(() => (window as unknown as { prospectDemoCspViolations: string[] }).prospectDemoCspViolations)).toEqual([]);
 });
+
+
+for (const width of WIDTHS) {
+  test(`Live AI readback avoids repeated facts at ${width}px`, async ({ page }, testInfo) => {
+    const mutations: string[] = [];
+    page.on("request", (request) => { if (request.method() === "POST") mutations.push(new URL(request.url()).pathname); });
+    await page.route("**/api/extract", async (route) => route.fulfill({ json: { mode: "live", extracted: { amount_at_stake: "$5,000–$25,000", dispute_reason: "No clear reason" } } }));
+    await page.setViewportSize({ width, height: 1000 });
+    await openDemo(page);
+    await expect(page.getByRole("button", { name: "Live AI", exact: true })).toHaveAttribute("aria-pressed", "true");
+    await expect(page.getByRole("button", { name: "Website", exact: true })).toHaveAttribute("aria-pressed", "true");
+    await assertLayout(page);
+    await page.getByRole("button", { name: "Split view", exact: true }).click();
+    await expect(page.getByRole("button", { name: "Split view", exact: true })).toHaveAttribute("aria-pressed", "true");
+    await assertLayout(page);
+    await page.locator(`${INTAKE} textarea`).fill("Fictional test. A business client owes us $18,450 for completed work. I can approve hiring a lawyer. We have an invoice and signed contract.");
+    await page.getByRole("button", { name: "Continue matter review", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "Review the facts" })).toBeVisible();
+    await expect(page.getByText("Live AI read the description. Review and confirm the facts.", { exact: true })).toBeVisible();
+    await expect(page.getByText("Just me", { exact: true })).toBeVisible();
+    await assertLayout(page);
+    await page.screenshot({ path: testInfo.outputPath(`ai-readback-${width}.png`), fullPage: true });
+    await page.getByRole("button", { name: "Confirm details and continue" }).click();
+    for (let i = 0; i < 10; i++) {
+      await expect(page.getByRole("heading", { name: "About how much money is involved?" })).toHaveCount(0);
+      await expect(page.getByRole("heading", { name: "Who decides whether to hire a lawyer for this?" })).toHaveCount(0);
+      const skip = page.getByRole("button", { name: "Skip this question" });
+      if (!(await skip.isVisible())) break;
+      await skip.click();
+    }
+    await expect(page.getByRole("button", { name: "See the contact step" })).toBeVisible();
+    await assertLayout(page);
+    await page.screenshot({ path: testInfo.outputPath(`ai-brief-${width}.png`), fullPage: true });
+    expect(mutations).toEqual(["/api/extract"]);
+  });
+}

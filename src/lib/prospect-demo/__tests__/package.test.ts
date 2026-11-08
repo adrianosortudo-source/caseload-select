@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { exampleLawFirmProspectDemoProfile } from "@/lib/prospect-demo-profiles/example-law-firm";
 import { ProspectDemoPackageError, validatePackage, validateProfile } from "../package";
 
 const profile = {
@@ -22,6 +23,10 @@ const profile = {
 describe("prospect-demo package validation", () => {
   it("accepts a complete profile with a normalized placement", () => {
     expect(validateProfile(profile)).toMatchObject({ firmName: "Walker Law", placement: profile.placement });
+  });
+
+  it("accepts the fixed fictional public sample", () => {
+    expect(validateProfile(exampleLawFirmProspectDemoProfile).id).toBe("example-law-firm");
   });
 
   it("rejects a placement that extends beyond the reference screenshot", () => {
