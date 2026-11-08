@@ -44,7 +44,7 @@ describe("canonical prospect presentation", () => {
     expect(store.readProspectDemoAsset).not.toHaveBeenCalled();
   });
   it("loads the same fixed sample without touching the private profile library", async () => {
-    render(<ProspectDemoClient profileId="walker-law" sampleOnly embedded />);
+    render(<ProspectDemoClient profileId="example-law-firm" sampleOnly embedded />);
     await waitFor(() => expect(screen.getByLabelText("Fictional inquiry")).toBeTruthy());
     expect(screen.getByLabelText("Fictional inquiry").getAttribute("data-runtime")).toBe("demo-live-ai");
     expect(screen.queryByRole("img", { name: "CaseLoad Select" })).toBeNull();
@@ -53,6 +53,6 @@ describe("canonical prospect presentation", () => {
     expect(store.listProspectDemoProfiles).not.toHaveBeenCalled();
     expect(store.readProspectDemoAsset).not.toHaveBeenCalled();
     expect(fetch).toHaveBeenCalledTimes(1);
-    expect(fetch).toHaveBeenCalledWith("/prospect-demos/walker-law/walker-law-consultation-reference.png", { cache: "force-cache" });
+    expect(fetch).toHaveBeenCalledWith("/prospect-demos/example-law-firm/example-law-firm.png", { cache: "force-cache" });
   });
 });

@@ -166,4 +166,3 @@ export function ProspectDemoClient({ profileId, embedded = false, sampleOnly = f
     </div>
   );
 }
-

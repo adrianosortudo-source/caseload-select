@@ -11,4 +11,3 @@ export default async function ScreenToolPage({ searchParams }: { searchParams: P
   const { embed } = await searchParams;
   return <ProspectDemoClient profileId="example-law-firm" sampleOnly embedded={embed === "1"} />;
 }
-

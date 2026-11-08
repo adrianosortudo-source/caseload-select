@@ -7,7 +7,7 @@ describe("current SCREEN entry point and embed boundary", () => {
   it("uses the canonical prospect presentation as an isolated embeddable public sample", async () => {
     const page = await ScreenToolPage({ searchParams: Promise.resolve({ embed: "1" }) });
     expect(page.type).toBe(ProspectDemoClient);
-    expect(page.props).toEqual({ profileId: "walker-law", sampleOnly: true, embedded: true });
+    expect(page.props).toEqual({ profileId: "example-law-firm", sampleOnly: true, embedded: true });
   });
   it("routes the existing tools entry to the new demo while preserving old result URLs", async () => {
     const rules = await config.redirects!();
