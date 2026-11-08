@@ -4,7 +4,7 @@ export default defineConfig({
   testDir: './tests/desired-client-v2',
   // Only the current six-section browser journey is supported here. Older
   // option, comparison and report specs targeted the retired questionnaire.
-  testMatch: ['orientation.spec.ts', 'blueprint-report.spec.ts'],
+  testMatch: ['orientation.spec.ts', 'blueprint-report.spec.ts', 'rename-compatibility.spec.ts'],
   outputDir: 'test-results/desired-client-v2',
   fullyParallel: false,
   workers: 1,

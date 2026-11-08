@@ -46,7 +46,7 @@ export function WelcomeScreen({ onStart, aiAvailable = null, hasDraft = false, r
         <div className="hero-copy" data-ui-component-content="desired-client-hero-copy">
           <p className="eyebrow">Your practice. With intention.</p>
           <h1 id="dc-welcome-heading" data-ui-copy="heading">Define the work you <span className="terminal-word">want<span className="terminal-square" aria-hidden="true" /></span></h1>
-          <p className="hero-intro" data-ui-copy="body">Turn your firm’s experience and ambitions into a clear six-part Desired Client profile.</p>
+          <p className="hero-intro" data-ui-copy="body">Define the clients, legal work and working conditions your firm wants more of.</p>
           <div className="hero-actions">
             <button type="button" className="button button-primary" onClick={onStart}>{action}</button>
             <a className="button button-secondary" href="#dc-profile-preview" onClick={() => previewRef.current?.focus({ preventScroll: true })}>Explore the example</a>
@@ -54,9 +54,9 @@ export function WelcomeScreen({ onStart, aiAvailable = null, hasDraft = false, r
           <p className="hero-meta" data-ui-copy="supporting">Six focused topics. One considered profile.</p>
           {resume}
         </div>
-        <div className="product-area" id="dc-profile-preview" ref={previewRef} tabIndex={-1} aria-label="Illustrative schematic Desired Client profile">
+        <div className="product-area" id="dc-profile-preview" ref={previewRef} tabIndex={-1} aria-label="Illustrative schematic Best Cases Profile">
           <div className="product-frame">
-            <div className="app-header"><div><div className="app-title">Your Desired Client</div><div className="app-subtitle">A profile for your firm</div></div><span className="example-tag">Schematic example</span></div>
+            <div className="app-header"><div><div className="app-title">Best Cases Profile</div><div className="app-subtitle">A profile for your firm</div></div><span className="example-tag">Schematic example</span></div>
             <div className="preview-tabs" role="tablist" aria-label="Explore the six profile topics">
               {topicLabels.map((label, index) => <button type="button" className="preview-tab" key={label} id={`dc-example-tab-${index}`} role="tab" aria-selected={index === selected} aria-controls="dc-example-panel" tabIndex={index === selected ? 0 : -1} ref={element => { tabRefs.current[index] = element; }} onClick={() => setSelected(index)} onKeyDown={event => navigateTab(event, index)} aria-label={index > 3 ? PREVIEW_TOPICS[index].topic : undefined}>{label}</button>)}
             </div>
@@ -67,14 +67,14 @@ export function WelcomeScreen({ onStart, aiAvailable = null, hasDraft = false, r
               <div className="detail-grid">{topic.details.map(([label, text]) => <div key={label} data-ui-component-content="desired-client-example-detail"><h3 className="detail-label">{label}</h3><p className="detail-text" data-ui-copy="body">{text}</p></div>)}</div>
               <div className="profile-note" data-ui-component-content="desired-client-example-note"><p className="note-title">{topic.noteTitle}</p><p className="note-text" data-ui-copy="body">{topic.note}</p></div>
             </div>
-            <div className="app-footer"><span>Schematic only · assumptions to test</span><span>Topic {selected + 1} of 6</span></div>
+            <div className="app-footer"><span>Schematic only Â· assumptions to test</span><span>Topic {selected + 1} of 6</span></div>
           </div>
           <p className="preview-caption">Explore the six tabs to see what a profile can contain</p>
         </div>
       </section>
       </div>
       <section className="container definition-wrap" aria-labelledby="dc-definition-title">
-        <div className="definition"><div className="definition-top"><h2 className="eyebrow" id="dc-definition-title">What is a Desired Client?</h2><div data-ui-component-content="desired-client-approved-definition"><p className="definition-copy" data-ui-copy="body">{WELCOME_COPY.definition}</p></div></div>
+        <div className="definition"><div className="definition-top"><h2 className="eyebrow" id="dc-definition-title">What is Best Cases Profile?</h2><div data-ui-component-content="desired-client-approved-definition"><p className="definition-copy" data-ui-copy="body">{WELCOME_COPY.definition}</p></div></div>
           <div className="pillars">{["Fees", "Margin", "Return on lawyer time", "Repeatable value"].map(pillar => <div className="pillar" key={pillar}>{pillar}</div>)}</div>
           <div className="definition-aside"><div data-ui-component-content="desired-client-fees-note"><p data-ui-copy="body">Higher fees do not automatically mean higher margin. Look at the whole commercial picture.</p></div><div data-ui-component-content="desired-client-ambition-note"><p data-ui-copy="body">Keep the ambition. Capacity gaps identify what must change, rather than automatically lowering the goal.</p></div></div>
         </div>
@@ -86,7 +86,7 @@ export function WelcomeScreen({ onStart, aiAvailable = null, hasDraft = false, r
       <section className="container process-section" aria-labelledby="dc-process-title">
         <div className="process-title" data-ui-component-content="desired-client-process-title"><p className="eyebrow">From thought to profile</p><h2 id="dc-process-title" data-ui-copy="heading">A guided process.</h2></div>
         <div className="steps">{[
-          ["Answer", "Work through six topics using your firm’s experience and ambitions."],
+          ["Answer", "Work through six topics using your firmâ€™s experience and ambitions."],
           ["Generate", "Bring your answers together in an AI-assisted draft profile."],
           ["Review and refine", "Check the reasoning, challenge assumptions and make the profile your own."],
         ].map(([heading, text], index) => <div className="step" key={heading} data-ui-component-content="desired-client-process-step"><div className="step-head"><span className="number">{index + 1}</span><h3>{heading}</h3></div><p data-ui-copy="body">{text}</p></div>)}</div>

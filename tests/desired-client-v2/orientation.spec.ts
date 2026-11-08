@@ -8,7 +8,7 @@ import { STAGE_DEFINITIONS } from "../../src/lib/desired-client/screens";
 for (const width of [1440, 1024, 768, 640, 390, 375, 320]) {
   test("welcome and first step fit at " + width + "px", async ({ page }) => {
     await page.setViewportSize({ width, height: 1000 });
-    await page.goto("/tools/desired-client-matter");
+    await page.goto("/tools/best-cases-profile");
     await expect(page.getByRole("heading", { name: "Define the work you want" })).toBeVisible();
     await page.getByText("About the exercise", { exact: true }).click();
     await expect(page.getByText("A firm can have a full calendar and still be building the wrong practice.", { exact: false })).toBeVisible();
@@ -25,7 +25,7 @@ for (const width of [1440, 1024, 768, 640, 390, 375, 320]) {
 
 test("the six sections explain their purpose and allow explicit unknowns", async ({ page }) => {
   await page.setViewportSize({ width: 768, height: 1000 });
-  await page.goto("/tools/desired-client-matter");
+  await page.goto("/tools/best-cases-profile");
   await page.getByRole("button", { name: "Build my profile" }).first().click();
 
   const group = (name: string) => page.getByRole("group", { name, exact: true });
@@ -75,7 +75,7 @@ test("known-disabled AI hides follow-up consent and continues without a request"
     await apiRoute.fulfill({status:503,contentType:"application/json",body:JSON.stringify({ok:false,error:{code:"AI_DISABLED"}})});
   });
 
-  await page.goto("/tools/desired-client-matter");
+  await page.goto("/tools/best-cases-profile");
   await page.getByRole("button",{name:"Build my profile"}).first().click();
   await expect(page.getByRole("status").filter({hasText:"AI follow-ups are unavailable"})).toBeVisible();
   await expect(page.getByRole("checkbox",{name:/Allow up to three short AI follow-up questions/})).toHaveCount(0);
@@ -101,7 +101,7 @@ test("a saved follow-up opt-in is reset on resume and works again after fresh op
   await page.addInitScript(({key,savedAnswers,createdAt})=>{
     localStorage.setItem(key,JSON.stringify({schemaVersion:2,answers:savedAnswers,currentStage:1,lastEditedAt:new Date(createdAt).toISOString(),expiresAt:new Date(createdAt+7*86400000).toISOString()}));
   },{key:"cls-desired-client-v2",savedAnswers:answers,createdAt:now});
-  await page.goto("/tools/desired-client-matter");
+  await page.goto("/tools/best-cases-profile");
   await page.getByRole("button",{name:"Continue my saved draft",exact:true}).click();
 
   const consent=page.getByRole("checkbox",{name:/Allow up to three short AI follow-up questions/});
@@ -130,7 +130,7 @@ test("an explicit AI_DISABLED follow-up response updates availability without sp
     await apiRoute.fulfill({status:503,contentType:"application/json",body:JSON.stringify({ok:false,error:{code:"AI_DISABLED"}})});
   });
 
-  await page.goto("/tools/desired-client-matter");
+  await page.goto("/tools/best-cases-profile");
   await page.getByRole("button",{name:"Build my profile"}).first().click();
   await page.getByRole("checkbox",{name:/Allow up to three short AI follow-up questions/}).check();
   await page.getByRole("group",{name:"What do you want this profile to help your firm do?"}).getByRole("radio").last().check();
@@ -159,7 +159,7 @@ test("a spent local follow-up budget is explained accurately and wraps at every 
   });
 
   await page.setViewportSize({ width: 768, height: 1000 });
-  await page.goto("/tools/desired-client-matter");
+  await page.goto("/tools/best-cases-profile");
   await page.getByRole("button", { name: "Build my profile" }).first().click();
   await page.locator('[data-ui-component-content="desired-client-ai-follow-up"] input[type="checkbox"]').check();
 
@@ -293,7 +293,7 @@ test("canonical branding spans the landing, questionnaire, review, failure, repo
         await page.screenshot({ path: testInfo.outputPath(`branding-${state}-${width}.png`), fullPage: true, style: "nextjs-portal{visibility:hidden}" });
     }
   };
-  await page.goto("/tools/desired-client-matter");
+  await page.goto("/tools/best-cases-profile");
   await audit("welcome");
   expect(await page.locator(".terminal-square").count()).toBe(1);
   expect(await page.locator(".dc-landing").innerText()).not.toMatch(/Visual prototype|saved-draft demo|dummy/i);
@@ -337,7 +337,7 @@ test("canonical branding spans the landing, questionnaire, review, failure, repo
   }
   await page.getByRole("button", { name: STAGE_DEFINITIONS[6].label, exact: true }).click();
   await audit("review");
-  await page.getByRole("button", { name: "Create my Desired Client Blueprint", exact: true }).click();
+  await page.getByRole("button", { name: "Create my Best Cases Profile", exact: true }).click();
   await expect(page.getByRole("status").filter({ hasText: "Connecting your answers" })).toBeVisible();
   await audit("loading");
   await expect.poll(() => Boolean(release)).toBe(true);
