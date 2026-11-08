@@ -1,3 +1,6 @@
+import { useRef, useState } from "react";
+import { assessment, copyPlan, coverageText, groups, presentFinding } from "./report-presentation";
+
 export interface DimensionBarEntry {
   name: string;
   weight: number;
@@ -18,6 +21,7 @@ export interface RankedFinding {
   // (advisory). See docs/BUILD_PLAN_design_check_calibration_v1.md
   // Phase 3.
   flagClassification?: "disqualifying" | "advisory";
+  flagKey?: string;
   // True for the leading run of findings the report leads with (every
   // active flag, plus enough top ordinary findings to reach at least
   // five total). See "attainable" below and Phase 4 of the same plan.
@@ -41,6 +45,7 @@ export interface AttainableScore {
 
 export interface DesignCheckResult {
   domain: string;
+  judgmentCoverage?: { wholePage: true } | { wholePage: false; judgedTopPx: number; actualPageHeightPx: number };
   checkedAt: string;
   score: number;
   // The uncapped weighted average, before any red-flag ceiling. Used
@@ -62,166 +67,68 @@ export interface DesignCheckResult {
   };
 }
 
-function gradeColor(grade: string): string {
-  if (grade === "A" || grade === "B") return "var(--navy)";
-  if (grade === "C") return "var(--stone-on-light)";
-  return "var(--danger)";
-}
-
-function effortLabel(effort: RankedFinding["estimatedEffort"]): string {
-  if (effort === "low") return "Quick fix";
-  if (effort === "high") return "Larger project";
-  return "Moderate effort";
-}
-
-function severityLabel(f: RankedFinding): string {
-  if (f.severity === "flag") return f.flagClassification === "disqualifying" ? "Caps the grade" : "Real opportunity";
-  return f.severity === "high" ? "High impact" : "Worth fixing";
-}
-
-function severityClass(f: RankedFinding): string {
-  if (f.severity === "flag") return f.flagClassification === "disqualifying" ? "dc-finding-severity-flag-disqualifying" : "dc-finding-severity-flag-advisory";
-  return `dc-finding-severity-${f.severity}`;
-}
-
-function FindingCard({ f }: { f: RankedFinding }) {
-  return (
-    <li className="dc-finding-item" data-ui-component-content="report-finding">
-      <div className="dc-finding-head">
-        <span className={`dc-finding-severity ${severityClass(f)}`}>{severityLabel(f)}</span>
-        <span className="dc-finding-effort">{effortLabel(f.estimatedEffort)}</span>
-      </div>
-      <p className="dc-finding-opportunity" data-ui-copy="body">{f.opportunity}</p>
-      <p className="dc-finding-evidence" data-ui-copy="supporting">{f.evidence}</p>
-      <span className="dc-finding-dim">{f.dimension}</span>
-    </li>
-  );
-}
-
 export default function WebsiteDesignCheckReport({ result, onReset }: { result: DesignCheckResult; onReset: () => void }) {
-  const { activeFlags, notCheckableInV1 } = result.redFlagPanel;
-  const disqualifyingFlags = activeFlags.filter((f) => f.classification === "disqualifying");
-  const isCapped = result.redFlagPanel.ceiling !== null;
-  const pathFindings = result.rankedFindings.filter((f) => f.inAttainablePath);
-  const restFindings = result.rankedFindings.filter((f) => !f.inAttainablePath);
-  const hasRealGap = result.attainable.score > result.score;
-
-  return (
-    <div className="dc-report">
-      <header className="dc-report-header" data-ui-component-content="report-summary">
-        <div className="dc-report-identity">
-          <div className="dc-report-meta">
-            <p className="dc-report-domain">{result.domain}</p>
-            <p className="dc-report-date">Checked {new Date(result.checkedAt).toLocaleDateString()}</p>
-          </div>
-          <button type="button" className="dc-reset-btn" onClick={onReset}>Check another site</button>
-        </div>
-        <dl className="dc-score-summary" aria-label="Website scores">
-          <div className="dc-current-block">
-            <dt className="dc-current-label">Today</dt>
-            <dd><span className="dc-current-letter" style={{ color: gradeColor(result.letterGrade) }}>{result.letterGrade}</span><span className="dc-current-score">{result.score}/100</span></dd>
-          </div>
-          <div className="dc-attainable-block">
-            <dt className="dc-attainable-label">Within reach</dt>
-            <dd><span className="dc-grade-letter" style={{ color: gradeColor(result.attainable.letterGrade) }}>{result.attainable.letterGrade}</span><span className="dc-grade-score">{result.attainable.score}/100</span></dd>
-          </div>
-        </dl>
-        {isCapped && (
-          <p className="dc-unlock-line" data-ui-copy="supporting">
-            The underlying measured craft is {result.uncappedScore}. The flagged items below are the ceiling.
-          </p>
-        )}
-      </header>
-
-      {pathFindings.length > 0 && (
-        <section className="dc-path-section" data-ui-component-content="priority-findings">
-          <h2 className="dc-section-title" data-ui-copy="heading">
-            {hasRealGap ? `Close these ${pathFindings.length} to reach ${result.attainable.letterGrade}` : "Worth fixing next"}
-          </h2>
-          <p className="dc-path-sub" data-ui-copy="body">
-            {hasRealGap
-              ? "Ranked by impact: every flagged item first, then the findings worth the most."
-              : "No further points are recoverable from these specific items, but they are still worth doing."}
-          </p>
-          <ol className="dc-findings-list">
-            {pathFindings.map((f, i) => (
-              <FindingCard key={i} f={f} />
-            ))}
-          </ol>
-        </section>
-      )}
-
-      <section className="dc-dimension-bar" data-ui-component-content="category-scores">
-        <h2 className="dc-section-title" data-ui-copy="heading">Where the site stands, by category</h2>
-        {result.dimensionBar.map((d) => (
-          <div key={d.name} className="dc-dim-row">
-            <span className="dc-dim-name">{d.name}</span>
-            <div className="dc-dim-track" aria-hidden="true">
-              {/* An empty track, not a zero-width bar reading as a total
-                  failure: a null score means this page had nothing to
-                  grade here. */}
-              {d.score !== null && (
-                <div className="dc-dim-fill" style={{ width: `${d.score}%`, background: gradeColor(d.score >= 80 ? "A" : d.score >= 70 ? "C" : "F") }} />
-              )}
-            </div>
-            <span className="dc-dim-score">{d.score === null ? "Not on this page" : d.score}</span>
-          </div>
-        ))}
-        {result.notApplicableDimensions.length > 0 && (
-          <p className="dc-not-measured" data-ui-copy="supporting">
-            Nothing on this page to grade for: {result.notApplicableDimensions.join(", ")}. These are left out of the score rather than counted against it.
-          </p>
-        )}
-        {result.notMeasuredDimensions.length > 0 && (
-          <p className="dc-not-measured" data-ui-copy="supporting">Not yet measured in this version: {result.notMeasuredDimensions.join(", ")}.</p>
-        )}
-      </section>
-
-      {disqualifyingFlags.length > 0 && (
-        <section className="dc-redflag-panel" data-ui-component-content="grade-limitations">
-          <h2 className="dc-redflag-title" data-ui-copy="heading">What&apos;s holding this grade back</h2>
-          <p className="dc-redflag-sub" data-ui-copy="body">
-            These findings cap the grade regardless of how the rest of the site scores. Fixing them unlocks the rest of the site&apos;s real score.
-          </p>
-          <ul className="dc-redflag-list">
-            {disqualifyingFlags.map((flag) => (
-              <li key={flag.key} className="dc-redflag-item" data-ui-component-content="grade-limitation">
-                <span className="dc-redflag-label" data-ui-copy="heading">{flag.label}</span>
-                <span className="dc-redflag-detail" data-ui-copy="body">{flag.detail}</span>
-                {flag.confidence === "best_effort" && <span className="dc-redflag-tag">Best-effort detection</span>}
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-
-      {restFindings.length > 0 && (
-        <section className="dc-findings" data-ui-component-content="remaining-findings">
-          <h2 className="dc-section-title" data-ui-copy="heading">The rest of what we found</h2>
-          <ol className="dc-findings-list">
-            {restFindings.map((f, i) => (
-              <FindingCard key={i} f={f} />
-            ))}
-          </ol>
-        </section>
-      )}
-
-      {notCheckableInV1.length > 0 && (
-        <section className="dc-disclosure" data-ui-component-content="unchecked-signals">
-          <h2 className="dc-disclosure-title" data-ui-copy="heading">Not checked in this version</h2>
-          <ul className="dc-disclosure-list">
-            {notCheckableInV1.map((n) => (
-              <li key={n.key} data-ui-component-content="unchecked-signal">
-                <p data-ui-copy="body">
-                <strong>{n.label}.</strong> {n.reason}
-                </p>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-
-
+  const [copyState, setCopyState] = useState<"idle" | "success" | "manual">("idle");
+  const detailsRef = useRef<HTMLDetailsElement>(null);
+  const fallbackRef = useRef<HTMLTextAreaElement>(null);
+  const priorities = groups(result).slice(0, 3);
+  const plan = copyPlan(result, priorities);
+  const flags = result.redFlagPanel.activeFlags.filter(f => f.classification === "disqualifying");
+  async function copy() {
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error("Clipboard unavailable");
+      await navigator.clipboard.writeText(plan);
+      setCopyState("success");
+    } catch { setCopyState("manual"); requestAnimationFrame(() => fallbackRef.current?.focus()); }
+  }
+  function reveal(id: string) {
+    if (detailsRef.current) detailsRef.current.open = true;
+    requestAnimationFrame(() => document.getElementById(id)?.focus());
+  }
+  return <div className="dc-report">
+    <header className="dc-report-header" data-ui-component-content="report-summary">
+      <div className="dc-report-identity"><div className="dc-report-meta">
+        <p className="dc-report-domain">{result.domain}</p>
+        <p className="dc-report-date">Checked {new Date(result.checkedAt).toLocaleDateString()}</p>
+      </div><button type="button" className="dc-reset-btn" onClick={onReset}>Check another site</button></div>
+      <p data-ui-copy="supporting">Automated homepage check · Mobile and desktop.</p>
+      <p data-ui-copy="body">{assessment(result, priorities)}</p>
+    </header>
+    {priorities.length > 0 && <section className="dc-path-section" data-ui-component-content="priority-findings">
+      <h2 className="dc-section-title" data-ui-copy="heading">Priorities</h2>
+      <ol className="dc-findings-list">{priorities.map((g,i) => <li className="dc-finding-item" key={i} data-ui-component-content="report-finding">
+        <h3 data-ui-copy="heading">{g.copy.title}</h3>
+        <p data-ui-copy="body"><strong>Found:</strong> {g.findings[0].evidence.length <= 170 ? g.findings[0].evidence : <a href={`#dc-finding-${result.rankedFindings.indexOf(g.findings[0].source)}`} onClick={() => reveal(`dc-finding-${result.rankedFindings.indexOf(g.findings[0].source)}`)}>See the full observation in details</a>}</p>
+        <p data-ui-copy="body"><strong>Why:</strong> {g.copy.why}</p>
+        <p data-ui-copy="body"><strong>Change:</strong> {Array.from(new Set(g.findings.map(item => item.copy.action))).join(" ")}</p>
+        {g.findings.length > 1 && <p data-ui-copy="supporting">Combines related findings. See each observation in the details.</p>}
+        <p data-ui-copy="supporting"><strong>Suggested owner:</strong> {g.copy.owner}. {g.status}.</p>
+      </li>)}</ol>
+    </section>}
+    {flags.length > 0 && <section className="dc-redflag-panel" data-ui-component-content="grade-limitations">
+      <h2 className="dc-redflag-title" data-ui-copy="heading">Review these flagged items</h2>
+      <ul className="dc-redflag-list">{flags.map(f => <li key={f.key}><a href={`#dc-flag-${f.key}`} onClick={() => reveal(`dc-flag-${f.key}`)}>{f.label}</a> · {f.confidence === "best_effort" ? "Needs confirmation" : f.confidence === "proven" ? "Confirmed" : "Confidence not supplied"}</li>)}</ul>
+    </section>}
+    <p className="dc-report-current">Current score: <strong>{result.letterGrade} · {result.score}/100</strong></p>
+    <div className="dc-report-actions"><button type="button" className="dc-reset-btn" onClick={copy}>Copy action plan</button>
+      <p role="status" aria-live="polite">{copyState === "success" ? "Action plan copied." : copyState === "manual" ? "Copy the action plan from the text below." : ""}</p>
+      {copyState === "manual" && <label>Action plan for manual copy<textarea ref={fallbackRef} readOnly value={plan} rows={10} onFocus={e => e.currentTarget.select()} /></label>}
     </div>
-  );
+    <details ref={detailsRef} className="dc-report-details" id="dc-finding-details"><summary>See all findings and scoring details</summary>
+      <section data-ui-component-content="all-findings"><h2 data-ui-copy="heading">All findings</h2>
+        <ol className="dc-findings-list">{result.rankedFindings.map((f,i) => { const item = presentFinding(f,result.redFlagPanel.activeFlags); return <li id={`dc-finding-${i}`} tabIndex={-1} key={i} className="dc-finding-item" data-ui-component-content="detail-finding">
+          <h3 data-ui-copy="heading">{f.label}</h3><p data-ui-copy="body">{item.evidence}</p><p data-ui-copy="body">{item.copy.action}</p><p data-ui-copy="supporting">{f.dimension} · {item.status} · {item.copy.owner}</p>
+        </li>; })}</ol>
+        <h3 data-ui-copy="heading">All detected flags</h3><ul>{result.redFlagPanel.activeFlags.map(f => {
+          const item = presentFinding({dimension:"",label:f.label,severity:"flag",flagKey:f.key,evidence:f.detail,opportunity:"",estimatedEffort:"low"},result.redFlagPanel.activeFlags);
+          return <li id={`dc-flag-${f.key}`} tabIndex={-1} key={f.key} data-ui-component-content="detail-flag"><p data-ui-copy="body"><strong>{f.label}</strong> ({f.classification}; {item.status}). {item.evidence}</p><p data-ui-copy="body">{item.copy.action}</p></li>;
+        })}</ul>
+      </section>
+      <section data-ui-component-content="scoring-details"><h2 data-ui-copy="heading">Scoring details</h2><p data-ui-copy="body">Current: {result.letterGrade}, {result.score}/100. Uncapped score: {result.uncappedScore}/100.</p><p data-ui-copy="body">Calculated scenario: {result.attainable.letterGrade}, {result.attainable.score}/100. This is a calculation, not a promised result.</p>
+        <ul>{result.dimensionBar.map(d => <li key={d.name} data-ui-component-content="detail-dimension"><p data-ui-copy="body">{d.name}: {d.score === null ? "Not applicable on this page" : `${d.score}/100`}</p></li>)}</ul>
+        <p data-ui-copy="body">Not applicable: {result.notApplicableDimensions.join(", ") || "None reported"}.</p><p data-ui-copy="body">Not measured: {result.notMeasuredDimensions.join(", ") || "None reported"}.</p><p data-ui-copy="body">{coverageText(result)}</p>
+        <h3 data-ui-copy="heading">Not checked in this version</h3><ul>{result.redFlagPanel.notCheckableInV1.map(n => <li key={n.key} data-ui-component-content="detail-unchecked"><p data-ui-copy="body">{n.label}: {n.reason}</p></li>)}</ul>
+      </section>
+    </details>
+  </div>;
 }

@@ -132,3 +132,9 @@
 }
 .dc-page .dc-nav-links a { font-family: var(--font-display); font-weight: 600; }
 .cls-marketing:has(.dc-page) .cls-footer-brand { font-weight: 600; }
+.dc-main:has(.dc-report) > .dc-categories-preview { display: none; }
+.dc-page .dc-report-actions, .dc-page .dc-report-details { padding: 24px; background: var(--white); }
+.dc-page .dc-report-details summary { cursor: pointer; font-family: var(--dc-heading); font-weight: 700; }
+.dc-page .dc-report-details section { margin-top: 24px; }
+.dc-page .dc-report-actions textarea { display: block; width: 100%; margin-top: 8px; font: inherit; }
+.dc-page .dc-finding-item h3, .dc-page .dc-finding-item p { width: 100%; margin: 0 0 8px; }

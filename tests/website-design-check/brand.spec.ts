@@ -98,8 +98,18 @@ for(const width of WIDTHS){
     await expect(page.locator(".dc-report-domain")).toHaveText(fixture.domain);
     await brandGates(page);
     await page.screenshot({path:path.join(EVIDENCE,`${width}-report.png`),fullPage:true});
+    await expect(page.locator(".dc-categories-preview")).toBeHidden();
+    await expect(page.locator(".dc-disclaimer")).toBeVisible();
+    const disclosure=page.locator(".dc-report-details");
+    await expect(disclosure).not.toHaveAttribute("open", "");
+    await page.getByText("See all findings and scoring details").focus();
+    await page.keyboard.press("Enter");
+    await expect(disclosure).toHaveAttribute("open", "");
+    await brandGates(page);
+    await page.screenshot({path:path.join(EVIDENCE,`${width}-expanded.png`),fullPage:true});
     await page.getByRole("button",{name:"Check another site"}).click();
     await expect(page.getByLabel("Public website URL")).toHaveValue("");
+    await expect(page.locator(".dc-categories-preview")).toBeVisible();
   });
 }
 
@@ -120,4 +130,34 @@ test("failed scan keeps the entered URL and supports a retry",async({page})=>{
   await expect(page.locator("#dc-domain-error")).toHaveText("Could not render this site. Try again or check the domain.");
   await expect(page.getByLabel("Public website URL")).toHaveValue("https://synthetic-fixture.example/");
   await brandGates(page);
+});
+
+for(const width of WIDTHS){
+  test(`embedded report in host at ${width}px`,async({page})=>{
+    await page.setViewportSize({width,height:900});
+    await page.route("**/api/tools/website-design-check",route=>route.fulfill({status:200,contentType:"application/json",body:JSON.stringify(fixture)}));
+    await page.goto("/tools/website-design-check");
+    await page.evaluate(() => {document.body.innerHTML="<iframe title=\"Embedded checker\" style=\"width:100%;height:800px;border:0\" src=\"/tools/website-design-check?embed=1\"></iframe>"});
+    const frame=page.frameLocator('iframe[title="Embedded checker"]');
+    await frame.getByLabel("Public website URL").fill("synthetic-fixture.example");
+    await frame.getByRole("button",{name:"Check my site",exact:true}).click();
+    await expect(frame.locator(".dc-report-domain")).toHaveText(fixture.domain);
+    await expect(frame.locator(".dc-report-details")).not.toHaveAttribute("open","");
+    await frame.locator("summary").click();
+    await expect(frame.locator(".dc-report-details")).toHaveAttribute("open","");
+  });
+}
+test("copy succeeds or offers a focused manual copy field",async({page,context})=>{
+  await context.grantPermissions(["clipboard-write","clipboard-read"]);
+  await page.goto("/tools/website-design-check");
+  await page.route("**/api/tools/website-design-check",route=>route.fulfill({status:200,contentType:"application/json",body:JSON.stringify(fixture)}));
+  await page.getByLabel("Public website URL").fill("synthetic-fixture.example");
+  await page.getByRole("button",{name:"Check my site",exact:true}).click();
+  await page.getByRole("button",{name:"Copy action plan"}).click();
+  await expect(page.getByText("Action plan copied.")).toBeVisible();
+  expect(await page.evaluate(()=>navigator.clipboard.readText())).toContain("Needs confirmation");
+  await page.evaluate(()=>Object.defineProperty(navigator.clipboard,"writeText",{value:()=>Promise.reject(new Error("denied"))}));
+  await page.getByRole("button",{name:"Copy action plan"}).click();
+  await expect(page.getByLabel("Action plan for manual copy")).toBeFocused();
+  await expect(page.getByLabel("Action plan for manual copy")).toHaveValue(/Needs confirmation/);
 });

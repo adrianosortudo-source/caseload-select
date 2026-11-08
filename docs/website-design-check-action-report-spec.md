@@ -156,3 +156,5 @@ Keep the existing disclaimer. When `.dc-report` exists, hide the redundant categ
 
 
 
+
+Implementation clarification: the producer also emits missing-title-only and missing-both metadata observations. Neither equals the specified missing-description branch, so those observations use the exact unmapped fallback until separately mapped. The TBT poor branch is identified by the producer phrase “heavy main-thread blocking”.
