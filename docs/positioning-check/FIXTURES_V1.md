@@ -61,3 +61,7 @@ Use the plan's existing thresholds: at least 95% of sampled factual assertions s
 
 Fixture set: `positioning-corpus-v1`, six development and two held-out sites. Failure set: `positioning-failures-v1`. Contract snapshot: `types.ts` as read 2026-11-08. Changes after Gate 1 require coordinator review and a recorded deviation.
 
+
+## Evaluation attribution
+
+The corpus specification and synthetic failure expectations are agent-prepared acceptance materials, not human-reviewed ground truth. Per-site reference judgments are pending the evidence-only input packets and will be labeled as Luna agent judgments. Any agreement percentages against them are internal evaluation signals only; the production plan's human-reviewed evidence-support and clarity-rating criteria remain `not performed` unless a human review is separately completed. Do not present these small-corpus or agent-reference results as public accuracy claims.

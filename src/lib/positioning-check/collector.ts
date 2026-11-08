@@ -17,7 +17,7 @@ async function readBody(res: Response, deadline: number): Promise<{text:string; 
     if (item.done) break;
     size += item.value.byteLength; if (size > MAX_BODY) { truncated = true; break; }
     chunks.push(item.value);
-  } } finally { await reader.cancel().catch(() => {}); }
+  } } finally { void reader.cancel().catch(() => {}); }
   return { text: Buffer.concat(chunks).toString("utf8"), truncated };
 }
 async function fetchPage(url: URL, anchor: URL, deadline: number): Promise<{res:Response; url:URL}> {
@@ -26,7 +26,7 @@ async function fetchPage(url: URL, anchor: URL, deadline: number): Promise<{res:
     if (!sameSite(anchor, current)) throw new Error("external_redirect");
     const remaining = deadline-Date.now(); if (remaining<=0) throw new Error("collection_timeout");
     const res = await ssrfSafeFetchOneHop(current.href, { timeoutMs:Math.min(8000,remaining), allowedSchemes:["https:"] });
-    if (res.status >= 300 && res.status < 400) { const location=res.headers.get("location"); await res.body?.cancel().catch(()=>{}); if (!location || hop===4) throw new Error("redirect_failed"); current=new URL(location,current); continue; }
+    if (res.status >= 300 && res.status < 400) { const location=res.headers.get("location"); void res.body?.cancel().catch(()=>{}); if (!location || hop===4) throw new Error("redirect_failed"); current=new URL(location,current); continue; }
     return { res, url: current };
   }
   throw new Error("redirect_failed");
@@ -38,8 +38,8 @@ export async function collectSite(requestedUrl: string, deadline: number): Promi
   while(queue.length && pages.length<MAX_PAGES && Date.now()<deadline && total<MAX_TOTAL) {
     const item=queue.shift()!; item.url.hash=""; if(seen.has(item.url.href)) continue; seen.add(item.url.href);
     try {
-      const {res,url} = await fetchPage(item.url,start,deadline); if (!res.ok || !/text\/html|application\/xhtml\+xml/i.test(res.headers.get("content-type") ?? "")) { await res.body?.cancel().catch(()=>{}); throw new Error("unreadable"); }
-      if(finalSeen.has(url.href)){await res.body?.cancel().catch(()=>{});continue;} finalSeen.add(url.href);
+      const {res,url} = await fetchPage(item.url,start,deadline); if (!res.ok || !/text\/html|application\/xhtml\+xml/i.test(res.headers.get("content-type") ?? "")) { void res.body?.cancel().catch(()=>{}); throw new Error("unreadable"); }
+      if(finalSeen.has(url.href)){void res.body?.cancel().catch(()=>{});continue;} finalSeen.add(url.href);
       if (pages.length===0) origin=url.origin;
       const body=await readBody(res,deadline); const links:URL[]=[]; const linkSet=new Set<string>(); let title="";
       sanitizeHtml(body.text,{allowedTags:["a"],allowedAttributes:{a:["href"]},transformTags:{a:(tag,attrs)=>{try{if(!attrs.href || !attrs.href.trim())return {tagName:tag,attribs:{}};const link=new URL(attrs.href,url);link.hash="";if(sameSite(start,link)&&!linkSet.has(link.href)&&links.length<100&&!/\.(?:pdf|jpg|png|zip|docx?)(?:$|\?)/i.test(link.pathname)){linkSet.add(link.href);links.push(link);}}catch{}return {tagName:tag,attribs:{}};}}});
@@ -49,7 +49,7 @@ export async function collectSite(requestedUrl: string, deadline: number): Promi
       pages.push({url:url.href,title,capturedAt,state:truncated?"truncated":"readable",retainedChars:usable.length});
       for(let offset=0;offset<usable.length;offset+=1000){const excerpt=usable.slice(offset,offset+1000); evidence.push({id:`text-${evidence.length+1}`,kind:"text",sourceUrl:url.href,title,capturedAt,excerpt,truncated});}
       if(item.depth<2){links.sort((a,b)=>score(a)-score(b)||a.href.localeCompare(b.href)); for(const link of links)if(score(link)<10&&!seen.has(link.href)&&!queued.has(link.href)&&queue.length<80){queued.add(link.href);queue.push({url:link,depth:item.depth+1});}}
-    } catch { pages.push({url:item.url.href,title:item.url.hostname,capturedAt:new Date().toISOString(),state:"unreadable",retainedChars:0}); }
+    } catch (err) { const e=(err && typeof err==="object"?err:{}) as {name?:unknown;code?:unknown;cause?:{code?:unknown}}; const code=typeof e.cause?.code==="string" && /^[A-Z0-9_]{1,32}$/.test(e.cause.code)?e.cause.code:"none"; console.warn("[positioning-collector]",JSON.stringify({errorClass:e.name==="TypeError"||e.name==="AbortError"?e.name:"Error",code})); pages.push({url:item.url.href,title:item.url.hostname,capturedAt:new Date().toISOString(),state:"unreadable",retainedChars:0}); }
   }
   if (Date.now()>=deadline) limitations.push("The collection time limit was reached, so some pages were not reviewed.");
   if (queue.length) limitations.push("The site was sampled within page and time limits; not every page was reviewed.");
@@ -57,6 +57,10 @@ export async function collectSite(requestedUrl: string, deadline: number): Promi
   if (pages.some(p=>p.state==="truncated")) limitations.push("Some page text was truncated.");
   return {requestedUrl,resolvedOrigin:origin,pages,evidence,limitations};
 }
+
+
+
+
 
 
 

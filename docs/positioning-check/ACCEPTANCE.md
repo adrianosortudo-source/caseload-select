@@ -1,9 +1,11 @@
 # Acceptance
-- Repository baseline/isolation: PASS. Canonical existing files preserved, feature branch baseline pushed.
-- Contract compile: UI has no TypeScript errors; full compile pending backend quota narrowing correction.
-- Interface fixture browser checks: RUNNING. Evidence, keyboard, clipboard, partial/failure, full usable width and seven viewports.
-- Real service report, renderer, distributed quotas and costs: NOT RUN; Phase 0/2 incomplete.
-- Independent factual/rubric corpus evaluation: NOT RUN.
-- Independent rendered copy, contrast and brand acceptance: NOT RUN.
-- Required CI and deployed preview smoke: NOT RUN.
-No fixture or source-only result counts as live output or visual approval.
+- Repository baseline/isolation: PASS; canonical files preserved. Draft PR472, latest pushed checkpoint fb099259a.
+- Backend focused checks:22/22 PASS as reported by Terra (17 quota/validator/capture and5collector); final CI required.
+- Required CI at fb099: Vercel preview build, ESLint, full Vitest and several regression jobs pass. CI TypeScript fails only collector test Evidence-union narrowing, being corrected. Final current-head CI required.
+- Local fixture browser batch:4/10 PASS,6/10 FAIL. Evidence/keyboard/clipboard, provider failure and1440/1024 full matrix passed. Partial selector ambiguity, mobile single-word endings, and machine teardown/I/O failures recorded. No global visual pass claimed.
+- Confirmed CTA contrast defect corrected in scoped anchor selector. Computed light/dark contrast assertion and crop screenshots added; cloud verification pending.
+- Local screenshots preserved: D:\00_Work\01_CaseLoad_Select\05_Product\Planning\Positioning_Diagnostic\ui-evidence\batch-1.
+- One scoped CI browser job now owns full seven-width/all-direction/partial/error confirmation, plus light/dark CTA contrast and artifacts.
+- Real new-service reports/limiter/cost verification: coordinator owned, pending report.
+- Independent factual corpus and final rendered/contrast/brand acceptance: NOT COMPLETE.
+- No fixture/source-only result counts as live output or visual approval.

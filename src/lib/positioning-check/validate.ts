@@ -7,6 +7,8 @@ const hasIds = (ids: unknown, known: Map<string, Evidence>, allowEmpty = false):
 /** Validate model output against collector-owned evidence. Traceability is not proof of semantic support. */
 export function validateAnalysis(raw: unknown, evidence: Evidence[], substantivePages?: number): string[] {
   const errors: string[] = [];
+  const hasEmDash=(v:unknown):boolean => typeof v === "string" ? v.includes("—") : Array.isArray(v) ? v.some(hasEmDash) : isRecord(v) ? Object.values(v).some(hasEmDash) : false;
+  if(hasEmDash(raw)) errors.push("em_dash");
   if (!isRecord(raw)) return ["analysis_not_object"];
   const known = new Map(evidence.map(item => [item.id, item]));
   if (known.size !== evidence.length) errors.push("duplicate_evidence");
@@ -50,6 +52,7 @@ export function validateAnalysis(raw: unknown, evidence: Evidence[], substantive
   return [...new Set(errors)];
 }
 export type AnalysisParts = Pick<PositioningResult, "part1" | "part2">;
+
 
 
 
