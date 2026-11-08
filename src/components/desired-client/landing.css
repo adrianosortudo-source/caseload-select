@@ -290,3 +290,4 @@
 
 /* Keep the confidentiality reminder readable in the public wrapper's narrow frame. */
 .dc-landing .closing p{text-wrap:pretty}
+@media(max-width:340px){.dc-landing .closing{padding-inline:16px}}
