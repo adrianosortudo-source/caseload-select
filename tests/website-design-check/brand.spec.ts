@@ -97,10 +97,13 @@ for(const width of WIDTHS){
     let release!:()=>void;
     const wait=new Promise<void>(resolve=>{release=resolve});
     await page.route("**/api/tools/website-design-check",async route=>{await wait;await route.fulfill({status:200,contentType:"application/json",body:JSON.stringify(fixture)})});
-    await page.getByRole("button",{name:"Check my site",exact:true}).click();
-    await expect(page.getByRole("status")).toBeVisible();
-    await brandGates(page);
-    release();
+    try {
+      await page.getByRole("button",{name:"Check my site",exact:true}).click();
+      await expect(page.getByRole("status")).toBeVisible();
+      await brandGates(page);
+    } finally {
+      release();
+    }
     await expect(page.locator(".dc-report-domain")).toHaveText(fixture.domain);
     await brandGates(page);
     const closedText=await page.locator(".dc-report").innerText();
@@ -147,8 +150,12 @@ for(const width of WIDTHS){
   test(`embedded report in host at ${width}px`,async({page})=>{
     await page.setViewportSize({width,height:900});
     await page.route("**/api/tools/website-design-check",route=>route.fulfill({status:200,contentType:"application/json",body:JSON.stringify(fixture)}));
-    await page.goto("/tools/website-design-check");
-    await page.evaluate(() => {document.body.innerHTML="<iframe title=\"Embedded checker\" style=\"width:100%;height:800px;border:0\" src=\"/tools/website-design-check?embed=1\"></iframe>"});
+    await page.route("**/website-check-test-host", route => route.fulfill({
+      status: 200,
+      contentType: "text/html",
+      body: '<!doctype html><html><head><meta name="viewport" content="width=device-width, initial-scale=1"><style>body{margin:0}</style></head><body><iframe title="Embedded checker" style="width:100%;height:800px;border:0" src="/tools/website-design-check?embed=1"></iframe></body></html>',
+    }));
+    await page.goto("/website-check-test-host");
     const frame=page.frameLocator('iframe[title="Embedded checker"]');
     await frame.getByLabel("Public website URL").fill("synthetic-fixture.example");
     await frame.getByRole("button",{name:"Check my site",exact:true}).click();
