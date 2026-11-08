@@ -7,9 +7,8 @@ const { pathToRegexp } = loadModule("next/dist/compiled/path-to-regexp") as {
   pathToRegexp: (source: string) => RegExp;
 };
 
-const EMBED_PATH = "/tools/desired-client-matter";
 
-describe("Desired Client frame security headers", () => {
+describe.each(["/tools/desired-client-matter", "/tools/best-cases-profile"])("%s frame security headers", (EMBED_PATH) => {
   it("uses scoped embed headers only for the exact route and strict denial for siblings and descendants", async () => {
     const rules = await nextConfig.headers!();
     const embedRule = rules.find((rule) => rule.source === EMBED_PATH);

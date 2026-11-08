@@ -10,7 +10,7 @@ export const STAGE_DEFINITIONS: readonly StageDefinition[] = [
   { id: 4, label: "4 Firm fit", heading: "Why might this client choose your firm?", explanation: "Consider what this client values, which firm strength matters to them, and what experience or evidence supports that strength. It is fine if you are still finding out." },
   { id: 5, label: "5 Matter signals", heading: "What would help you recognize this matter?", explanation: "Describe visible circumstances that distinguish this work and merit a closer look. These are prompts for lawyer review, not automatic acceptance rules." },
   { id: 6, label: "6 Evidence", heading: "Where have these clients come from, and what do you know?", explanation: "Use enquiries, retained matters, referrals, repeat clients or other experience. Mark estimates and unknowns clearly; you do not need a campaign plan." },
-  { id: 7, label: "Review", heading: "Review your direction", explanation: "Your answers shape a provisional client-and-matter profile. Review the direction and the questions still to resolve before asking AI to create the blueprint." },
+  { id: 7, label: "Review", heading: "Review your direction", explanation: "Your answers shape a provisional client-and-matter profile. Review the direction and the questions still to resolve before asking AI to create the profile." },
 ];
 
 export const COMPARISON_STEPS = [

@@ -12,11 +12,11 @@ function fixture() {
   return {answers,saved};
 }
 
-describe("Desired Client Blueprint definition review",()=>{
+describe("Best Cases Profile definition review",()=>{
   it("keeps a saved report visible and shows server call usage after a failed regeneration",()=>{
     const {answers,saved}=fixture(),onRetry=vi.fn();
     const {container}=render(<BriefView saved={saved} answers={answers} dismissedCode={null} reviewed onReview={vi.fn()} onEdit={vi.fn()} onAnother={vi.fn()} onClear={vi.fn()} onRetry={onRetry} analysisError="unavailable" retryAllowed providerCallsUsed={2} providerCallLimit={3} storageWarning={false}/>);
-    expect(container.textContent).toContain("The saved blueprint and its review status remain available");
+    expect(container.textContent).toContain("The saved profile and its review status remain available");
     expect(container.textContent).toContain("Server generation calls used for this review: 2 of 3.");
     expect(container.querySelector('[data-ui-component-content="desired-client-blueprint"]')).toBeTruthy();
     fireEvent.click(screen.getByRole("button",{name:"Try again"}));

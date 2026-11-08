@@ -21,7 +21,7 @@ const decisionPathwayEntries = (view: ReturnType<typeof currentView>) => view.de
 ] as const : [];
 
 function currentView(saved: SavedBrief, answers: DesiredClientAnswers) {
-  if (!isCurrentBrief(saved.brief)) throw new Error("The saved blueprint uses the original report version.");
+  if (!isCurrentBrief(saved.brief)) throw new Error("The saved profile uses the original report version.");
   return buildBlueprintViewModel(saved.brief, answers, {
     mode: saved.mode,
     generatedAt: saved.generatedAt,
@@ -70,12 +70,13 @@ export function formatBriefText(saved: SavedBrief, answers: DesiredClientAnswers
   if (!isCurrentBrief(saved.brief)) return legacyText(saved.brief);
   const view = currentView(saved, answers);
   return [
+    "Best Cases Profile",
     view.title,
     view.status,
     view.evidenceStatus,
     `${view.modeLabel} · ${view.date}`,
     "",
-    "OUR DESIRED-CLIENT DEFINITION",
+    "OUR CLIENT AND MATTER DEFINITION",
     view.definition,
     ...(view.conditions.length ? ["", "CONDITIONS AND UNRESOLVED QUESTIONS", ...view.conditions.map((condition) => `- ${condition}`)] : []),
     "",
@@ -117,7 +118,8 @@ export function formatBriefMarkdown(saved: SavedBrief, answers: DesiredClientAns
     "",
   ]);
   return [
-    `# ${view.title}`,
+    "# Best Cases Profile",
+    `## ${view.title}`,
     "",
     `_${view.status} · ${view.evidenceStatus}_`,
     "",
@@ -223,9 +225,9 @@ export function formatBriefHtml(saved: SavedBrief, answers: DesiredClientAnswers
     const questions = !view.decisionPathway && view.openQuestions.length ? `<section class="open-questions"><h2>Points still to resolve</h2><ul>${view.openQuestions.map((item) => `<li>${escapeHtml(item.text)} <span class="evidence">${escapeHtml(EVIDENCE_BASIS_LABELS[item.evidence_basis])}</span></li>`).join("")}</ul></section>` : "";
     const conditions = view.conditions.length ? `<section class="conditions"><h2>Conditions and unresolved questions</h2><ul>${view.conditions.map((condition) => `<li>${escapeHtml(condition)}</li>`).join("")}</ul></section>` : "";
     const progress = `<section class="progress"><h2>Progress review</h2><dl>${[["Measure",view.progressReview.metric],["Target",view.progressReview.target],["Review period",view.progressReview.reviewPeriod],["Status",view.progressReview.status]].map(([label,value])=>`<div><dt>${label}</dt><dd>${escapeHtml(value)}</dd></div>`).join("")}</dl></section>`;
-    return `<header><p class="eyebrow">CASELOAD SELECT · DESIRED CLIENT &amp; MATTER BLUEPRINT</p><h1>${escapeHtml(view.title)}</h1><p class="meta">${escapeHtml(view.modeLabel)} · Created ${escapeHtml(view.date)}</p><p class="status"><strong>${escapeHtml(view.status)}</strong><span>${escapeHtml(view.evidenceStatus)}</span></p></header><main><section class="definition"><h2>Client definition</h2><p>${emphasizedSentence(view.definition, view.definitionComponents)}</p></section>${conditions}${progress}${decisionPathway}<div class="cards">${cards}</div>${questions}<p class="footnote">${escapeHtml(REPORT_FOOTNOTE_COPY)}</p><details class="supporting"><summary>Supporting answers and sources</summary>${sourceMarkup(saved, answers)}</details></main>`;
+    return `<header><p class="eyebrow">CASELOAD SELECT · BEST CASES PROFILE</p><h1>${escapeHtml(view.title)}</h1><p class="meta">${escapeHtml(view.modeLabel)} · Created ${escapeHtml(view.date)}</p><p class="status"><strong>${escapeHtml(view.status)}</strong><span>${escapeHtml(view.evidenceStatus)}</span></p></header><main><section class="definition"><h2>Client definition</h2><p>${emphasizedSentence(view.definition, view.definitionComponents)}</p></section>${conditions}${progress}${decisionPathway}<div class="cards">${cards}</div>${questions}<p class="footnote">${escapeHtml(REPORT_FOOTNOTE_COPY)}</p><details class="supporting"><summary>Supporting answers and sources</summary>${sourceMarkup(saved, answers)}</details></main>`;
   })();
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Desired Client Blueprint</title><!--${EXPORT_BRAND_LICENSES}--><style>${EXPORT_BRAND_FONTS}
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${legacy ? "Desired Client Blueprint · Original version" : "Best Cases Profile"}</title><!--${EXPORT_BRAND_LICENSES}--><style>${EXPORT_BRAND_FONTS}
     :root{color-scheme:light;--navy:#1e2f58;--ink:#0D1520;--muted:#40516D;--paper:#f4f3ef;--line:#d7d8dc;--accent:#C4B49A}*{box-sizing:border-box}body{margin:0;padding:2rem;background:var(--paper);color:var(--ink);font:16px/1.5 'DC DM Sans',Arial,sans-serif}.page{width:min(100%,1000px);margin:auto;padding:2.25rem;background:white;border:1px solid var(--line);border-top:1px solid var(--line);box-shadow:none}header{padding-bottom:1.25rem;border-bottom:1px solid var(--line)}.eyebrow{margin:0 0 .5rem;color:var(--navy);font-size:.72rem;font-weight:700;letter-spacing:.1em}.meta,.status span,.footnote{color:var(--muted);font-size:.9rem}h1,h2,h3,p{max-width:none}h1{margin:.15rem 0;font-size:2rem;line-height:1.16}h2{font-size:1.05rem;line-height:1.25}header .status{display:flex;flex-wrap:wrap;gap:.5rem 1rem;margin:.8rem 0 0}.status strong{color:var(--navy)}.definition{margin:1.25rem 0;padding:1rem 1.15rem;border-inline-start:0;background:var(--paper)}.definition h2{margin:0 0 .45rem;color:var(--navy);font-size:.78rem;letter-spacing:.06em;text-transform:uppercase}.definition p{margin:0;font-size:1.1rem;line-height:1.5}.definition strong{color:var(--navy)}.cards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.75rem}.card,.legacy-card{break-inside:avoid;padding:1rem;border:1px solid var(--line);background:white}.card-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:.5rem}.card h2,.legacy-card h2{margin:0;color:var(--navy)}.card p,.legacy-card p{margin:.6rem 0 0;overflow-wrap:anywhere}.claim{padding-top:.45rem;border-top:1px solid var(--line)}.claim:first-of-type{padding-top:0;border:0}.calculated{display:grid;gap:.25rem;margin-top:.5rem;padding-top:.5rem;border-top:1px solid var(--line)}.calculated small{color:var(--muted)}.opportunity-basis{font-size:.85rem}.evidence{display:inline-block;flex:none;padding:.12rem .45rem;border:1px solid #cbd2de;border-radius:0;color:var(--navy);font-size:.72rem;line-height:1.5}.open-questions{margin-top:1rem;padding:.9rem 1rem;background:var(--paper)}.open-questions h2{margin:0;color:var(--navy)}.open-questions ul{margin:.5rem 0 0;padding-left:1.2rem}.footnote{margin:1rem 0 0}.supporting{margin-top:1.25rem;padding-top:.75rem;border-top:1px solid var(--line)}.supporting summary{cursor:pointer;color:var(--navy);font-weight:700}.source-entry{margin:1rem 0}.source-entry h3{margin:0;font-size:.95rem}.source-entry p{margin:.25rem 0}.source-entry ul{margin:.25rem 0;padding-left:1.2rem}.legacy-card{margin:.75rem 0}.legacy-card .evidence{margin-top:.5rem}.legacy-card p+p{margin-top:.5rem}
     .decision-pathway{margin:1rem 0 1.25rem;padding:1rem;border-top:1px solid var(--line);background:var(--paper);break-inside:avoid}.decision-pathway-heading{display:flex;justify-content:space-between;gap:1rem;align-items:baseline}.decision-pathway-heading h2{margin:0;color:var(--navy)}.decision-pathway-heading span{color:var(--muted);font-size:.8rem}.decision-pathway-steps{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.5rem;margin-top:.7rem}.decision-pathway-steps article{padding:.65rem;border:1px solid var(--line);background:#fff}.decision-pathway-steps h3{margin:0;color:var(--navy);font-size:.8rem}.decision-pathway-steps p{margin:.35rem 0;font-size:.9rem}
     .conditions,.progress{display:grid;gap:.5rem;margin:.75rem 0;padding:.8rem 1rem;background:var(--paper)}.conditions{border-top:1px solid var(--line)}.conditions h2,.progress h2{margin:0;color:var(--navy)}.conditions ul{margin:0;padding-left:1.2rem}.conditions li{overflow-wrap:anywhere}.progress dl{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.5rem;margin:0}.progress dl>div{min-width:0;padding:.5rem;background:#fff}.progress dt{font-size:.78rem;font-weight:700;color:var(--muted)}.progress dd{margin:.2rem 0 0;overflow-wrap:anywhere}
@@ -243,15 +245,15 @@ export function formatBriefHtml(saved: SavedBrief, answers: DesiredClientAnswers
 }
 
 export function createHtmlDownload(saved: SavedBrief, answers: DesiredClientAnswers, now = new Date()) {
-  return { filename: `desired-client-blueprint-${stamp(now)}.html`, content: formatBriefHtml(saved, answers), mimeType: "text/html;charset=utf-8" };
+  return { filename: `best-cases-profile-${stamp(now)}.html`, content: formatBriefHtml(saved, answers), mimeType: "text/html;charset=utf-8" };
 }
 
 export function createMarkdownDownload(saved: SavedBrief, answers: DesiredClientAnswers, now = new Date()) {
-  return { filename: `desired-client-blueprint-supporting-detail-${stamp(now)}.md`, content: formatBriefMarkdown(saved, answers), mimeType: "text/markdown;charset=utf-8" };
+  return { filename: `best-cases-profile-supporting-detail-${stamp(now)}.md`, content: formatBriefMarkdown(saved, answers), mimeType: "text/markdown;charset=utf-8" };
 }
 
 export function createProfileDownload(saved: SavedBrief, answers: DesiredClientAnswers, now = new Date()) {
-  return { filename: `desired-client-blueprint-${stamp(now)}.txt`, content: formatBriefText(saved, answers), mimeType: "text/plain;charset=utf-8" };
+  return { filename: `best-cases-profile-${stamp(now)}.txt`, content: formatBriefText(saved, answers), mimeType: "text/plain;charset=utf-8" };
 }
 
 export function createAnswersDownload(answers: DesiredClientAnswers, now = new Date()) {
@@ -259,5 +261,5 @@ export function createAnswersDownload(answers: DesiredClientAnswers, now = new D
     const source = getSourceDetails(path, answers);
     return source.answer === null ? [] : [`- **${source.question}**: ${source.answer}`];
   });
-  return { filename: `desired-client-discovery-answers-${stamp(now)}.md`, mimeType: "text/markdown;charset=utf-8", content: ["# Desired Client Discovery Answers", "", "_Answer record only. A Desired Client Blueprint has not been generated._", "", `Exported: ${stamp(now)}`, "", ...rows, "", "This document records your answers. A Desired Client Blueprint has not been generated.", ""].join("\n") };
+  return { filename: `best-cases-profile-discovery-answers-${stamp(now)}.md`, mimeType: "text/markdown;charset=utf-8", content: ["# Best Cases Profile Discovery Answers", "", "_Answer record only. A Best Cases Profile has not been generated._", "", `Exported: ${stamp(now)}`, "", ...rows, "", "This document records your answers. A Best Cases Profile has not been generated.", ""].join("\n") };
 }
