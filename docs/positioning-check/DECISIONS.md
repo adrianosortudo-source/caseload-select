@@ -12,3 +12,6 @@
 - Nonimage serialized request cap 256 KiB. Up to eight pages, 48,000 retained characters; max 8000/page. Two PNGs maximum, 4 MiB each; desktop max1440x7800 and mobile max390x7800 (backend common maximum dimension1440x7800).
 - Total app deadline105s; collection envelope40s; first model call45s; second call only within remaining time. No infrastructure or provider expansion.
 - This replaces the provisional100/day atUSD0.10 before Gate0 acceptance. Live preview verification is still required.
+
+## Preview renderer correction
+The first new-route Gene Colman request returned422 before report generation; distributed quota access succeeded. The inherited Preview renderer URL pointed to an obsolete deployment. Coordinator added a branch-specific override to existing stable caseload-render.vercel.app; inherited token unchanged pending live verification. Production/global settings and other branches were untouched. This is a configuration correction, not a functional pass. If abandoning, remove the branch-specific override along with other feature-only Preview settings.

@@ -16,7 +16,7 @@ async function render(url:URL,deadline:number):Promise<{images:ImageInput[];scre
   const controller=new AbortController(), timer=setTimeout(()=>controller.abort(),Math.max(1,deadline-Date.now()));
   try {
     const response=await fetch(`${service.replace(/\/$/,"")}/api/render`,{method:"POST",headers:{"Content-Type":"application/json",Authorization:`Bearer ${token}`},body:JSON.stringify({url:url.href}),signal:controller.signal});
-    if(!response.ok || !response.body){console.warn("[positioning-render]",JSON.stringify({httpStatus:response.status}));throw new Error("renderer_unavailable");}
+    if(!response.ok || !response.body){console.warn("[positioning-render]",JSON.stringify({runtime:process.version,httpStatus:response.status}));throw new Error("renderer_unavailable");}
     const reader=response.body.getReader(); const chunks:Uint8Array[]=[];let size=0;
     try {for(;;){const part=await reader.read(); if(part.done)break;size+=part.value.byteLength;if(size>12*1024*1024)throw new Error("renderer_too_large");chunks.push(part.value);}} finally{void reader.cancel().catch(()=>{});}
     const data=JSON.parse(Buffer.concat(chunks).toString("utf8")) as {captures?:{viewport:string;finalUrl:string;screenshotPng:string;screenshotClippedFromPx:number|null;domSnapshot?:{authority?:{firmVoicedText?:string}}}[]};
@@ -25,20 +25,20 @@ async function render(url:URL,deadline:number):Promise<{images:ImageInput[];scre
     return {images,screenshots,evidence,renderedText};
   }finally{clearTimeout(timer);}
 }
-async function readRequest(req:Request):Promise<unknown> {
+async function readRequest(req:Request, deadline:number):Promise<unknown> {
   if (Number(req.headers.get("content-length") ?? "0") > 4096 || !req.body) throw new Error("invalid");
   const reader=req.body.getReader(); const chunks:Uint8Array[]=[]; let size=0;
-  try {for(;;){const part=await reader.read();if(part.done)break;size+=part.value.length;if(size>3072)throw new Error("invalid");chunks.push(part.value);}}
+  try {for(;;){const left=Math.min(5000,deadline-Date.now());if(left<=0)throw new Error("invalid");let timer:ReturnType<typeof setTimeout>|undefined;const part=await Promise.race([reader.read(),new Promise<never>((_,reject)=>{timer=setTimeout(()=>reject(new Error("invalid")),left);})]).finally(()=>{if(timer)clearTimeout(timer);});if(part.done)break;size+=part.value.length;if(size>4096)throw new Error("invalid");chunks.push(part.value);}}
   finally {void reader.cancel().catch(()=>{});}
   return JSON.parse(Buffer.concat(chunks).toString("utf8"));
 }
 export async function POST(req:NextRequest){
   const start=Date.now(), deadline=start+105000;
   if(process.env.POSITIONING_CHECK_ENABLED!=="true")return failure("feature_disabled","This tool is temporarily unavailable.",503,true);
-  let url:URL;try{const body=await readRequest(req) as {url?:unknown};if(typeof body.url!=="string"||body.url.length>2048)throw new Error();url=normalized(body.url.trim());}catch{return failure("invalid_url","Enter a valid public HTTPS website address.",400,false);}
+  let url:URL;try{const body=await readRequest(req,deadline) as {url?:unknown};if(typeof body.url!=="string"||body.url.length>2048)throw new Error();url=normalized(body.url.trim());}catch{return failure("invalid_url","Enter a valid public HTTPS website address.",400,false);}
   const reservation=await reserveAnalysis(ipFromRequest(req));if(reservation.status==="unavailable")return failure("provider_unavailable","The tool is temporarily unavailable. Please try again later.",503,true);if(reservation.status!=="ok")return failure("rate_limited",reservation.reason==="daily"?"The daily review capacity has been reached. Please try again later.":reservation.reason==="active"?"A review is already in progress from this network. Please try again shortly.":"This network has reached its hourly review limit. Shared offices may share a limit. Please try again later.",429,true);
   try {
-    const [site,visual]=await Promise.all([collectSite(url.href,start+40000),render(url,start+40000).catch((err:unknown)=>{const e=(err && typeof err==="object"?err:{}) as {name?:unknown;cause?:{code?:unknown}};const code=typeof e.cause?.code==="string" && /^[A-Z0-9_]{1,32}$/.test(e.cause.code)?e.cause.code:"none";console.warn("[positioning-render]",JSON.stringify({errorClass:e.name==="TypeError"||e.name==="AbortError"?e.name:"Error",code}));return null;})]);
+    const [site,visual]=await Promise.all([collectSite(url.href,start+40000),render(url,start+40000).catch((err:unknown)=>{const e=(err && typeof err==="object"?err:{}) as {name?:unknown;cause?:{code?:unknown}};const code=typeof e.cause?.code==="string" && /^[A-Z0-9_]{1,32}$/.test(e.cause.code)?e.cause.code:"none";console.warn("[positioning-render]",JSON.stringify({runtime:process.version,errorClass:e.name==="TypeError"||e.name==="AbortError"?e.name:"Error",code}));return null;})]);
     const primary=site.pages[0]; if(primary && primary.retainedChars<150 && visual && visual.renderedText.length>=150){ const available=Math.max(0,48000-site.pages.reduce((n,p)=>n+p.retainedChars,0)); const t=visual.renderedText.slice(0,Math.min(8000,available)); primary.retainedChars=t.length; primary.state="readable"; for(let i=0;i<t.length;i+=1000)site.evidence.push({id:`rendered-text-${i/1000+1}`,kind:"text",sourceUrl:primary.url,title:primary.title,capturedAt:new Date().toISOString(),excerpt:t.slice(i,i+1000),truncated:t.length===8000}); site.limitations.push("The submitted page text was taken from a rendered snapshot; other page text may be incomplete."); } if(!primary||primary.retainedChars<150)return failure("blocked_or_unreadable","We could not read enough of the submitted page to assess it. Please check the address and try again.",422,true);
     const screenshots=visual?.screenshots??(["desktop","mobile"] as const).map(viewport=>({id:`screenshot-${viewport}`,viewport,state:"unavailable" as const,analyzed:false,clippedFromPx:null}));
     if(!visual||screenshots.some(s=>!s.analyzed))site.limitations.push("Some or all homepage images could not be assessed.");
@@ -49,6 +49,8 @@ export async function POST(req:NextRequest){
     return NextResponse.json({status:partial?"partial":"success",metadata:{schemaVersion:"1",rubricVersion:RUBRIC_VERSION,promptVersion:PROMPT_VERSION,model:MODEL,generatedAt:new Date().toISOString(),requestedUrl:url.href,resolvedOrigin:site.resolvedOrigin,aiGenerated:true},coverage:{pages:site.pages,screenshots,limitations:site.limitations},evidence,...result.analysis},{headers:{"Cache-Control":"no-store"}});
   }catch(e){const code=e instanceof Error?e.message:"provider_unavailable";console.warn("[positioning-check]",JSON.stringify({errorCode:code==="timeout"||code==="invalid_analysis"||code==="review_limit"?code:"provider_unavailable",durationMs:Date.now()-start}));if(code==="review_limit")return failure("blocked_or_unreadable","This website exceeds the review size limit. Please try a more focused page.",422,true);if(code==="timeout")return failure("timeout","The review timed out. Please try again.",504,true);if(code==="invalid_analysis")return failure("invalid_analysis","We could not produce a reliable report. Please try again.",502,true);return failure("provider_unavailable","The review is temporarily unavailable. Please try again later.",503,true);}finally{await releaseWithinDeadline(reservation.release,deadline);}
 }
+
+
 
 
 

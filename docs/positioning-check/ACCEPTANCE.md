@@ -9,3 +9,5 @@
 - Real new-service reports/limiter/cost verification: coordinator owned, pending report.
 - Independent factual corpus and final rendered/contrast/brand acceptance: NOT COMPLETE.
 - No fixture/source-only result counts as live output or visual approval.
+- Latest focused backend total26/26 (prior22 plus4 provider tests), reported by Terra. Whole-head CI pending.
+- Scoped interface mechanical detector: no findings. This does not replace rendered acceptance.

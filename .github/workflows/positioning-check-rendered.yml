@@ -21,9 +21,11 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
           cache: npm
       - run: npm ci
+      - name: Verify bounded backend
+        run: npx vitest run src/lib/positioning-check/__tests__
       - name: Install fixed Chromium
         run: npx playwright install --with-deps chromium
       - name: Verify positioning interaction, copy and contrast
@@ -36,4 +38,5 @@ jobs:
           path: test-results/positioning-check/**
           if-no-files-found: ignore
           retention-days: 7
+
 
