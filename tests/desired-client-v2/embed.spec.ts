@@ -2,7 +2,7 @@ import { expect, test, type Page, type Frame } from '@playwright/test';
 import { capture, layout, settled } from './helpers';
 
 test.beforeEach(async ({ page }) => {
-  await page.route('**/api/tools/desired-client-matter/analyze', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ enabled: false }) }));
+  await page.route('**/api/tools/best-cases-profile/analyze', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ enabled: false }) }));
 });
 
 async function settleEmbedded(page: Page, child: Frame) {
@@ -17,10 +17,10 @@ async function settleEmbedded(page: Page, child: Frame) {
 
 test('iframe uses verified messages, grows and shrinks, and preserves the public wrapper', async ({ page }) => {
   const appOrigin = new URL(test.info().project.use.baseURL ?? 'http://localhost:3301').origin;
-  await page.goto('http://localhost:3300/tools/desired-client-matter.html');
+  await page.goto('http://localhost:3300/tools/best-cases-profile.html');
   const frame = page.frameLocator('iframe[data-desired-client-frame]');
   await expect(frame.getByRole('button', { name: 'Build my profile', exact: true }).first()).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Open the tool in its own window', exact: true })).toHaveAttribute('href', appOrigin + '/tools/desired-client-matter');
+  await expect(page.getByRole('link', { name: 'Open the tool in its own window', exact: true })).toHaveAttribute('href', appOrigin + '/tools/best-cases-profile');
   const child = page.frames().find(f => f.url().startsWith(appOrigin + '/'));
   expect(child).toBeTruthy();
   const dimensions = async () => page.locator('iframe[data-desired-client-frame]').evaluate(el => ({ height: el.getBoundingClientRect().height, style: el.style.height }));
@@ -58,7 +58,7 @@ for (const width of [1440, 1024, 768, 640, 390, 375, 320]) {
   test('embedded welcome reflows at ' + width + 'px', async ({ page }) => {
     const appOrigin = new URL(test.info().project.use.baseURL ?? 'http://localhost:3301').origin;
     await page.setViewportSize({ width, height: 1000 });
-    await page.goto('http://localhost:3300/tools/desired-client-matter.html');
+    await page.goto('http://localhost:3300/tools/best-cases-profile.html');
     const frame = page.frameLocator('iframe[data-desired-client-frame]');
     await expect(frame.getByRole('button', { name: 'Build my profile', exact: true }).first()).toBeVisible();
     const child = page.frames().find(f => f.url().startsWith(appOrigin + '/'))!;

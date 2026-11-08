@@ -3,7 +3,7 @@ import path from 'node:path';
 import base from './playwright.desired-client.config';
 
 const siteRoot = process.env.DESIRED_CLIENT_SITE_WORKTREE
-  ?? path.resolve('../../caseloadselect-site-worktrees/desired-client-v2');
+  ?? path.resolve('../../caseloadselect-site-worktrees/best-cases-profile-rename');
 export default defineConfig({
   ...base,
   testMatch: process.env.DESIRED_CLIENT_FULL_REVIEW === '1' ? '**/*.spec.ts' : 'embed.spec.ts',
@@ -14,7 +14,7 @@ export default defineConfig({
     {
       command: 'node tests/desired-client-v2-wrapper-fixture/server.mjs',
       cwd: siteRoot,
-      url: 'http://localhost:3300/tools/desired-client-matter.html',
+      url: 'http://localhost:3300/tools/best-cases-profile.html',
       reuseExistingServer: false,
       timeout: 30_000,
     },

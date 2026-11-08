@@ -270,6 +270,10 @@ const nextConfig: NextConfig = {
         headers: toolsEmbedSecurityHeaders,
       },
       {
+        source: "/tools/best-cases-profile",
+        headers: toolsEmbedSecurityHeaders,
+      },
+      {
         // Catch-all for EVERYTHING that is NOT a widget or a tools-embed
         // route. Negative lookahead is required here because Next.js
         // headers() MERGES headers from every matching rule rather than
@@ -278,7 +282,7 @@ const nextConfig: NextConfig = {
         // both their embeddable set AND the strict main-app set, and the
         // latter's X-Frame-Options: DENY would block iframe embedding.
         source:
-          "/((?!widget/|widget-public/|tools/seo-check|tools/firm-voice-builder|tools/start-a-conversation|tools/website-design-check|tools/why-your-firm|tools/desired-client-matter/?$|screen-demo).*)",
+          "/((?!widget/|widget-public/|tools/seo-check|tools/firm-voice-builder|tools/start-a-conversation|tools/website-design-check|tools/why-your-firm|tools/desired-client-matter/?$|tools/best-cases-profile/?$|screen-demo).*)",
         headers: mainSecurityHeaders,
       },
     ];

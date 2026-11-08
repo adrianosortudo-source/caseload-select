@@ -6,6 +6,7 @@ on:
       - 'src/components/desired-client/**'
       - 'src/lib/desired-client/**'
       - 'src/app/tools/desired-client-matter/**'
+      - 'src/app/tools/best-cases-profile/**'
       - 'src/app/api/tools/desired-client-matter/**'
       - 'src/lib/rate-limit.ts'
       - 'next.config.ts'
