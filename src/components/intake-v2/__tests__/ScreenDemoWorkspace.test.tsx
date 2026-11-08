@@ -30,7 +30,7 @@ describe("current SCREEN workspace", () => {
   });
   it("keeps live success, no-call outcomes, guided mode and provider failure distinct", () => {
     const view: ScreenDemoView = {stage:"kickoff",state:null,currentQuestion:null,report:null,runtime:"demo-live-ai",extraction:{status:"not-requested"}};
-    expect(demoExtractionLabel({...view,extraction:{status:"live"}})).toContain("completed the extraction");
+    expect(demoExtractionLabel({...view,extraction:{status:"live"}})).toContain("Live AI read the description");
     expect(demoExtractionLabel({...view,extraction:{status:"fallback"}})).toContain("AI is unavailable");
     expect(demoExtractionLabel({...view,extraction:{status:"not-needed"}})).toContain("was not needed");
     expect(demoExtractionLabel({...view,runtime:"demo"})).toContain("AI is not being called");
