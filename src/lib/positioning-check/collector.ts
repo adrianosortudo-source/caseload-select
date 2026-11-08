@@ -16,7 +16,7 @@ async function readBody(res: Response, deadline: number): Promise<{text:string; 
     let timer: ReturnType<typeof setTimeout> | undefined;
     const item = await Promise.race([reader.read(), new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error("collection_timeout")), ms); })]).finally(() => { if (timer) clearTimeout(timer); });
     if (item.done) break;
-    size += item.value.byteLength; if (size > MAX_BODY) { truncated = true; break; }
+    size += item.value.byteLength; if (size > MAX_BODY) { const allowed=MAX_BODY-(size-item.value.byteLength); if(allowed>0)chunks.push(item.value.subarray(0,allowed)); truncated = true; break; }
     chunks.push(item.value);
   } } finally { void reader.cancel().catch(() => {}); }
   return { text: Buffer.concat(chunks).toString("utf8"), truncated };
@@ -47,7 +47,7 @@ export async function collectSite(requestedUrl: string, deadline: number): Promi
       const cleaned=sanitizeHtml(body.text,{allowedTags:["h1","h2","h3","h4","p","li","title","br"],allowedAttributes:{},nonTextTags:["script","style","textarea","option","noscript","nav","footer","form","svg","iframe"]});
       const match=cleaned.match(/<title[^>]*>([\s\S]*?)<\/title>/i); title=(match?.[1]??url.hostname).replace(/<[^>]*>/g,"").trim().slice(0,200);
       const text=decodeHtmlEntities(sanitizeHtml(cleaned.replace(/<\/(?:h[1-4]|p|li|title)>|<br\s*\/?\s*>/gi,"$& "),{allowedTags:[],allowedAttributes:{}})).replace(/\s+/g," ").trim(); if(text.length<2000 && /verify (?:you are|you're) human|checking your browser|enable javascript and cookies|just a moment\.\.\.|access denied/i.test(text))throw new Error("challenge"); const usable=text.slice(0,Math.min(MAX_PAGE,MAX_TOTAL-total)); total+=usable.length; const truncated=body.truncated || usable.length<text.length; const capturedAt=new Date().toISOString();
-      pages.push({url:url.href,title,capturedAt,state:truncated?"truncated":"readable",retainedChars:usable.length});
+      pages.push({url:url.href,title,capturedAt,state:usable.length===0?"unreadable":truncated?"truncated":"readable",retainedChars:usable.length});
       for(let offset=0;offset<usable.length;offset+=1000){const excerpt=usable.slice(offset,offset+1000); evidence.push({id:`text-${evidence.length+1}`,kind:"text",sourceUrl:url.href,title,capturedAt,excerpt,truncated});}
       if(item.depth<2){links.sort((a,b)=>score(a)-score(b)||a.href.localeCompare(b.href)); for(const link of links)if(score(link)<10&&!seen.has(link.href)&&!queued.has(link.href)&&queue.length<80){queued.add(link.href);queue.push({url:link,depth:item.depth+1});}}
     } catch (err) { const e=(err && typeof err==="object"?err:{}) as {name?:unknown;code?:unknown;cause?:{code?:unknown}}; const code=typeof e.cause?.code==="string" && /^[A-Z0-9_]{1,32}$/.test(e.cause.code)?e.cause.code:"none"; console.warn("[positioning-collector]",JSON.stringify({runtime:process.version,errorClass:e.name==="TypeError"||e.name==="AbortError"?e.name:"Error",code})); pages.push({url:item.url.href,title:item.url.hostname,capturedAt:new Date().toISOString(),state:"unreadable",retainedChars:0}); }
@@ -58,6 +58,8 @@ export async function collectSite(requestedUrl: string, deadline: number): Promi
   if (pages.some(p=>p.state==="truncated")) limitations.push("Some page text was truncated.");
   return {requestedUrl,resolvedOrigin:origin,pages,evidence,limitations};
 }
+
+
 
 
 

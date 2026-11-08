@@ -1,7 +1,7 @@
 import type { Evidence } from "./types";
-const quoteParts=/(“[^”]*”|"[^"]*")/g;
+const quoteParts=/(“[^”]*”|"[^"]*"|(?<![\p{L}\p{N}])[\x27‘](?:[^\x27‘’]|(?<=[\p{L}\p{N}])[\x27’](?=[\p{L}\p{N}]))+[\x27’](?![\p{L}\p{N}]))/gu;
 function sourceQuote(part:string,evidence:Evidence[]):boolean {
-  if(!(part.startsWith("“")&&part.endsWith("”")) && !(part.startsWith("\"")&&part.endsWith("\"")))return false;
+  if(!(part.startsWith("“")&&part.endsWith("”")) && !(part.startsWith("\"")&&part.endsWith("\"")) && !((part.startsWith("'")||part.startsWith("‘"))&&(part.endsWith("'")||part.endsWith("’"))))return false;
   const inner=part.slice(1,-1);return evidence.some(e=>e.kind==="text"&&e.excerpt.includes(inner));
 }
 /** Normalize authored copy only; exact quotes present in collected text remain verbatim. */

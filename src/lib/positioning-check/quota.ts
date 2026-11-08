@@ -14,7 +14,7 @@ async function reserveInternal(identity:string):Promise<{status:"ok"; release:()
     const locked=await redis.set(lock,owner,{nx:true,ex:120}); if(locked!=="OK")return {status:"limited",reason:"active"}; ownsLock=true;
     const individual=new Ratelimit({redis,limiter:Ratelimit.slidingWindow(3,"1 h"),prefix:"positioning:hour",analytics:false});
     const hourly=await individual.limit(hash); if(!hourly.success){await release();return {status:"limited",reason:"hourly"};}
-    const daily=new Ratelimit({redis,limiter:Ratelimit.fixedWindow(40,"1 d"),prefix:"positioning:day",analytics:false});
+    const daily=new Ratelimit({redis,limiter:Ratelimit.fixedWindow(8,"1 d"),prefix:"positioning:day",analytics:false});
     const global=await daily.limit("global"); if(!global.success){await release();return {status:"limited",reason:"daily"};}
     return {status:"ok",release};
   } catch {if(ownsLock)void release();return {status:"unavailable"};}
@@ -43,3 +43,4 @@ export async function releaseWithinDeadline(release:()=>Promise<void>,deadline:n
   try{await Promise.race([cleanup,new Promise<void>(resolve=>{timer=setTimeout(resolve,remaining);})]);}
   finally{if(timer)clearTimeout(timer);}
 }
+

@@ -23,6 +23,8 @@ describe("bounded positioning collection",()=>{
   });
   it("caps pages and retained text",async()=>{const links=Array.from({length:20},(_,i)=>`<a href="/about-${i}">About</a>`).join("");fetchOne.mockImplementation(async()=>html(`<nav>${links}</nav><p>${"a".repeat(12000)}</p>`));const r=await collectSite("https://example.com/",Date.now()+5000);expect(r.pages.length).toBeLessThanOrEqual(8);expect(r.pages.reduce((n,p)=>n+p.retainedChars,0)).toBeLessThanOrEqual(48000);expect(r.pages.every(p=>p.retainedChars<=8000)).toBe(true);expect(r.pages.some(p=>p.state==="truncated")).toBe(true);});
   it("caps oversized response bodies",async()=>{fetchOne.mockImplementation(async()=>html(`<p>${"a".repeat(1100000)}</p>`));const r=await collectSite("https://example.com/",Date.now()+5000);expect(r.pages[0].retainedChars).toBeLessThanOrEqual(8000);expect(r.pages[0].state).toBe("truncated");});
+  it("marks empty text unreadable",async()=>{fetchOne.mockImplementation(async()=>html("<html><body></body></html>"));const r=await collectSite("https://example.com/",Date.now()+5000);expect(r.pages[0].state).toBe("unreadable");expect(r.pages[0].retainedChars).toBe(0);});
+  it("stops at eight pages even when text is short",async()=>{const links=Array.from({length:20},(_,i)=>`<a href="/about-${i}">About</a>`).join("");fetchOne.mockImplementation(async()=>html(`<nav>${links}</nav><p>Useful short page text.</p>`));const r=await collectSite("https://example.com/",Date.now()+5000);expect(r.pages).toHaveLength(8);});
   it("marks HTTP 200 challenge pages unreadable",async()=>{
     fetchOne.mockResolvedValue(html("<title>Just a moment...</title><p>Verify you are human before continuing</p>"));
     const result=await collectSite("https://example.com/",Date.now()+5000);
@@ -40,6 +42,7 @@ describe("bounded positioning collection",()=>{
     expect(fetchOne).toHaveBeenCalledTimes(1);expect(result.pages[0].state).toBe("unreadable");
   });
 });
+
 
 
 

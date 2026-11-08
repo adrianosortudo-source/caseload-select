@@ -15,3 +15,6 @@ Updated2026-11-08. Gates0 and1 accepted:8/28 units. No later gate is marked comp
 
 ## Still required
 Actual new-route end-to-end report, remaining corpus/held-out checks, security matrix reconciliation, final copy acceptance, independent review of corrected artifacts and all required current-head CI. No source-only or offline result counts as live delivery. No production release or merge is authorized.
+- Hosted cc9 failure case: https://127.0.0.1 rejected as an invalid publicHTTPS address; focused error heading, no retry, no report; rejected before quota/provider.
+- cc9 real-Postgres required job128802533770 completedSUCCESS at17:31:45UTC (started17:14:48), including migrations, database/contracts, rendered checks and cleanup. It was running, not waiting for approval.
+- Selected3.8/v6 backend snapshot: combined focused52/52 across six suites; subsequent validator/Gemini25/25 after word-count feedback. Latest current-head CI must confirm the integrated source.
