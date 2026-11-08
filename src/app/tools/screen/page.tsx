@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { ScreenDemoWorkspace } from "@/components/intake-v2/ScreenDemoWorkspace";
+import { ProspectDemoClient } from "@/components/prospect-demo/ProspectDemoClient";
 
 export const metadata: Metadata = {
   title: "SCREEN Demo · CaseLoad Select",
@@ -9,5 +9,5 @@ export const metadata: Metadata = {
 
 export default async function ScreenToolPage({ searchParams }: { searchParams: Promise<{ embed?: string }> }) {
   const { embed } = await searchParams;
-  return <ScreenDemoWorkspace embedded={embed === "1"} />;
+  return <ProspectDemoClient profileId="walker-law" sampleOnly embedded={embed === "1"} />;
 }

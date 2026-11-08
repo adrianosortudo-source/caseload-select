@@ -4,10 +4,12 @@ Status: preview only. PR #468 must remain unmerged until Adriano reviews the com
 
 ## Entry points
 
-- `/tools/screen`: canonical CaseLoad Select demonstration, defaults to live AI, with an explicit guided option. Static, no firm database lookup. `?embed=1` removes the extra logo in the website tools iframe.
+- **Canonical experience: prospect website presentation.** Adriano confirmed on November 8 that the version he tested is the widget placed on a prospect website, not the separate generic split workspace. `ProspectDemoClient` and `ProspectDemoPresentation` are the shared implementation.
+- `/admin/prospect-demos`: protected builder for saving, importing and positioning a prospect website screenshot. Existing browser-local profiles, screenshots and placements remain authoritative.
+- `/demo/prospect/[profileId]`: protected canonical presentation. Opens the profile’s Website view, with Lawyer view and Split view available without discarding answers. CaseLoad presentation defaults to live AI with an explicit guided option.
+- `/tools/screen`: public fixed-sample entry to that same canonical presentation, using the shipped Walker Law screenshot and fictional inquiries. It never reads or writes the operator’s browser-local profile library, performs no firm database lookup, and exposes no builder. `?embed=1` removes the extra logo and permits the parent frame to shrink after changing views. The website-snapshot illustration and fictional-policy limits are explicit; publication remains held for review.
 - `/screen-demo`: temporary redirect to the canonical route; incoming query values, including `embed`, are retained. Existing quiz and report subpaths remain available for previous bookmarks.
-- `/widget-v2/demo/[firmId]`: same workspace with the existing firm's colour and font theme. Only the CaseLoad-owned shell and report use CaseLoad branding. The demonstration geometry is square. No production intake route is changed.
-- `/demo/prospect/[profileId]`: existing prospect mockup, sharing the correction flow and production report projection.
+- `/widget-v2/demo/[firmId]`: retained secondary workspace with the existing firm's colour and font theme. Only the CaseLoad-owned shell and report use CaseLoad branding. The demonstration geometry is square. No production intake route is changed.
 - `/widget-public/demo`: separate deterministic demonstration, retained for existing consumers. It is not the canonical live-AI tool.
 
 ## Pinned authorities and boundaries
@@ -33,7 +35,7 @@ Verify live provider success on the actual branch preview, then complete the fic
 
 Run unit and component tests for report parity, provenance/escaping, corrections, no-write behavior, entry redirect and scoped frame headers, plus the existing brief/engine tests and repository CI. Verify 1440, 1024, 768, 640, 390, 375 and 320 CSS pixels, keyboard focus, contrast, font roles, reduced motion and expanded details. Test the real tools host and iframe through a local review harness pointing to the preview; do not change the live website for testing.
 
-Structural exceptions: `ScreenDemo.module.css` `.toolbarInner` and `.body` are page shells capped at 1280px, not copy measures. Report facts and controls remain full width inside each content inset. Shared client widget option grids are functional choice tracks; configured firm colours and fonts remain intentional client-theme exceptions on `/widget-v2/demo/[firmId]`. No general copy-width exception applies to the CaseLoad-owned demo.
+Structural exceptions: `ProspectDemoPresentation.module.css` `.presentationBody` and toolbar are structural page shells. The screenshot placement is a calibrated functional overlay; when its width would fall below 320px the intake uses the full available width below the website header. No arbitrary copy measure is applied. `ScreenDemo.module.css` `.toolbarInner` and `.body` are page shells capped at 1280px, not copy measures. Report facts and controls remain full width inside each content inset. Shared client widget option grids are functional choice tracks; configured firm colours and fonts remain intentional client-theme exceptions on `/widget-v2/demo/[firmId]`. No general copy-width exception applies to the CaseLoad-owned demo.
 
 Production publication remains PR-merge-only after explicit approval. No direct production deployment, migration, provider activation or live client submission belongs to this update.
 

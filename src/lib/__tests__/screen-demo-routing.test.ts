@@ -1,6 +1,14 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import config from "../../../next.config";
+import ScreenToolPage from "@/app/tools/screen/page";
+import { ProspectDemoClient } from "@/components/prospect-demo/ProspectDemoClient";
+vi.mock("@/components/prospect-demo/ProspectDemoClient", () => ({ ProspectDemoClient: () => null }));
 describe("current SCREEN entry point and embed boundary", () => {
+  it("uses the canonical prospect presentation as an isolated embeddable public sample", async () => {
+    const page = await ScreenToolPage({ searchParams: Promise.resolve({ embed: "1" }) });
+    expect(page.type).toBe(ProspectDemoClient);
+    expect(page.props).toEqual({ profileId: "walker-law", sampleOnly: true, embedded: true });
+  });
   it("routes the existing tools entry to the new demo while preserving old result URLs", async () => {
     const rules = await config.redirects!();
     const rule = rules.find((rule) => rule.source === "/screen-demo");

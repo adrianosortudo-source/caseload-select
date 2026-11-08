@@ -78,6 +78,7 @@ export interface ProspectDemoSessionContext {
 export interface ProspectDemoSessionAdapter {
   renderIntake(context: ProspectDemoSessionContext): ReactNode;
   renderReview(context: ProspectDemoSessionContext): ReactNode;
+  renderStatus?(context: ProspectDemoSessionContext): ReactNode;
   onRestart?(context: ProspectDemoSessionContext): void;
 }
 
