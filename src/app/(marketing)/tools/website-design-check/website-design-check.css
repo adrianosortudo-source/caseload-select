@@ -45,7 +45,7 @@
 .dc-categories-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 28px 40px; }
 .dc-cat-preview { min-width: 0; background: none; border: 0; border-radius: 0; padding: 0; }
 .dc-page .dc-cat-preview-name { width: 100%; margin: 0 0 8px; font-size: 18px; line-height: 1.4; font-weight: 700; }
-.dc-page .dc-cat-preview-desc { width: 100%; margin: 0; color: var(--text-muted); font-size: 15px; line-height: 1.65; }
+.dc-page .dc-cat-preview-desc { width: 100%; margin: 0; color: var(--text-muted); font-size: 16px; line-height: 1.65; }
 .dc-page .dc-disclaimer { width: 100%; max-width: none; margin: 0; padding: 24px 0 0; border: 0; border-top: 1px solid #bac3ce; border-radius: 0; background: transparent; }
 .dc-page .dc-disclaimer p { width: 100%; color: var(--text-muted); font-size: 14px; line-height: 1.65; }
 .dc-scanning-card { padding: 24px; background: var(--white); }
