@@ -11,6 +11,7 @@ Worktree:D:\00_Work\01_CaseLoad_Select\.worktrees\positioning-check-20261108
 
 Current configuration:DECISIONS.md. Evidence/limitations:CLOSEOUT.md and ACCEPTANCE.md. Historical decisions are explicitly superseded in DECISION_HISTORY.md.
 
-Required CI: a49 all checks passed, including real-Postgres job128814595920 at18:24:32UTC. Runtime2b0 UI/backend job passes; its new real-Postgres run is in progress. A following docs-only head may have queued checks/builds; do not describe all required current-head checks as passed. Private testing proceeds against the verified runtime preview. No merge or production approval question is requested now.
+Required CI: a49 non-UI checks passed; UI passed11/11 on2b0. This includes a49 real-Postgres job128814595920 at18:24:32UTC. Runtime2b0 UI/backend job passes; its new real-Postgres run is in progress. A following docs-only head may have queued checks/builds; do not describe all required current-head checks as passed. Private testing proceeds against the verified runtime preview. No merge or production approval question is requested now.
 
 Remaining work belongs to production approval/human validation, final current-head required-CI completion, and any owner feedback after private testing. No further code or UI tuning is planned in this session.
+
