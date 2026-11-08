@@ -47,7 +47,8 @@
     "agency-followup:manual": "node --import tsx scripts/agency-followup-walkthrough.ts --manual",
     "drg:deploy": "tsx scripts/drg-deploy/cli.ts",
     "drg:revise-checklists": "tsx scripts/drg-deploy/checklist-revision.ts",
-    "prospects:test-batch-pipeline": "node scripts/test-gta-prospect-batch-pipeline.mjs"
+    "prospects:test-batch-pipeline": "node scripts/test-gta-prospect-batch-pipeline.mjs",
+    "test:website-design-check-rendered": "playwright test --config=playwright.website-design-check.config.ts"
   },
   "dependencies": {
     "@fontsource-variable/caveat": "5.3.0",

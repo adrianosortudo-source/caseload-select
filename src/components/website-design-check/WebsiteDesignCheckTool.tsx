@@ -85,20 +85,24 @@ export default function WebsiteDesignCheckTool() {
   }
 
   return (
-    <div className="dc-tool">
+    <div className="dc-tool" aria-busy={step === "scanning"}>
       {step === "input" && (
-        <div className="dc-input-card">
-          <label className="dc-domain-label" htmlFor="dc-domain-input">Public website URL</label>
+        <div className="dc-input-card" data-ui-component-content="website-input">
+          <label className="dc-field-label" htmlFor="dc-domain-input">Public website URL</label>
           <div className="dc-input-row">
             <div className="dc-input-field-wrap">
-              <span className="dc-input-prefix">https://</span>
+              {!/^https?:\/\//i.test(domain.trim()) && <span className="dc-input-prefix" aria-hidden="true">https://</span>}
               <input
                 id="dc-domain-input"
                 type="text"
+                inputMode="url"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
+                aria-invalid={Boolean(error)}
+                aria-describedby={error ? "dc-domain-error dc-domain-hint" : "dc-domain-hint"}
                 className="dc-input-field"
                 placeholder="yourfirm.ca"
-                aria-invalid={Boolean(error)}
-                aria-describedby={error ? "dc-domain-error" : undefined}
                 value={domain}
                 onChange={(e) => {
                   setDomain(e.target.value);
@@ -108,12 +112,12 @@ export default function WebsiteDesignCheckTool() {
                 autoFocus
               />
             </div>
-            <button className="dc-scan-btn" onClick={handleScan}>
+            <button type="button" className="dc-scan-btn" onClick={handleScan}>
               Check my site
             </button>
           </div>
-          {error && <p id="dc-domain-error" className="dc-error" role="alert">{error}</p>}
-          <p className="dc-input-hint">
+          {error && <p id="dc-domain-error" className="dc-error" role="alert" data-ui-copy="supporting">{error}</p>}
+          <p id="dc-domain-hint" className="dc-input-hint" data-ui-copy="supporting">
             Renders your homepage in a real browser at mobile and desktop widths, then measures typography, contrast, spacing,
             forms, and authority signals against a fixed rubric.
           </p>
@@ -122,9 +126,9 @@ export default function WebsiteDesignCheckTool() {
 
       {step === "scanning" && (
         <div className="dc-scanning">
-          <div className="dc-scanning-card">
-            <div className="dc-spinner" />
-            <h3 className="dc-scanning-domain">{domain}</h3>
+          <div className="dc-scanning-card" role="status" aria-live="polite" data-ui-component-content="scan-status">
+            <div className="dc-spinner" aria-hidden="true" />
+            <h2 className="dc-scanning-domain">{domain}</h2>
             <div className="dc-phases">
               {SCAN_PHASES.map((phase, i) => (
                 <div key={i} className={`dc-phase ${i < scanPhase ? "dc-phase-done" : i === scanPhase ? "dc-phase-active" : "dc-phase-pending"}`}>
@@ -139,41 +143,7 @@ export default function WebsiteDesignCheckTool() {
 
       {step === "report" && result && <WebsiteDesignCheckReport result={result} onReset={handleReset} />}
 
-      <style>{`
-        .dc-tool { width: 100%; }
 
-        .dc-input-card { max-width: 640px; margin: 0 auto; background: var(--white); border: 1px solid var(--border); border-radius: var(--r-card); padding: var(--sp-6); }
-        .dc-domain-label { display: block; margin: 0 0 var(--sp-2); font-family: var(--font-body); font-size: 13px; font-weight: 600; color: var(--text); }
-        .dc-input-row { display: flex; gap: var(--sp-3); margin-bottom: var(--sp-3); }
-        .dc-input-field-wrap { flex: 1; display: flex; align-items: center; border: 1.5px solid var(--border); border-radius: var(--r-tight); overflow: hidden; background: var(--parchment); transition: border-color 0.2s; }
-        .dc-input-field-wrap:focus-within { border-color: var(--navy); }
-        .dc-input-prefix { font-family: var(--font-body); font-size: 14px; color: var(--text-muted); padding: 0 0 0 14px; user-select: none; }
-        .dc-input-field { flex: 1; font-family: var(--font-body); font-size: 15px; color: var(--text); padding: 14px 14px 14px 4px; border: none; outline: none; background: transparent; }
-        .dc-input-field::placeholder { color: var(--text-muted); opacity: 0.5; }
-        .dc-scan-btn { font-family: var(--font-display); font-size: 12px; font-weight: 700; letter-spacing: var(--ls-button); text-transform: uppercase; color: var(--white); background: var(--navy); border: none; padding: 14px 28px; border-radius: var(--r-tight); cursor: pointer; white-space: nowrap; transition: background 0.2s; }
-        .dc-scan-btn:hover { background: var(--navy-deep); }
-        .dc-error { font-size: 13px; color: var(--danger); margin: var(--sp-2) 0 0; }
-        .dc-input-hint { font-size: 12.5px; color: var(--text-muted); margin: var(--sp-3) 0 0; line-height: 1.55; }
-
-        .dc-scanning { max-width: 640px; margin: 0 auto; }
-        .dc-scanning-card { background: var(--white); border: 1px solid var(--border); border-radius: var(--r-card); padding: var(--sp-7); text-align: center; }
-        .dc-spinner { width: 40px; height: 40px; border: 3px solid var(--border); border-top-color: var(--navy); border-radius: 50%; margin: 0 auto var(--sp-5); animation: dc-spin 0.9s linear infinite; }
-        @keyframes dc-spin { to { transform: rotate(360deg); } }
-        .dc-scanning-domain { font-family: var(--font-display); font-size: 16px; font-weight: 700; color: var(--navy); margin: 0 0 var(--sp-6); }
-        .dc-phases { display: flex; flex-direction: column; gap: var(--sp-3); text-align: left; max-width: 380px; margin: 0 auto; }
-        .dc-phase { display: flex; align-items: center; gap: var(--sp-3); }
-        .dc-phase-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; background: var(--border); }
-        .dc-phase-done .dc-phase-dot { background: var(--navy); }
-        .dc-phase-active .dc-phase-dot { background: var(--stone-on-light); animation: dc-pulse 1s ease-in-out infinite; }
-        @keyframes dc-pulse { 50% { opacity: 0.4; } }
-        .dc-phase-label { font-size: 13px; color: var(--text-muted); }
-        .dc-phase-done .dc-phase-label { color: var(--text); }
-        .dc-phase-active .dc-phase-label { color: var(--navy); font-weight: 600; }
-
-        @media (max-width: 640px) {
-          .dc-input-row { flex-direction: column; }
-        }
-      `}</style>
     </div>
   );
 }
