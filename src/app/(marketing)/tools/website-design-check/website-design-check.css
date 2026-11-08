@@ -142,6 +142,10 @@
 .dc-page .dc-report-details ul { padding: 0; list-style: none; }
 .dc-page .dc-detail-scores > div { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; padding: 8px 0; }
 .dc-page .dc-detail-scores dd { text-align: right; }
+.dc-page .dc-detail-records > div { padding: 8px 0; }
+.dc-page .dc-detail-records dt { font-weight: 700; }
+.dc-page .dc-detail-unchecked dt { font-weight: 700; }
+.dc-page .dc-detail-unchecked dd { margin: 0 0 8px; width: 100%; }
 @media (max-width: 640px) {
   .dc-page .dc-main { padding-inline: 12px; }
   .dc-input-card, .dc-page .dc-report-details { padding-inline: 16px; }

@@ -58,7 +58,7 @@ async function brandGates(page: Page | Frame) {
         const current=lines[i].words, next=lines[i+1].words[0];
         const remaining=rect.right-current[current.length-1].right;
         const used=current[current.length-1].right-current[0].left;
-        if(used<rect.width*.75 && next.width+4<remaining) failures.push(`${copy.className}: avoidably short nonfinal line in ${copy.textContent}`);
+        if(used<rect.width*.75 && next.width+4<remaining) failures.push(`${copy.className}: avoidably short nonfinal line in ${copy.textContent} [width=${rect.width.toFixed(2)} used=${used.toFixed(2)} next=${next.text} nextWidth=${next.width.toFixed(2)} remaining=${remaining.toFixed(2)} font=${style.fontSize}/${style.fontWeight}/${style.fontFamily}]`);
       }
       let ancestor: HTMLElement | null=copy;
       let background="rgb(255, 255, 255)";
