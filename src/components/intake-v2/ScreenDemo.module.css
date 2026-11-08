@@ -156,3 +156,6 @@
 .brief :global(.reasoning-amount) dl { width: 100%; margin: 0; }
 .brief :global(.reasoning-amount) dt { font: 600 13px/1.5 var(--font-oxanium),sans-serif; color: #1e2f58; }
 .brief :global(.reasoning-amount) dd { width: 100%; margin: 8px 0 0; }
+
+.dataNotice { width: 100%; margin: 0 0 24px; color: #fff; font: 400 17px/1.6 "DM Sans Variable",sans-serif; text-wrap: pretty; }
+.widget [data-ui-component-content="demo-complete"] { align-items: stretch; text-align: left; }

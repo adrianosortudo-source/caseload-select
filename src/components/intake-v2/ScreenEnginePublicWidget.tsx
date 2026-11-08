@@ -734,7 +734,7 @@ export function ScreenEnginePublicWidget({
     );
     const doneBody = doneBodyTemplate.replace(/\{firmName\}/g, trimmedFirmName);
     const visibleDoneBody = isDemo
-      ? "The firm review brief is ready beside the intake. Nothing was saved or sent."
+      ? "The brief is ready. No lead was saved and no firm was contacted."
       : doneBody;
     // Translate the "submitted" sentinel; pass other reason strings
     // through verbatim (they are server-supplied and not user-facing
@@ -751,18 +751,18 @@ export function ScreenEnginePublicWidget({
         backLabel={backLabel}
         layout={layout} reportHeight={reportEmbeddedHeight} footer={demoReviewFooter}
       >
-        <div className="flex flex-col items-center text-center gap-5 py-10">
+        <div className="flex flex-col items-center text-center gap-5 py-10" data-ui-component-content={isDemo ? "demo-complete" : undefined}>
           <div className="w-16 h-16 rounded-full bg-[var(--cls-accent,#1E2F58)] text-[var(--cls-accent-text,#FFFFFF)] flex items-center justify-center">
             <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
               <polyline points="20 6 9 17 4 12" />
             </svg>
           </div>
-          <h2 className="text-[28px] font-extrabold text-balance text-[var(--cls-text,#1E2F58)]" style={{ fontFamily: fontDisplay }}>
+          <h2 data-ui-copy={isDemo ? "heading" : undefined} className="text-[28px] font-extrabold text-balance text-[var(--cls-text,#1E2F58)]" style={{ fontFamily: fontDisplay }}>
             {isDemo
               ? "The demonstration is complete."
               : ws("done_heading", "Your matter review was submitted.")}
           </h2>
-          <p
+          <p data-ui-copy={isDemo ? "body" : undefined}
             className="max-w-[460px] text-[15px] leading-relaxed text-[color-mix(in_srgb,var(--cls-text,#1E2F58)_70%,transparent)]"
             style={{ fontFamily: fontBody }}
           >

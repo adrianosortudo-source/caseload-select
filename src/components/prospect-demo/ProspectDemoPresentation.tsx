@@ -235,7 +235,7 @@ export function ProspectDemoPresentation({
         <div className="mx-auto flex w-full max-w-[1440px] flex-col gap-4" data-ui-component-content="prospect-demo-toolbar">
           <div className="w-full">
             {appearance === "caseload" ? <a href="https://caseloadselect.ca/" className={styles.brand}><Image src="/brand/logos/lockup-horizontal-dark-transparent.png" alt="CaseLoad Select" width={210} height={48} priority /></a> : <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#90734B]">CaseLoad Select prospect preview</p>}
-            <h1 className="mt-1 w-full text-pretty text-[17px] font-extrabold leading-snug tracking-[-0.02em] sm:text-2xl" data-ui-copy="heading">{appearance === "caseload" ? "See the Screen at work." : `${profile.firmName} intake preview`}</h1>
+            <h1 className="mt-1 w-full text-pretty text-[17px] font-extrabold leading-snug tracking-[-0.02em] sm:text-2xl" data-ui-copy="heading">{appearance === "caseload" ? "Try the SCREEN" : `${profile.firmName} intake preview`}</h1>
             {appearance === "caseload" && <p className={styles.introduction} data-ui-copy="body">Try a fictional inquiry. See the intake and the lawyer’s brief develop together.</p>}
           </div>
           <div className="grid w-full gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">

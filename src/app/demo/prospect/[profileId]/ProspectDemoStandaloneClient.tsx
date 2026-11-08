@@ -106,9 +106,7 @@ export function ProspectDemoStandaloneClient({ profileId }: { profileId: string 
     ),
     renderReview: () => (
       <div className="space-y-4">
-        <p role="status" className="w-full border-b border-white/15 pb-3 text-sm leading-6 text-white/80" data-ui-component-content="demo-ai-status" data-ui-copy="supporting">
-          {demoExtractionLabel(view)}
-        </p>
+        <div data-ui-component-content="demo-ai-status"><p role="status" className="w-full" data-ui-copy="supporting">{demoExtractionLabel(view)}</p><p className="mt-3 w-full" data-ui-copy="body">Live AI can send the fictional description to Google Gemini. Guided samples run in your browser. Do not enter client or confidential information.</p></div>
         <DemoOperatorPanel view={view} contained />
       </div>
     ),
