@@ -1194,7 +1194,8 @@ export function renderBriefHtmlServer(
     // jurisdiction. Do not turn the engine's legacy bucket hint into a court
     // determination. Ontario O. Reg. 626/00, s.1 (current from 2025-10-01).
     const scopeChecks = (report.strategic_considerations ?? []).map((item) =>
-      item === 'Above Small Claims threshold. Superior Court action with proper pleadings; consider summary judgment if defence is thin.'
+      (item === 'Above Small Claims threshold. Superior Court action with proper pleadings; consider summary judgment if defence is thin.' ||
+       item === 'Within Small Claims jurisdiction (under $35k). Faster, cheaper, but no full discovery. Often the right venue when documents are tight.')
         ? 'Confirm the exact claim amount, relief sought and appropriate court before choosing a procedure.'
         : item,
     );

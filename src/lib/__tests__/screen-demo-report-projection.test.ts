@@ -46,10 +46,11 @@ describe("shared production report projection for the demo", () => {
 it("does not choose a court from a broad amount bucket in either projection", () => {
   const state = startDemoState(input);
   const report = buildDemoReport(state);
-  report.strategic_considerations = ["Above Small Claims threshold. Superior Court action with proper pleadings; consider summary judgment if defence is thin."];
+  report.strategic_considerations = ["Above Small Claims threshold. Superior Court action with proper pleadings; consider summary judgment if defence is thin.", "Within Small Claims jurisdiction (under $35k). Faster, cheaper, but no full discovery. Often the right venue when documents are tight."];
   for (const presentation of ["portal", "demo"] as const) {
     const html = htmlRoot(renderBriefHtmlServer(report, "web", "en", undefined, state.matter_type, state.practice_area, {presentation}));
     expect(html.textContent).not.toContain("Above Small Claims threshold");
+    expect(html.textContent).not.toContain("under $35k");
     expect(html.textContent).toContain(presentation === "demo" ? "Confirm the exact claim amount, relief and court before choosing a procedure." : "Confirm the exact claim amount, relief sought and appropriate court");
   }
   expect(report.strategic_considerations[0]).toContain("Above Small Claims threshold");
