@@ -98,5 +98,6 @@
 
 .caseload .introduction, .caseload [data-ui-component-content="demo-ai-status"] p { text-wrap: pretty; }
 .caseload [data-ui-component-content="demo-ai-status"] p { width: 100%; margin: 0; color: white; font: 400 17px/1.6 "DM Sans Variable",sans-serif; }
+.caseload [data-ui-component-content="demo-ai-status"] p[role="status"] { font: 600 15px/1.5 var(--font-oxanium),sans-serif; }
 
 .caseload[data-demo-embedded="true"] { min-height: 0; }
