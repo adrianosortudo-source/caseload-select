@@ -1,6 +1,6 @@
 # Website Design Check action report specification
 
-Status: implementation contract for the Luna copy and report presentation phase. This document does not authorize implementation, deployment, or changes to scoring or API output.
+Status: user approved implementation of this report contract. Merge of the specific PR requires separate approval. Scoring and API output remain unchanged.
 
 ## 1. Product contract
 

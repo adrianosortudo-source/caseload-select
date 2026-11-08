@@ -43,6 +43,17 @@ describe("report presentation", () => {
     expect(coverageText({...fixture,judgmentCoverage:{wholePage:true}})).toContain("not clipped");
     expect(coverageText({...fixture,judgmentCoverage:{wholePage:false,judgedTopPx:100,actualPageHeightPx:500}})).toContain("top 100 pixels");
   });
+  it("handles one finding, null scores and unmatched or unknown-confidence flags", () => {
+    const only={...fixture,rankedFindings:[finding("Unknown")],dimensionBar:[{name:"Unknown",weight:1,score:null}]};
+    expect(groups(only)).toHaveLength(1); expect(assessment(only,groups(only))).toContain("homepage");
+    const unknown={...fixture.redFlagPanel.activeFlags[0],confidence:undefined} as unknown as typeof fixture.redFlagPanel.activeFlags[0];
+    const mixed={...fixture,redFlagPanel:{...fixture.redFlagPanel,activeFlags:[unknown]}};
+    expect(groups(mixed)[0].status).not.toBe("Confirmed");
+    const unmatched={...fixture.rankedFindings[0],flagKey:"unknown"};
+    expect(presentFinding(unmatched,[]).copy.title).toBe("Review this automated finding.");
+    expect(presentFinding(unmatched,[]).evidence).toBe(unmatched.evidence);
+    expect(assessment({...fixture,rankedFindings:[]},[])).toContain("does not establish that the entire website is issue-free");
+  });
   it("handles zero findings and all grade limitations in copy", () => {
     const empty={...fixture,rankedFindings:[],dimensionBar:[]}; expect(assessment(empty,[])).toContain("No actionable findings");
     const many={...fixture,redFlagPanel:{...fixture.redFlagPanel,activeFlags:Array.from({length:5},(_,i)=>({...fixture.redFlagPanel.activeFlags[0],key:`key${i}`,label:`Flag ${i}`}))}};
