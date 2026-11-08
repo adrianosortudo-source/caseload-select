@@ -158,3 +158,5 @@ Keep the existing disclaimer. When `.dc-report` exists, hide the redundant categ
 
 
 Implementation clarification: the producer also emits missing-title-only and missing-both metadata observations. Neither equals the specified missing-description branch, so those observations use the exact unmapped fallback until separately mapped. The TBT poor branch is identified by the producer phrase “heavy main-thread blocking”.
+
+Implementation clarification: when multiple listed members form a priority, use one shared group action in the closed report and copied plan; retain each constituent action and observation in details. The Claim support group action is “Ask the firm owner to review the highlighted claims and add supporting evidence where the claims are accurate.”

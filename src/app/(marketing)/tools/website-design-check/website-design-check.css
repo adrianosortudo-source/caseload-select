@@ -138,3 +138,4 @@
 .dc-page .dc-report-details section { margin-top: 24px; }
 .dc-page .dc-report-actions textarea { display: block; width: 100%; margin-top: 8px; font: inherit; }
 .dc-page .dc-finding-item h3, .dc-page .dc-finding-item p { width: 100%; margin: 0 0 8px; }
+.dc-page :is(.dc-input-hint, .dc-cat-preview-desc, .dc-report p) { text-wrap: wrap; }

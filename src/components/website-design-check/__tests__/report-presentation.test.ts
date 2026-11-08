@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { assessment, copyPlan, coverageText, displayEvidence, groups, matchFlag, presentFinding } from "../report-presentation";
+import { assessment, copyPlan, coverageText, displayEvidence, groupAction, groups, matchFlag, presentFinding } from "../report-presentation";
 import { fixture } from "../../../../tests/website-design-check/fixture";
 import type { RankedFinding } from "../WebsiteDesignCheckReport";
 
@@ -8,7 +8,10 @@ describe("report presentation", () => {
   it("groups exact members in ranked order and does not mutate input", () => {
     const original = structuredClone(fixture); const result = groups(fixture);
     expect(result[0].findings).toHaveLength(2); expect(result[1].copy.group).toBe("Testimonial attribution");
-    expect(result[0].status).toBe("Needs confirmation"); expect(fixture).toEqual(original);
+    expect(result[0].status).toBe("Needs confirmation");
+    const action = "Ask the firm owner to review the highlighted claims and add supporting evidence where the claims are accurate.";
+    expect(groupAction(result[0])).toBe(action); expect(copyPlan(fixture,result.slice(0,3))).toContain(`Change: ${action}`);
+    expect(fixture).toEqual(original);
   });
   it("uses unique flag label only when no key was emitted", () => {
     const flag=fixture.redFlagPanel.activeFlags[0], f=fixture.rankedFindings[0];

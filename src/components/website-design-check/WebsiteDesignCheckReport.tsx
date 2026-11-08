@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { assessment, copyPlan, coverageText, groups, presentFinding } from "./report-presentation";
+import { assessment, copyPlan, coverageText, groupAction, groups, presentFinding } from "./report-presentation";
 
 export interface DimensionBarEntry {
   name: string;
@@ -100,7 +100,7 @@ export default function WebsiteDesignCheckReport({ result, onReset }: { result: 
         <h3 data-ui-copy="heading">{g.copy.title}</h3>
         <p data-ui-copy="body"><strong>Found:</strong> {g.findings[0].evidence.length <= 170 ? g.findings[0].evidence : <a href={`#dc-finding-${result.rankedFindings.indexOf(g.findings[0].source)}`} onClick={() => reveal(`dc-finding-${result.rankedFindings.indexOf(g.findings[0].source)}`)}>See the full observation in details</a>}</p>
         <p data-ui-copy="body"><strong>Why:</strong> {g.copy.why}</p>
-        <p data-ui-copy="body"><strong>Change:</strong> {Array.from(new Set(g.findings.map(item => item.copy.action))).join(" ")}</p>
+        <p data-ui-copy="body"><strong>Change:</strong> {groupAction(g)}</p>
         {g.findings.length > 1 && <p data-ui-copy="supporting">Combines related findings. See each observation in the details.</p>}
         <p data-ui-copy="supporting"><strong>Suggested owner:</strong> {g.copy.owner}. {g.status}.</p>
       </li>)}</ol>

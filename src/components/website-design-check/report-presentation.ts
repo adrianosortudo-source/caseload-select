@@ -630,9 +630,18 @@ export function assessment(result: DesignCheckResult, priorities: FindingGroup[]
  const first = measured.length && (measured[0].score ?? 0) >= 85 ? `${measured[0].name} scored ${measured[0].score}/100 against this tool’s rubric.` : 'This automated check reviewed the homepage on mobile and desktop.';
  return `${first} ${priorities.length ? 'Start with the selected priorities below.' : 'No actionable findings were selected, which does not establish that the entire website is issue-free.'}`;
 }
+export function groupAction(group: FindingGroup): string {
+ if (group.findings.length < 2) return group.copy.action;
+ switch (group.copy.group) {
+  case 'Claim support': return 'Ask the firm owner to review the highlighted claims and add supporting evidence where the claims are accurate.';
+  case 'Testimonial attribution': return 'Ask the firm owner to verify attribution and permission before publishing identifying details.';
+  case 'Text contrast': return 'Ask your website editor to adjust the sampled colors and recheck the measured pair.';
+  default: return group.copy.action;
+ }
+}
 export function copyPlan(result: DesignCheckResult, priorities: FindingGroup[]): string {
  const lines = [result.domain, `Checked ${new Date(result.checkedAt).toLocaleDateString()}`, 'Automated homepage check · Mobile and desktop.', assessment(result,priorities), ''];
- priorities.forEach((g,i) => { lines.push(`${i+1}. ${g.copy.title}`, `Found: ${g.findings.map(x => x.evidence).join(" ")}`, `Why: ${g.copy.why}`, `Change: ${g.findings.map(x => x.copy.action).filter((x,i,a) => a.indexOf(x) === i).join(" ")}`, `Suggested owner: ${g.copy.owner}`, `Status: ${g.status}${g.findings.length > 1 ? "; combines related findings" : ""}`, ''); });
+ priorities.forEach((g,i) => { lines.push(`${i+1}. ${g.copy.title}`, `Found: ${g.findings.map(x => x.evidence).join(" ")}`, `Why: ${g.copy.why}`, `Change: ${groupAction(g)}`, `Suggested owner: ${g.copy.owner}`, `Status: ${g.status}${g.findings.length > 1 ? "; combines related findings" : ""}`, ''); });
  const flags = result.redFlagPanel.activeFlags.filter(f=>f.classification === 'disqualifying');
  if (flags.length) { lines.push('Grade-limiting notices:'); flags.forEach(f=>lines.push(`${f.label}: ${f.confidence === 'best_effort' ? 'Needs confirmation' : f.confidence === 'proven' ? 'Confirmed' : 'Confidence not supplied'}`)); }
  lines.push('After making changes, run this homepage check again.'); return lines.join('\n');
