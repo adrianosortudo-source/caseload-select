@@ -18,3 +18,5 @@ Actual new-route end-to-end report, remaining corpus/held-out checks, security m
 - Hosted cc9 failure case: https://127.0.0.1 rejected as an invalid publicHTTPS address; focused error heading, no retry, no report; rejected before quota/provider.
 - cc9 real-Postgres required job128802533770 completedSUCCESS at17:31:45UTC (started17:14:48), including migrations, database/contracts, rendered checks and cleanup. It was running, not waiting for approval.
 - Selected3.8/v6 backend snapshot: combined focused52/52 across six suites; subsequent validator/Gemini25/25 after word-count feedback. Latest current-head CI must confirm the integrated source.
+- Accepted functional units now12/28:0/1 eight units;2.1 bounded collection reviewed by Sol;3.1–3.3 functional interface. Actual API/copy remains3.4, so Gate3 is not passed.
+- V6.1 narrow label guard: provider/validator tests26/26 pass; semantic regression and hosted result remain independent evidence.

@@ -18,12 +18,14 @@ describe("positioning model output validation",()=>{
   it("matches source quotations across case and HTML entity rendering only",()=>{const r=valid();const ev:Evidence[]=[{id:"text-1",kind:"text",sourceUrl:"https://example.com/",title:"Home",capturedAt:"2026-11-08",excerpt:"Advice &amp; Support",truncated:false}];r.part1.elements[0].finding='The site says "advice & support".';expect(validateAnalysis(r,ev)).not.toContain("quote_not_in_cited_evidence");r.part1.elements[0].finding='The site says "advice and support".';expect(validateAnalysis(r,ev)).toContain("quote_not_in_cited_evidence");});
   it("rejects ensured outcomes",()=>{const r=valid();r.part2.directions[0].clientExpectation="A fair result is ensured.";expect(validateAnalysis(r,evidence)).toContain("expectation_guarantee");});
   it("gives repair the path and count for overlong element copy",()=>{const r=valid();r.part1.elements[0].reason=Array(46).fill("word").join(" ");expect(repairFeedback(r,evidence)).toContainEqual({path:"part1.elements[0].reason",phrase:r.part1.elements[0].reason,wordCount:46,maxWords:45});});
+  it("rejects guaranteed and risk-free direction labels while allowing ordinary contingency access",()=>{const r=valid();r.part2.directions[0].label="Guaranteed wins";expect(validateAnalysis(r,evidence)).toContain("direction_label_guarantee_or_superlative");expect(repairFeedback(r,evidence).some(x=>x.path==="part2.directions[0].label")).toBe(true);r.part2.directions[0].label="Risk-Free Contingency";expect(validateAnalysis(r,evidence)).toContain("direction_label_guarantee_or_superlative");r.part2.directions[0].label="Contingency-fee access";expect(validateAnalysis(r,evidence)).not.toContain("direction_label_guarantee_or_superlative");});
   it("rejects made-up evidence IDs",()=>{const r=valid();r.part1.elements[0].evidenceIds=["made-up"];expect(validateAnalysis(r,evidence)).toContain("element_evidence");});
   it("rejects duplicate element keys",()=>{const r=valid();r.part1.elements[0].key=r.part1.elements[1].key;expect(validateAnalysis(r,evidence)).toContain("element_key");});
   it("rejects visual findings supported only by text",()=>{const r=valid();r.part1.visualFindings[0].evidenceIds=["text-1"];expect(validateAnalysis(r,evidence)).toContain("visual_evidence");});
   it("rejects scores for inaccessible elements",()=>{const r=valid();r.part1.elements[0].status="not_assessable";expect(validateAnalysis(r,evidence)).toContain("unassessable_scored");});
   it("requires both sides of a conflict",()=>{const r=valid();r.part1.elements[0].conflict=true;expect(validateAnalysis(r,evidence)).toContain("conflict_evidence");});
 });
+
 
 
 

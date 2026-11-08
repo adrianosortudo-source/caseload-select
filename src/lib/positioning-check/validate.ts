@@ -2,7 +2,7 @@ import { decodeHtmlEntities } from "@/app/api/tools/seo-check/engine-core";
 import { hasUnapprovedEmDash } from "./normalize";
 import { ELEMENT_KEYS, type Evidence, type PositioningResult } from "./types";
 
-const PROHIBITED_STATEMENT = /\b(?:guarantee(?:s|d)?|ensur(?:e|es|ed|ing)|unparalleled|best\s+(?:firm|lawyer|attorney|practice|service)|most experienced|cutting[- ]edge)\b/i;
+const PROHIBITED_STATEMENT = /\b(?:guarantee(?:s|d)?|ensur(?:e|es|ed|ing)|unparalleled|best\s+(?:firm|lawyer|attorney|practice|service)|most experienced|cutting[- ]edge|risk[- ]free|no\s+risk|zero\s+risk)\b/i;
 const PROHIBITED_EXPECTATION = /\b(?:guarantee(?:s|d)?|ensur(?:e|es|ed|ing))\b/i;
 const words = (value: unknown, max: number): value is string => typeof value === "string" && value.trim().length > 0 && value.trim().split(/\s+/u).length <= max;
 const isRecord = (v: unknown): v is Record<string, unknown> => !!v && typeof v === "object" && !Array.isArray(v);
@@ -64,6 +64,7 @@ export function validateAnalysis(raw: unknown, evidence: Evidence[], substantive
       for (const k of ["label", "audienceSituation", "communicationImplication", "clientExpectation", "tradeoff"]) if (!words(d[k], 30)) errors.push("direction_copy");
       if (!words(d.possibleStatement, 35) || !hasIds(d.evidenceIds, known)) errors.push("direction_basis");
       if([d.label,d.audienceSituation,d.possibleStatement,d.communicationImplication,d.clientExpectation,d.tradeoff,...(Array.isArray(d.validationQuestions)?d.validationQuestions:[])].some(v=>!quoteTextMatches(v,d.evidenceIds,known)))errors.push("quote_not_in_cited_evidence");
+      if (typeof d.label === "string" && PROHIBITED_STATEMENT.test(d.label)) errors.push("direction_label_guarantee_or_superlative");
       if (typeof d.possibleStatement === "string" && PROHIBITED_STATEMENT.test(d.possibleStatement)) errors.push("direction_guarantee_or_superlative");
       if (typeof d.clientExpectation === "string" && PROHIBITED_EXPECTATION.test(d.clientExpectation)) errors.push("expectation_guarantee");
       if (!Array.isArray(d.validationQuestions) || d.validationQuestions.length !== 3 || !d.validationQuestions.every(q => words(q, 30))) errors.push("direction_questions");
@@ -94,9 +95,10 @@ export function repairFeedback(raw:unknown,evidence:Evidence[]=[]):{path:string;
   elements.forEach((e,i)=>{if(isRecord(e))for(const key of ["finding","reason","uncertainty"] as const){quote(e[key],e.evidenceIds,`part1.elements[${i}].${key}`);checkLength(e[key],`part1.elements[${i}].${key}`,key==="uncertainty"?30:45);}});
   if(Array.isArray(p1.visualFindings))p1.visualFindings.forEach((v,i)=>{if(isRecord(v))quote(v.finding,v.evidenceIds,`part1.visualFindings[${i}].finding`);});
   if(Array.isArray(raw.part2.limitations))raw.part2.limitations.forEach((v,i)=>quote(v,[],`part2.limitations[${i}]`));
-  raw.part2.directions.forEach((d,index)=>{if(!isRecord(d))return;for(const key of ["label","audienceSituation","possibleStatement","communicationImplication","clientExpectation","tradeoff"] as const){quote(d[key],d.evidenceIds,`part2.directions[${index}].${key}`);checkLength(d[key],`part2.directions[${index}].${key}`,key==="possibleStatement"?35:30);}if(Array.isArray(d.validationQuestions))d.validationQuestions.forEach((q,i)=>quote(q,d.evidenceIds,`part2.directions[${index}].validationQuestions[${i}]`));for(const [field,pattern] of [["possibleStatement",PROHIBITED_STATEMENT],["clientExpectation",PROHIBITED_EXPECTATION]] as const){const value=d[field];if(typeof value==="string"&&pattern.test(value))result.push({path:`part2.directions[${index}].${field}`,phrase:value.slice(0,500)});}});
+  raw.part2.directions.forEach((d,index)=>{if(!isRecord(d))return;for(const key of ["label","audienceSituation","possibleStatement","communicationImplication","clientExpectation","tradeoff"] as const){quote(d[key],d.evidenceIds,`part2.directions[${index}].${key}`);checkLength(d[key],`part2.directions[${index}].${key}`,key==="possibleStatement"?35:30);}if(Array.isArray(d.validationQuestions))d.validationQuestions.forEach((q,i)=>quote(q,d.evidenceIds,`part2.directions[${index}].validationQuestions[${i}]`));for(const [field,pattern] of [["label",PROHIBITED_STATEMENT],["possibleStatement",PROHIBITED_STATEMENT],["clientExpectation",PROHIBITED_EXPECTATION]] as const){const value=d[field];if(typeof value==="string"&&pattern.test(value))result.push({path:`part2.directions[${index}].${field}`,phrase:value.slice(0,500)});}});
   return result;
 }
+
 
 
 
