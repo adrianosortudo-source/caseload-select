@@ -1,0 +1,47 @@
+{
+  "status": "success",
+  "metadata": {"schemaVersion":"1","rubricVersion":"positioning-rubric-v1","promptVersion":"positioning-v1","model":"gemini-2.5-flash","generatedAt":"2026-11-08T15:00:00.000Z","requestedUrl":"https://samplefirm.ca/","resolvedOrigin":"https://samplefirm.ca","aiGenerated":true},
+  "coverage": {
+    "pages": [
+      {"url":"https://samplefirm.ca/","title":"Sample Firm","capturedAt":"2026-11-08T14:58:00.000Z","state":"readable","retainedChars":4200},
+      {"url":"https://samplefirm.ca/about/","title":"About the Firm","capturedAt":"2026-11-08T14:58:03.000Z","state":"readable","retainedChars":2600},
+      {"url":"https://samplefirm.ca/family-law/","title":"Family Law","capturedAt":"2026-11-08T14:58:05.000Z","state":"readable","retainedChars":3100}
+    ],
+    "screenshots": [
+      {"id":"screenshot-desktop","viewport":"desktop","state":"captured","analyzed":true,"clippedFromPx":null},
+      {"id":"screenshot-mobile","viewport":"mobile","state":"captured","analyzed":true,"clippedFromPx":null}
+    ],
+    "limitations": []
+  },
+  "evidence": [
+    {"id":"text-1","kind":"text","sourceUrl":"https://samplefirm.ca/","title":"Sample Firm","capturedAt":"2026-11-08T14:58:00.000Z","excerpt":"Sample Firm helps Ontario families resolve complex parenting and support disputes. We prepare each matter carefully and explain the available steps. Request a confidential consultation.","truncated":false},
+    {"id":"text-2","kind":"text","sourceUrl":"https://samplefirm.ca/about/","title":"About the Firm","capturedAt":"2026-11-08T14:58:03.000Z","excerpt":"Our lawyers have practised family law for more than twenty years. We focus on practical advice, careful preparation and clear communication with clients.","truncated":false},
+    {"id":"text-3","kind":"text","sourceUrl":"https://samplefirm.ca/family-law/","title":"Family Law","capturedAt":"2026-11-08T14:58:05.000Z","excerpt":"We advise on parenting arrangements, child and spousal support, and property division. Our team works with clients across Ontario.","truncated":false},
+    {"id":"screenshot-desktop","kind":"screenshot","sourceUrl":"https://samplefirm.ca/","title":"desktop screenshot","capturedAt":"2026-11-08T14:58:10.000Z","screenshotId":"screenshot-desktop","visibleRegion":"Full captured homepage viewport"},
+    {"id":"screenshot-mobile","kind":"screenshot","sourceUrl":"https://samplefirm.ca/","title":"mobile screenshot","capturedAt":"2026-11-08T14:58:11.000Z","screenshotId":"screenshot-mobile","visibleRegion":"Full captured homepage viewport"}
+  ],
+  "part1": {
+    "statement":"The site presents the firm as an Ontario family-law practice helping families navigate complex parenting and support matters through careful preparation and clear guidance.",
+    "rationale":"The homepage names the audience and matters, while the about and service pages reinforce preparation, communication and family-law scope.",
+    "elements":[
+      {"key":"audience","status":"observed","finding":"The site addresses Ontario families facing complex parenting and support disputes.","clarity":3,"confidence":"high","evidenceIds":["text-1"],"reason":"The homepage names both the audience and the situations served.","uncertainty":"The captured pages do not establish which clients the firm prefers.","conflict":false},
+      {"key":"practice_focus","status":"observed","finding":"Family law is the stated practice focus, including parenting, support and property matters.","clarity":3,"confidence":"high","evidenceIds":["text-1","text-3"],"reason":"The homepage and service page explicitly list the focus and examples.","uncertainty":"Other practices outside the captured pages may exist.","conflict":false},
+      {"key":"central_promise","status":"observed","finding":"The site offers careful preparation and explanation of available steps.","clarity":2,"confidence":"moderate","evidenceIds":["text-1"],"reason":"The homepage states these service commitments but does not describe their full delivery.","uncertainty":"Actual client experience was not assessed.","conflict":false},
+      {"key":"practical_benefits","status":"observed","finding":"The site says it explains available steps and provides practical advice.","clarity":2,"confidence":"moderate","evidenceIds":["text-1","text-2"],"reason":"The wording names useful process benefits but gives limited detail.","uncertainty":"No service outcomes were measured.","conflict":false},
+      {"key":"emotional_benefits","status":"inferred","finding":"The emphasis on clear communication may be intended to reduce uncertainty for clients.","clarity":1,"confidence":"low","evidenceIds":["text-2"],"reason":"This is a cautious interpretation of the stated communication approach.","uncertainty":"The site does not explicitly promise an emotional outcome.","conflict":false},
+      {"key":"reasons_to_choose","status":"observed","finding":"The site points to careful preparation, practical advice and clear communication.","clarity":2,"confidence":"moderate","evidenceIds":["text-1","text-2"],"reason":"These are stated reasons, but the site does not establish comparative advantage.","uncertainty":"No competitor or client research was conducted.","conflict":false},
+      {"key":"supporting_credentials","status":"observed","finding":"The about page states that the lawyers have practised family law for more than twenty years.","clarity":3,"confidence":"high","evidenceIds":["text-2"],"reason":"The experience statement is explicit on the captured page.","uncertainty":"The statement was not independently verified.","conflict":false},
+      {"key":"consistency","status":"observed","finding":"The three captured pages reinforce family-law focus and careful client guidance.","clarity":2,"confidence":"moderate","evidenceIds":["text-1","text-2","text-3"],"reason":"The homepage, about page and service page share a related emphasis.","uncertainty":"This is limited to three captured pages, not the whole site.","conflict":false}
+    ],
+    "visualFindings":[{"finding":"The homepage screenshot shows the firm name and family-law message in the opening viewport.","evidenceIds":["screenshot-desktop"]}]
+  },
+  "part2": {
+    "directions":[
+      {"id":"direction-1","label":"Complex parenting matters","audienceSituation":"Ontario families navigating complex parenting disputes","possibleStatement":"Focused family-law guidance for complex parenting disputes, grounded in careful preparation and clear communication.","evidenceIds":["text-1","text-2"],"communicationImplication":"Give parenting disputes a prominent route and explain the first steps in plain language.","clientExpectation":"A structured discussion of parenting concerns and available next steps.","tradeoff":"A narrower emphasis may make other family-law services less prominent.","validationQuestions":["Which parenting matters are most aligned with the firm's work?","Do clients value the stated preparation and communication approach?","Which examples can the firm substantiate publicly?"]},
+      {"id":"direction-2","label":"Clear process through family change","audienceSituation":"People seeking practical guidance through a family-law matter","possibleStatement":"Understand the steps ahead with practical family-law advice and clear communication.","evidenceIds":["text-1","text-2","text-3"],"communicationImplication":"Show the stages of a matter and what a first consultation can cover.","clientExpectation":"A clearer explanation of process and questions to consider.","tradeoff":"Process detail requires ongoing review to stay accurate and useful.","validationQuestions":["Which process questions recur in consultations?","What can the firm safely explain before learning case details?","Would clients find a process guide useful?"]},
+      {"id":"direction-3","label":"Keep the current breadth","audienceSituation":"Families with different parenting, support or property concerns","possibleStatement":"Family-law advice for parenting, support and property matters, with careful preparation and clear guidance.","evidenceIds":["text-1","text-2","text-3"],"communicationImplication":"Keep broad service coverage while making each matter pathway easy to find.","clientExpectation":"A clear route to information about the relevant family-law issue.","tradeoff":"A broad message may be less specific to any one matter.","validationQuestions":["Does the current range reflect the matters the firm wants?","Which service areas need clearer entry points?","Does the current message match the firm's intended direction?"]}
+    ],
+    "limitations":["These options are hypotheses based on the captured website, not market-tested recommendations."]
+  }
+}
+

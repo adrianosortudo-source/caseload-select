@@ -1,0 +1,40 @@
+{
+  "status": "partial",
+  "metadata": {"schemaVersion":"1","rubricVersion":"positioning-rubric-v1","promptVersion":"positioning-v1","model":"gemini-2.5-flash","generatedAt":"2026-11-08T15:10:00.000Z","requestedUrl":"https://samplefirm.ca/","resolvedOrigin":"https://samplefirm.ca","aiGenerated":true},
+  "coverage": {
+    "pages": [
+      {"url":"https://samplefirm.ca/","title":"Sample Firm","capturedAt":"2026-11-08T15:08:00.000Z","state":"readable","retainedChars":900},
+      {"url":"https://samplefirm.ca/about/","title":"About the Firm","capturedAt":"2026-11-08T15:08:03.000Z","state":"unreadable","retainedChars":0}
+    ],
+    "screenshots": [
+      {"id":"screenshot-desktop","viewport":"desktop","state":"unavailable","analyzed":false,"clippedFromPx":null},
+      {"id":"screenshot-mobile","viewport":"mobile","state":"unavailable","analyzed":false,"clippedFromPx":null}
+    ],
+    "limitations":["Only the homepage text was readable; the about page and screenshots could not be assessed.","Visual positioning was not assessed."]
+  },
+  "evidence": [
+    {"id":"text-1","kind":"text","sourceUrl":"https://samplefirm.ca/","title":"Sample Firm","capturedAt":"2026-11-08T15:08:00.000Z","excerpt":"Sample Firm provides Ontario family-law services. We advise on parenting and support matters. Contact us to discuss your situation.","truncated":false}
+  ],
+  "part1": {
+    "statement":"The readable homepage presents an Ontario family-law practice for parenting and support matters.",
+    "rationale":"The homepage names the practice and two matter types; other site content could not be reviewed.",
+    "elements":[
+      {"key":"audience","status":"inferred","finding":"The site appears to address people with parenting or support matters.","clarity":1,"confidence":"low","evidenceIds":["text-1"],"reason":"The matters are named but the intended client group is not fully described.","uncertainty":"Only the homepage text was readable.","conflict":false},
+      {"key":"practice_focus","status":"observed","finding":"Family law is the stated practice area, including parenting and support matters.","clarity":2,"confidence":"moderate","evidenceIds":["text-1"],"reason":"The homepage names the practice and two examples.","uncertainty":"Other services may appear on unreadable pages.","conflict":false},
+      {"key":"central_promise","status":"not_observed","finding":"No central promise is expressed in the readable homepage text.","clarity":0,"confidence":"moderate","evidenceIds":[],"reason":"The available text names services and invites contact but does not state a distinct promise.","uncertainty":"This applies only to the readable homepage text.","conflict":false},
+      {"key":"practical_benefits","status":"not_observed","finding":"No practical benefit is expressed in the readable homepage text.","clarity":0,"confidence":"moderate","evidenceIds":[],"reason":"The available text does not describe a specific process or practical benefit.","uncertainty":"This applies only to the readable homepage text.","conflict":false},
+      {"key":"emotional_benefits","status":"not_observed","finding":"No emotional benefit is expressed in the readable homepage text.","clarity":0,"confidence":"moderate","evidenceIds":[],"reason":"The available text does not state an emotional outcome.","uncertainty":"This applies only to the readable homepage text.","conflict":false},
+      {"key":"reasons_to_choose","status":"not_observed","finding":"No stated reason to choose the firm appears in the readable homepage text.","clarity":0,"confidence":"moderate","evidenceIds":[],"reason":"The available text names services but no reason to choose this firm.","uncertainty":"This applies only to the readable homepage text.","conflict":false},
+      {"key":"supporting_credentials","status":"not_observed","finding":"No supporting credential appears in the readable homepage text.","clarity":0,"confidence":"moderate","evidenceIds":[],"reason":"The available text does not state qualifications or experience.","uncertainty":"This applies only to the readable homepage text.","conflict":false},
+      {"key":"consistency","status":"not_assessable","finding":"Cross-page consistency could not be assessed because only one page was readable.","clarity":null,"confidence":null,"evidenceIds":[],"reason":"The about page was unreadable and there was no second substantive page to compare.","uncertainty":"No site-wide consistency judgment is made.","conflict":false}
+    ],
+    "visualFindings":[]
+  },
+  "part2": {
+    "directions":[
+      {"id":"direction-1","label":"Clarify the current family-law focus","audienceSituation":"People seeking help with parenting or support matters in Ontario","possibleStatement":"Family-law guidance for parenting and support matters, with a clear next step to discuss your situation.","evidenceIds":["text-1"],"communicationImplication":"Clarify what a first discussion can cover and where clients can learn about each matter type.","clientExpectation":"An initial conversation about the stated family-law issue and possible next steps.","tradeoff":"A broader family-law message may remain less specific to a single type of matter.","validationQuestions":["Which matters does the firm most want to serve?","What can the firm explain about an initial discussion?","Does this wording reflect the firm's intended practice?"]}
+    ],
+    "limitations":["This single-page reading is incomplete. The firm should confirm whether this interpretation fits its intended practice."]
+  }
+}
+
