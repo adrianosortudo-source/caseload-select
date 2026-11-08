@@ -592,7 +592,11 @@ function ordinaryRow(f: RankedFinding): string[] | undefined {
  if (f.label === 'Body line length') index = e.includes('wider than') ? 1 : 0;
  else if (f.label === 'Body line height') index = e.includes('looser than') ? 1 : 0;
  else if (['Largest Contentful Paint','Cumulative Layout Shift','Total Blocking Time'].includes(f.label)) index = e.includes('poor') || e.includes('heavy main-thread') ? 1 : 0;
- else if (f.label === 'Meta title and description present') { if (e === 'no meta title found.' || e === 'no meta title or description found.') return undefined; index = e.includes('description') ? 0 : 1; }
+ else if (f.label === 'Meta title and description present') {
+  if (e === 'no meta title found.') return [f.dimension, f.label, 'Page title is missing', 'The inspected page lacks a meta title.', 'Ask your website editor to draft an accurate title naming the page’s practice focus and location.', 'Website editor', 'none'];
+  if (e === 'no meta title or description found.') return [f.dimension, f.label, 'Page title and description are missing', 'The inspected page lacks a meta title and description.', 'Ask your website editor to draft an accurate title and description naming the page’s practice focus and location.', 'Website editor', 'none'];
+  index = e.includes('description') ? 0 : 1;
+ }
  else if (f.label === 'Named author entity present') index = e.includes('byline is present') ? 1 : 0;
  else if (f.label === 'Review or rating structured data') index = e.includes('found but') ? 1 : 0;
  return rows[index];

@@ -102,7 +102,7 @@ export default function WebsiteDesignCheckReport({ result, onReset }: { result: 
         <p data-ui-copy="body"><strong>Why:</strong> {g.copy.why}</p>
         <p data-ui-copy="body"><strong>Change:</strong> {groupAction(g)}</p>
         {g.findings.length > 1 && <p data-ui-copy="supporting">Combines related findings. See each observation in the details.</p>}
-        <p data-ui-copy="supporting"><strong>Suggested owner:</strong> {g.copy.owner}. {g.status}.</p>
+        <p data-ui-copy="supporting"><strong>Suggested owner:</strong> {g.copy.owner}</p><p data-ui-copy="supporting">{g.status}</p>
       </li>)}</ol>
     </section>}
     {flags.length > 0 && <section className="dc-redflag-panel" data-ui-component-content="grade-limitations">
@@ -117,17 +117,17 @@ export default function WebsiteDesignCheckReport({ result, onReset }: { result: 
     <details ref={detailsRef} className="dc-report-details" id="dc-finding-details"><summary>See all findings and scoring details</summary>
       <section data-ui-component-content="all-findings"><h2 data-ui-copy="heading">All findings</h2>
         <ol className="dc-findings-list">{result.rankedFindings.map((f,i) => { const item = presentFinding(f,result.redFlagPanel.activeFlags); return <li id={`dc-finding-${i}`} tabIndex={-1} key={i} className="dc-finding-item" data-ui-component-content="detail-finding">
-          <h3 data-ui-copy="heading">{f.label}</h3><p data-ui-copy="body">{item.evidence}</p><p data-ui-copy="body">{item.copy.action}</p><p data-ui-copy="supporting">{f.dimension} · {item.status} · {item.copy.owner}</p>
+          <h3 data-ui-copy="heading">{f.label}</h3><p data-ui-copy="body">{item.evidence}</p><p data-ui-copy="body">{item.copy.action}</p><p data-ui-copy="supporting">{f.dimension}</p><p data-ui-copy="supporting">{item.status}</p><p data-ui-copy="supporting">{item.copy.owner}</p>
         </li>; })}</ol>
         <h3 data-ui-copy="heading">All detected flags</h3><ul>{result.redFlagPanel.activeFlags.map(f => {
           const item = presentFinding({dimension:"",label:f.label,severity:"flag",flagKey:f.key,evidence:f.detail,opportunity:"",estimatedEffort:"low"},result.redFlagPanel.activeFlags);
-          return <li id={`dc-flag-${f.key}`} tabIndex={-1} key={f.key} data-ui-component-content="detail-flag"><p data-ui-copy="body"><strong>{f.label}</strong> ({f.classification}; {item.status}). {item.evidence}</p><p data-ui-copy="body">{item.copy.action}</p></li>;
+          return <li id={`dc-flag-${f.key}`} tabIndex={-1} key={f.key} data-ui-component-content="detail-flag"><p data-ui-copy="body"><strong>{f.label}</strong></p><p data-ui-copy="supporting">{f.classification}</p><p data-ui-copy="supporting">{item.status}</p><p data-ui-copy="body">{item.evidence}</p><p data-ui-copy="body">{item.copy.action}</p></li>;
         })}</ul>
       </section>
-      <section data-ui-component-content="scoring-details"><h2 data-ui-copy="heading">Scoring details</h2><p data-ui-copy="body">Current: {result.letterGrade}, {result.score}/100. Uncapped score: {result.uncappedScore}/100.</p><p data-ui-copy="body">Calculated scenario: {result.attainable.letterGrade}, {result.attainable.score}/100. This is a calculation, not a promised result.</p>
-        <ul>{result.dimensionBar.map(d => <li key={d.name} data-ui-component-content="detail-dimension"><p data-ui-copy="body">{d.name}: {d.score === null ? "Not applicable on this page" : `${d.score}/100`}</p></li>)}</ul>
+      <section data-ui-component-content="scoring-details"><h2 data-ui-copy="heading">Scoring details</h2><p data-ui-copy="body">Current: {result.letterGrade}, {result.score}/100.</p><p data-ui-copy="body">Uncapped score: {result.uncappedScore}/100.</p><p data-ui-copy="body">Calculated scenario: {result.attainable.letterGrade}, {result.attainable.score}/100. This is a calculation, not a promised result.</p>
+        <dl className="dc-detail-scores">{result.dimensionBar.map(d => <div key={d.name}><dt>{d.name}</dt><dd>{d.score === null ? "Not applicable on this page" : `${d.score}/100`}</dd></div>)}</dl>
         <p data-ui-copy="body">Not applicable: {result.notApplicableDimensions.join(", ") || "None reported"}.</p><p data-ui-copy="body">Not measured: {result.notMeasuredDimensions.join(", ") || "None reported"}.</p><p data-ui-copy="body">{coverageText(result)}</p>
-        <h3 data-ui-copy="heading">Not checked in this version</h3><ul>{result.redFlagPanel.notCheckableInV1.map(n => <li key={n.key} data-ui-component-content="detail-unchecked"><p data-ui-copy="body">{n.label}: {n.reason}</p></li>)}</ul>
+        <h3 data-ui-copy="heading">Not checked in this version</h3><ul>{result.redFlagPanel.notCheckableInV1.map(n => <li key={n.key} data-ui-component-content="detail-unchecked"><p data-ui-copy="body"><strong>{n.label}</strong></p><p data-ui-copy="body">{n.reason}</p></li>)}</ul>
       </section>
     </details>
   </div>;

@@ -21,6 +21,9 @@ describe("report presentation", () => {
   });
   it("keeps unknowns and selects direction-specific actions", () => {
     expect(presentFinding(finding("Unknown"),[]).copy.title).toBe("Review this automated finding.");
+    const meta=(evidence:string)=>presentFinding({...finding("Meta title and description present",evidence),dimension:"Authority and Positioning"},[]).copy.title;
+    expect(meta("No meta title found.")).toBe("Page title is missing");
+    expect(meta("No meta title or description found.")).toBe("Page title and description are missing");
     expect(presentFinding(finding("Body line length","~30 characters per line, narrower than the 45-75 range that keeps reading rhythm comfortable."),[]).copy.action).toContain("widen");
     expect(presentFinding(finding("Body line length","~90 characters per line, wider than the 45-75 range that keeps reading rhythm comfortable."),[]).copy.action).toContain("narrow");
   });

@@ -138,4 +138,11 @@
 .dc-page .dc-report-details section { margin-top: 24px; }
 .dc-page .dc-report-actions textarea { display: block; width: 100%; margin-top: 8px; font: inherit; }
 .dc-page .dc-finding-item h3, .dc-page .dc-finding-item p { width: 100%; margin: 0 0 8px; }
-.dc-page :is(.dc-input-hint, .dc-cat-preview-desc, .dc-report p) { text-wrap: wrap; }
+/* Expanded lists and scoring records use their full content track. */
+.dc-page .dc-report-details ul { padding: 0; list-style: none; }
+.dc-page .dc-detail-scores > div { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; padding: 8px 0; }
+.dc-page .dc-detail-scores dd { text-align: right; }
+@media (max-width: 640px) {
+  .dc-page .dc-main { padding-inline: 12px; }
+  .dc-input-card, .dc-page .dc-report-details { padding-inline: 16px; }
+}
