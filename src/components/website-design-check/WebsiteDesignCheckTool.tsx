@@ -85,16 +85,14 @@ export default function WebsiteDesignCheckTool() {
   }
 
   return (
-    <div className="dc-tool">
+    <div className="dc-tool" aria-busy={step === "scanning"}>
       {step === "input" && (
         <div className="dc-input-card" data-ui-component-content="website-input">
           <label className="dc-field-label" htmlFor="dc-domain-input">Public website URL</label>
-          <label className="dc-domain-label" htmlFor="dc-domain-input">Public website URL</label>
           <div className="dc-input-row">
             <div className="dc-input-field-wrap">
               {!/^https?:\/\//i.test(domain.trim()) && <span className="dc-input-prefix" aria-hidden="true">https://</span>}
               <input
-                id="dc-domain-input"
                 id="dc-domain-input"
                 type="text"
                 inputMode="url"
@@ -105,8 +103,6 @@ export default function WebsiteDesignCheckTool() {
                 aria-describedby={error ? "dc-domain-error dc-domain-hint" : "dc-domain-hint"}
                 className="dc-input-field"
                 placeholder="yourfirm.ca"
-                aria-invalid={Boolean(error)}
-                aria-describedby={error ? "dc-domain-error" : undefined}
                 value={domain}
                 onChange={(e) => {
                   setDomain(e.target.value);
@@ -120,7 +116,7 @@ export default function WebsiteDesignCheckTool() {
               Check my site
             </button>
           </div>
-          {error && <p id="dc-domain-error" className="dc-error" role="alert">{error}</p>}
+          {error && <p id="dc-domain-error" className="dc-error" role="alert" data-ui-copy="supporting">{error}</p>}
           <p id="dc-domain-hint" className="dc-input-hint" data-ui-copy="supporting">
             Renders your homepage in a real browser at mobile and desktop widths, then measures typography, contrast, spacing,
             forms, and authority signals against a fixed rubric.

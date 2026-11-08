@@ -82,7 +82,7 @@ for(const width of WIDTHS){
     await expect(page.getByRole("heading",{level:1})).toHaveText("Website Design & Conversion Check");
     await brandGates(page);
     await page.getByRole("button",{name:"Check my site",exact:true}).click();
-    await expect(page.getByRole("alert")).toHaveText("Enter a domain to check.");
+    await expect(page.locator("#dc-domain-error")).toHaveText("Enter a domain to check.");
     await expect(page.getByLabel("Public website URL")).toHaveAttribute("aria-invalid","true");
     await brandGates(page);
     await page.getByLabel("Public website URL").fill("https://synthetic-fixture.example/");
@@ -95,12 +95,6 @@ for(const width of WIDTHS){
     await expect(page.getByRole("status")).toBeVisible();
     await brandGates(page);
     release();
-    await expect(page.getByRole("heading",{name:"Enter your email to view the report"})).toBeVisible();
-    await brandGates(page);
-    await page.getByRole("button",{name:"View report",exact:true}).click();
-    await expect(page.getByRole("alert")).toHaveText("Enter a valid email address.");
-    await brandGates(page);
-    await page.getByRole("button",{name:"Skip, show me the report"}).click();
     await expect(page.locator(".dc-report-domain")).toHaveText(fixture.domain);
     await brandGates(page);
     await page.screenshot({path:path.join(EVIDENCE,`${width}-report.png`),fullPage:true});
@@ -115,4 +109,15 @@ test("embedded tool preserves its compact surface",async({page})=>{
   await expect(page.locator(".dc-hero")).toHaveCount(0);
   await expect(page.getByLabel("Public website URL")).toBeVisible();
   await expect(page.locator(".cls-footer")).toBeHidden();
+});
+
+test("failed scan keeps the entered URL and supports a retry",async({page})=>{
+  await page.setViewportSize({width:375,height:900});
+  await page.goto("/tools/website-design-check");
+  await page.route("**/api/tools/website-design-check",route=>route.fulfill({status:502,contentType:"application/json",body:JSON.stringify({error:"Could not render this site. Try again or check the domain."})}));
+  await page.getByLabel("Public website URL").fill("https://synthetic-fixture.example/");
+  await page.getByRole("button",{name:"Check my site",exact:true}).click();
+  await expect(page.locator("#dc-domain-error")).toHaveText("Could not render this site. Try again or check the domain.");
+  await expect(page.getByLabel("Public website URL")).toHaveValue("https://synthetic-fixture.example/");
+  await brandGates(page);
 });

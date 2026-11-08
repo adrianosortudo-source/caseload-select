@@ -25,7 +25,7 @@
 .dc-tool { min-width: 0; width: 100%; }
 .dc-input-card { background: var(--white); padding: 24px; }
 .dc-field-label { display: block; margin: 0 0 8px; color: var(--navy); font-size: 14px; font-weight: 600; }
-.dc-input-row, .dc-email-row { display: flex; align-items: stretch; gap: 12px; min-width: 0; }
+.dc-input-row { display: flex; align-items: stretch; gap: 12px; min-width: 0; }
 .dc-input-field-wrap { display: flex; align-items: center; min-width: 0; flex: 1; border: 1px solid var(--navy); background: var(--white); }
 .dc-input-prefix { flex: 0 0 auto; padding-left: 12px; font-size: 16px; color: var(--text-muted); user-select: none; }
 .dc-page .dc-input-field { flex: 1 1 0; min-width: 0; width: 0; padding: 12px; border: 0; border-radius: 0; background: transparent; outline: none; color: var(--text); font-family: var(--font-body); font-size: 16px; line-height: 1.5; }
@@ -33,9 +33,9 @@
 .dc-input-field-wrap:focus-within { outline: 2px solid var(--navy); outline-offset: 3px; }
 .dc-page :is(button,a,input):focus-visible { outline: 2px solid var(--navy); outline-offset: 4px; }
 .dc-page :is(button,input) { border-radius: 0; caret-color: var(--navy); }
-.dc-page :is(.dc-scan-btn,.dc-email-btn,.dc-reset-btn) { min-height: 48px; padding: 12px 20px; border: 1px solid var(--navy); font-family: var(--font-display); font-size: 13px; font-weight: 600; line-height: 1.5; letter-spacing: 0.02em; cursor: pointer; text-transform: none; }
-.dc-scan-btn, .dc-email-btn { color: var(--white); background: var(--navy); }
-.dc-page :is(.dc-scan-btn,.dc-email-btn):hover { background: var(--navy-deep); }
+.dc-page :is(.dc-scan-btn,.dc-reset-btn) { min-height: 48px; padding: 12px 20px; border: 1px solid var(--navy); font-family: var(--font-display); font-size: 13px; font-weight: 600; line-height: 1.5; letter-spacing: 0.02em; cursor: pointer; text-transform: none; }
+.dc-scan-btn { color: var(--white); background: var(--navy); }
+.dc-page :is(.dc-scan-btn):hover { background: var(--navy-deep); }
 .dc-page button:disabled { cursor: wait; opacity: 0.7; }
 .dc-page .dc-error { width: 100%; margin-top: 16px; color: var(--danger); font-size: 15px; line-height: 1.6; }
 .dc-page .dc-input-hint { width: 100%; margin-top: 16px; color: var(--text-muted); font-size: 14px; line-height: 1.6; }
@@ -48,7 +48,7 @@
 .dc-page .dc-cat-preview-desc { width: 100%; margin: 0; color: var(--text-muted); font-size: 15px; line-height: 1.65; }
 .dc-page .dc-disclaimer { width: 100%; max-width: none; margin: 0; padding: 24px 0 0; border: 0; border-top: 1px solid #bac3ce; border-radius: 0; background: transparent; }
 .dc-page .dc-disclaimer p { width: 100%; color: var(--text-muted); font-size: 14px; line-height: 1.65; }
-.dc-scanning-card, .dc-email-card { padding: 24px; background: var(--white); }
+.dc-scanning-card { padding: 24px; background: var(--white); }
 .dc-spinner { width: 100%; height: 3px; margin-bottom: 24px; background: var(--navy); animation: dc-progress 1.6s ease-in-out infinite; }
 @keyframes dc-progress { 50% { opacity: 0.4; } }
 .dc-page .dc-scanning-domain { margin: 0 0 24px; overflow-wrap: anywhere; font-size: 24px; line-height: 1.3; }
@@ -58,15 +58,6 @@
 .dc-phase-active .dc-phase-dot, .dc-phase-done .dc-phase-dot { background: var(--navy); }
 .dc-phase-label { font-size: 15px; line-height: 1.6; color: var(--text-muted); }
 .dc-phase-active .dc-phase-label { color: var(--navy); font-weight: 600; }
-.dc-email-preview { margin-bottom: 24px; }
-.dc-email-grade-peek { display: flex; align-items: baseline; gap: 12px; margin-bottom: 16px; }
-.dc-email-grade-letter { font-family: var(--font-display); font-size: 40px; font-weight: 600; line-height: 1.1; }
-.dc-email-grade-score { color: var(--text-muted); font-size: 16px; }
-.dc-page .dc-email-preview-text, .dc-page .dc-email-sub { width: 100%; font-size: 16px; line-height: 1.65; }
-.dc-page .dc-email-title { margin: 0 0 12px; font-size: 24px; line-height: 1.3; }
-.dc-email-sub { margin-bottom: 20px !important; color: var(--text-muted); }
-.dc-email-input { min-width: 0; flex: 1 1 0; padding: 12px; border: 1px solid var(--navy); background: var(--white); font-family: var(--font-body); font-size: 16px; line-height: 1.5; }
-.dc-skip-link { min-height: 44px; margin-top: 16px; padding: 8px 0; border: 0; background: none; color: var(--navy); font-family: var(--font-body); font-size: 15px; text-align: left; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
 .dc-report { width: 100%; min-width: 0; }
 .dc-report-header { padding: 24px; background: var(--white); }
 .dc-report-identity { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 20px; min-width: 0; margin-bottom: 24px; }
@@ -119,9 +110,9 @@
   .dc-page .dc-main { padding: 24px 16px 40px; }
   .dc-page .dc-hero { margin-bottom: 24px; }
   .dc-hero-facts { gap: 8px 20px; }
-  .dc-input-card, .dc-scanning-card, .dc-email-card, .dc-report-header { padding: 20px; }
-  .dc-input-row, .dc-email-row { flex-direction: column; }
-  .dc-page .dc-input-field, .dc-email-input { min-width: 0; }
+  .dc-input-card, .dc-scanning-card, .dc-report-header { padding: 20px; }
+  .dc-input-row { flex-direction: column; }
+  .dc-page .dc-input-field { min-width: 0; }
   .dc-categories-grid { grid-template-columns: minmax(0,1fr); gap: 24px; }
   .dc-report-identity { gap: 16px; }
   .dc-reset-btn { width: 100%; }
@@ -139,3 +130,5 @@
   .dc-page .dc-report-header { padding: 0; background: none; }
   .dc-page .dc-finding-item { break-inside: avoid; }
 }
+.dc-page .dc-nav-links a { font-family: var(--font-display); font-weight: 600; }
+.cls-marketing:has(.dc-page) .cls-footer-brand { font-weight: 600; }
