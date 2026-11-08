@@ -42,7 +42,7 @@ export async function POST(req:NextRequest){
     const [site,visual]=await Promise.all([collectSite(url.href,start+40000),render(url,start+40000).catch((err:unknown)=>{const e=(err && typeof err==="object"?err:{}) as {name?:unknown;cause?:{code?:unknown}};const code=typeof e.cause?.code==="string" && /^[A-Z0-9_]{1,32}$/.test(e.cause.code)?e.cause.code:"none";console.warn("[positioning-render]",JSON.stringify({runtime:process.version,errorClass:e.name==="TypeError"||e.name==="AbortError"?e.name:"Error",code}));return null;})]);
     applyRenderedFallback(site,visual?.renderedText??null); const primary=site.pages[0]; if(!primary||primary.retainedChars<150)return failure("blocked_or_unreadable","We could not read enough of the submitted page to assess it. Please check the address and try again.",422,true);
     const screenshots=visual?.screenshots??(["desktop","mobile"] as const).map(viewport=>({id:`screenshot-${viewport}`,viewport,state:"unavailable" as const,analyzed:false,clippedFromPx:null}));
-    if(!visual||screenshots.some(s=>!s.analyzed))site.limitations.push("Some or all homepage images could not be assessed.");
+    if(!visual||screenshots.some(s=>!s.analyzed))site.limitations.push("Some or all page images could not be assessed.");
     if(screenshots.some(s=>s.state==="clipped"))site.limitations.push("At least one screenshot covers only the top portion of the page.");
     const evidence=[...site.evidence,...(visual?.evidence??[])]; const result=await generateAnalysis(evidence,visual?.images??[],{pages:site.pages,screenshots,limitations:site.limitations},deadline);
     const partial=site.limitations.length>0||site.pages.some(p=>p.state!=="readable");
@@ -50,6 +50,7 @@ export async function POST(req:NextRequest){
     return NextResponse.json({status:partial?"partial":"success",metadata:{schemaVersion:"1",rubricVersion:RUBRIC_VERSION,promptVersion:PROMPT_VERSION,model:MODEL,generatedAt:new Date().toISOString(),requestedUrl:url.href,resolvedOrigin:site.resolvedOrigin,aiGenerated:true},coverage:{pages:site.pages,screenshots,limitations:site.limitations},evidence,part1:result.analysis.part1,part2:result.analysis.part2},{headers:{"Cache-Control":"no-store"}});
   }catch(e){const code=e instanceof Error?e.message:"provider_unavailable";console.warn("[positioning-check]",JSON.stringify({errorCode:code==="timeout"||code==="invalid_analysis"||code==="review_limit"?code:"provider_unavailable",durationMs:Date.now()-start}));if(code==="review_limit")return failure("blocked_or_unreadable","This website exceeds the review size limit. Please try a more focused page.",422,true);if(code==="timeout")return failure("timeout","The review timed out. Please try again.",504,true);if(code==="invalid_analysis")return failure("invalid_analysis","We could not produce a reliable report. Please try again.",502,true);return failure("provider_unavailable","The review is temporarily unavailable. Please try again later.",503,true);}finally{await releaseWithinDeadline(reservation.release,deadline);}
 }
+
 
 
 
