@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { completeAnswers } from "../../src/lib/desired-client/__tests__/blueprint-helpers";
+import { layout } from "./helpers";
 import { buildStructuredBlueprintV4 } from "../../src/lib/desired-client/structured-blueprint";
 
 test("the new name and legacy address share the same tool and framing policy", async ({ page }) => {
@@ -44,4 +45,11 @@ test("a reviewed saved report survives navigation from the old address to the ne
   expect(restored.savedBrief).toEqual(draft.savedBrief);
   expect(restored.expiresAt).toBe(draft.expiresAt);
   expect(analysisCalls).toBe(0);
+});
+
+test("the confidentiality reminder reflows in the 320px public wrapper", async ({ page }) => {
+  // The wrapper's 16px sides and iframe borders leave a 286px child viewport.
+  await page.setViewportSize({ width: 286, height: 1000 });
+  await page.goto("/tools/best-cases-profile?embed=1");
+  await layout(page, ".closing [data-ui-copy]");
 });
