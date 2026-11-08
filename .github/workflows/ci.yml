@@ -167,16 +167,11 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          # 22, not the repo-wide 20: @sparticuz/chromium 149 declares
-          # `engines: { node: "^22.17.0 || >=24.0.0" }`, so installing it
-          # under Node 20 emits an EBADENGINE warning and runs the browser
-          # on a Node version its own maintainers do not support. This job
-          # must match what actually runs the service in production (Vercel
-          # resolves the runtime from services/render/package.json's own
-          # engines field), or CI is testing a configuration that never
-          # ships. The root app's jobs stay on 20 -- this override is
-          # scoped to the render service alone.
-          node-version: '22'
+          # Match the renderer's pinned production runtime. An open-ended
+          # engines range selected Node 26, whose built-in fetch rejects
+          # the installed undici 6 dispatcher before any request is sent.
+          # The transport test exercises that real fetch/dispatcher pairing.
+          node-version: '24'
           cache: 'npm'
           cache-dependency-path: services/render/package-lock.json
       - name: Install dependencies
