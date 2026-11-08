@@ -96,8 +96,8 @@ describe("Blueprint exports", () => {
     expect(html).toContain("Why clients choose the firm");
     expect(text).toContain("CLIENT TYPE");
     expect(text).toContain("CLIENT SITUATION AND MATTER");
-    expect(text).toContain("CLIENT DECISION PATHWAY Â· WORKING INTERPRETATION");
-    expect(markdown).toContain("## Client decision pathway Â· working interpretation");
+    expect(text).toContain("CLIENT DECISION PATHWAY · WORKING INTERPRETATION");
+    expect(markdown).toContain("## Client decision pathway · working interpretation");
     expect(markdown).toContain("## Client goals and needs");
     expect(html).not.toContain("Points still to resolve</h2>");
   });

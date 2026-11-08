@@ -40,12 +40,12 @@ function contributionText(contribution: NonNullable<ReturnType<typeof buildBluep
 }
 
 function contributionHtml(contribution: NonNullable<ReturnType<typeof buildBlueprintViewModel>["cards"][number]["contribution"]>): string {
-  return `<div class="calculated"><div><strong>${escapeHtml(contribution.label)}:</strong> <span>${escapeHtml(contribution.amount)}</span></div>${contribution.margin ? `<div class="calculated-margin"><strong>${escapeHtml(contribution.margin.label)}:</strong> <span>${escapeHtml(contribution.margin.amount)}</span></div>` : "<p>Contribution margin not calculated because collected fees are zero.</p>"}<small>${escapeHtml(EVIDENCE_BASIS_LABELS[contribution.basis])} Â· ${escapeHtml(contribution.scope)}. Calculated as collected fees less direct delivery costs; overhead and acquisition costs are excluded. This is not net profit.</small></div>`;
+  return `<div class="calculated"><div><strong>${escapeHtml(contribution.label)}:</strong> <span>${escapeHtml(contribution.amount)}</span></div>${contribution.margin ? `<div class="calculated-margin"><strong>${escapeHtml(contribution.margin.label)}:</strong> <span>${escapeHtml(contribution.margin.amount)}</span></div>` : "<p>Contribution margin not calculated because collected fees are zero.</p>"}<small>${escapeHtml(EVIDENCE_BASIS_LABELS[contribution.basis])} · ${escapeHtml(contribution.scope)}. Calculated as collected fees less direct delivery costs; overhead and acquisition costs are excluded. This is not net profit.</small></div>`;
 }
 
 function legacyText(brief: LegacyDesiredClientBriefV1): string {
   return [
-    "Desired Client Blueprint Â· Original version",
+    "Desired Client Blueprint · Original version",
     "",
     "DESIRED CLIENT PORTRAIT",
     brief.portrait.text,
@@ -74,7 +74,7 @@ export function formatBriefText(saved: SavedBrief, answers: DesiredClientAnswers
     view.title,
     view.status,
     view.evidenceStatus,
-    `${view.modeLabel} Â· ${view.date}`,
+    `${view.modeLabel} · ${view.date}`,
     "",
     "OUR CLIENT AND MATTER DEFINITION",
     view.definition,
@@ -86,7 +86,7 @@ export function formatBriefText(saved: SavedBrief, answers: DesiredClientAnswers
     `Review period: ${view.progressReview.reviewPeriod}`,
     `Status: ${view.progressReview.status}`,
     ...(view.decisionPathway && "client" in view.definitionComponents ? ["", "CLIENT TYPE", view.definitionComponents.client.text, "", "CLIENT SITUATION AND MATTER", view.definitionComponents.client_matter.text] : []),
-    ...(view.decisionPathway ? ["", "CLIENT DECISION PATHWAY Â· WORKING INTERPRETATION", ...decisionPathwayEntries(view).map(([label, statement]) => `${label} [${EVIDENCE_BASIS_LABELS[statement.evidence_basis]}]: ${statement.text}`)] : []),
+    ...(view.decisionPathway ? ["", "CLIENT DECISION PATHWAY · WORKING INTERPRETATION", ...decisionPathwayEntries(view).map(([label, statement]) => `${label} [${EVIDENCE_BASIS_LABELS[statement.evidence_basis]}]: ${statement.text}`)] : []),
     ...view.cards.flatMap((card) => ["", card.title.toUpperCase(), ...(card.recoveryDisclosure ? [card.recoveryDisclosure.label, card.recoveryDisclosure.description] : []), ...card.claims.map((claim) => `${EVIDENCE_BASIS_LABELS[claim.evidence_basis]}: ${claim.text}`), ...(card.contribution ? contributionText(card.contribution) : [])]),
     ...(view.decisionPathway ? [] : ["", "POINTS STILL TO RESOLVE", ...(view.openQuestions.length ? view.openQuestions.map((item) => `- ${item.text}`) : ["- No specific open question was recorded"])]),
     "",
@@ -95,7 +95,7 @@ export function formatBriefText(saved: SavedBrief, answers: DesiredClientAnswers
 }
 
 export function formatBriefMarkdown(saved: SavedBrief, answers: DesiredClientAnswers): string {
-  if (!isCurrentBrief(saved.brief)) return `# Desired Client Blueprint Â· Original version\n\n${legacyText(saved.brief)}\n`;
+  if (!isCurrentBrief(saved.brief)) return `# Desired Client Blueprint · Original version\n\n${legacyText(saved.brief)}\n`;
   const view = currentView(saved, answers);
   const cards = view.cards.flatMap((card) => [
     `## ${card.title}`,
@@ -106,7 +106,7 @@ export function formatBriefMarkdown(saved: SavedBrief, answers: DesiredClientAns
     ...(card.opportunityBasis ? [`**Numerical and source result basis:** ${card.opportunityBasis}`, ""] : []),
   ]);
   const decisionPathway = view.decisionPathway ? [
-    "## Client decision pathway Â· working interpretation",
+    "## Client decision pathway · working interpretation",
     "",
     ...decisionPathwayEntries(view).flatMap(([label, statement]) => [`**${label}:** ${statement.text}`, `**Evidence:** ${EVIDENCE_BASIS_LABELS[statement.evidence_basis]}`, `**Sources:** ${statement.source_answer_ids.join(", ") || "No linked answer"}`, ""]),
   ] : [];
@@ -121,9 +121,9 @@ export function formatBriefMarkdown(saved: SavedBrief, answers: DesiredClientAns
     "# Best Cases Profile",
     `## ${view.title}`,
     "",
-    `_${view.status} Â· ${view.evidenceStatus}_`,
+    `_${view.status} · ${view.evidenceStatus}_`,
     "",
-    `**${view.modeLabel} Â· ${view.date}**`,
+    `**${view.modeLabel} · ${view.date}**`,
     "",
     "## Client definition",
     "",
@@ -213,7 +213,7 @@ function snapshotAnswer(snapshot: unknown, path: string): string | null {
 
 function legacyHtml(brief: LegacyDesiredClientBriefV1, saved: SavedBrief, answers: DesiredClientAnswers): string {
   const statement = (label: string, item: LegacyDesiredClientBriefV1["portrait"]) => `<section class="legacy-card"><h2>${escapeHtml(label)}</h2><p>${escapeHtml(item.text)}</p><span class="evidence">${escapeHtml(item.kind)}</span></section>`;
-  return `<header><p class="eyebrow">CASELOAD SELECT Â· ORIGINAL REPORT VERSION</p><h1>Desired Client Blueprint</h1><p>Original report Â· ${escapeHtml(saved.generatedAt.slice(0, 10))}</p></header><main><section class="definition"><h2>Desired client portrait</h2><p>${escapeHtml(brief.portrait.text)}</p></section><div class="cards">${statement("Client need", brief.client_need)}${statement("Firm value", brief.firm_value)}</div><section class="legacy-card"><h2>Marketing direction</h2><p><strong>Message:</strong> ${escapeHtml(brief.marketing.message.text)}</p><p><strong>Content:</strong> ${escapeHtml(brief.marketing.content.text)}</p><p><strong>Next step:</strong> ${escapeHtml(brief.marketing.next_step.text)}</p></section><section class="legacy-card"><h2>Open questions</h2>${brief.open_questions.map((item) => `<p>${escapeHtml(item.text)}</p>`).join("") || "<p>None recorded</p>"}</section><details class="supporting"><summary>Original answer sources</summary>${sourceMarkup(saved, answers)}</details><p class="footnote">This is the original dcm-blueprint-v1 report. It has not been rewritten as the current six-card blueprint.</p></main>`;
+  return `<header><p class="eyebrow">CASELOAD SELECT · ORIGINAL REPORT VERSION</p><h1>Desired Client Blueprint</h1><p>Original report · ${escapeHtml(saved.generatedAt.slice(0, 10))}</p></header><main><section class="definition"><h2>Desired client portrait</h2><p>${escapeHtml(brief.portrait.text)}</p></section><div class="cards">${statement("Client need", brief.client_need)}${statement("Firm value", brief.firm_value)}</div><section class="legacy-card"><h2>Marketing direction</h2><p><strong>Message:</strong> ${escapeHtml(brief.marketing.message.text)}</p><p><strong>Content:</strong> ${escapeHtml(brief.marketing.content.text)}</p><p><strong>Next step:</strong> ${escapeHtml(brief.marketing.next_step.text)}</p></section><section class="legacy-card"><h2>Open questions</h2>${brief.open_questions.map((item) => `<p>${escapeHtml(item.text)}</p>`).join("") || "<p>None recorded</p>"}</section><details class="supporting"><summary>Original answer sources</summary>${sourceMarkup(saved, answers)}</details><p class="footnote">This is the original dcm-blueprint-v1 report. It has not been rewritten as the current six-card blueprint.</p></main>`;
 }
 
 export function formatBriefHtml(saved: SavedBrief, answers: DesiredClientAnswers): string {
@@ -221,13 +221,13 @@ export function formatBriefHtml(saved: SavedBrief, answers: DesiredClientAnswers
   const body = legacy ? legacyHtml(saved.brief as LegacyDesiredClientBriefV1, saved, answers) : (() => {
     const view = currentView(saved, answers);
     const cards = view.cards.map((card) => `<section class="card"><h2>${escapeHtml(card.title)}</h2>${card.recoveryDisclosure ? `<div class="recovery-disclosure"><strong>${escapeHtml(card.recoveryDisclosure.label)}</strong><p>${escapeHtml(card.recoveryDisclosure.description)}</p></div>` : ""}${card.claims.map((claim) => `<div class="claim"><span class="evidence">${escapeHtml(EVIDENCE_BASIS_LABELS[claim.evidence_basis])}</span><p>${escapeHtml(claim.text)}</p></div>`).join("")}${card.contribution ? contributionHtml(card.contribution) : ""}${card.opportunityBasis ? `<p class="opportunity-basis">Numeric and source results: <span class="evidence">${escapeHtml(card.opportunityBasis)}</span></p>` : ""}</section>`).join("");
-    const decisionPathway = view.decisionPathway ? `<section class="decision-pathway" aria-labelledby="decision-pathway-title"><div class="decision-pathway-heading"><h2 id="decision-pathway-title">Client decision pathway</h2><span>Working interpretation Â· review with the firm</span></div><div class="decision-pathway-steps">${decisionPathwayEntries(view).map(([label, statement]) => `<article><h3>${escapeHtml(label)}</h3><p>${escapeHtml(statement.text)}</p><span class="evidence">${escapeHtml(EVIDENCE_BASIS_LABELS[statement.evidence_basis])}</span></article>`).join("")}</div></section>` : "";
+    const decisionPathway = view.decisionPathway ? `<section class="decision-pathway" aria-labelledby="decision-pathway-title"><div class="decision-pathway-heading"><h2 id="decision-pathway-title">Client decision pathway</h2><span>Working interpretation · review with the firm</span></div><div class="decision-pathway-steps">${decisionPathwayEntries(view).map(([label, statement]) => `<article><h3>${escapeHtml(label)}</h3><p>${escapeHtml(statement.text)}</p><span class="evidence">${escapeHtml(EVIDENCE_BASIS_LABELS[statement.evidence_basis])}</span></article>`).join("")}</div></section>` : "";
     const questions = !view.decisionPathway && view.openQuestions.length ? `<section class="open-questions"><h2>Points still to resolve</h2><ul>${view.openQuestions.map((item) => `<li>${escapeHtml(item.text)} <span class="evidence">${escapeHtml(EVIDENCE_BASIS_LABELS[item.evidence_basis])}</span></li>`).join("")}</ul></section>` : "";
     const conditions = view.conditions.length ? `<section class="conditions"><h2>Conditions and unresolved questions</h2><ul>${view.conditions.map((condition) => `<li>${escapeHtml(condition)}</li>`).join("")}</ul></section>` : "";
     const progress = `<section class="progress"><h2>Progress review</h2><dl>${[["Measure",view.progressReview.metric],["Target",view.progressReview.target],["Review period",view.progressReview.reviewPeriod],["Status",view.progressReview.status]].map(([label,value])=>`<div><dt>${label}</dt><dd>${escapeHtml(value)}</dd></div>`).join("")}</dl></section>`;
-    return `<header><p class="eyebrow">CASELOAD SELECT Â· BEST CASES PROFILE</p><h1>${escapeHtml(view.title)}</h1><p class="meta">${escapeHtml(view.modeLabel)} Â· Created ${escapeHtml(view.date)}</p><p class="status"><strong>${escapeHtml(view.status)}</strong><span>${escapeHtml(view.evidenceStatus)}</span></p></header><main><section class="definition"><h2>Client definition</h2><p>${emphasizedSentence(view.definition, view.definitionComponents)}</p></section>${conditions}${progress}${decisionPathway}<div class="cards">${cards}</div>${questions}<p class="footnote">${escapeHtml(REPORT_FOOTNOTE_COPY)}</p><details class="supporting"><summary>Supporting answers and sources</summary>${sourceMarkup(saved, answers)}</details></main>`;
+    return `<header><p class="eyebrow">CASELOAD SELECT · BEST CASES PROFILE</p><h1>${escapeHtml(view.title)}</h1><p class="meta">${escapeHtml(view.modeLabel)} · Created ${escapeHtml(view.date)}</p><p class="status"><strong>${escapeHtml(view.status)}</strong><span>${escapeHtml(view.evidenceStatus)}</span></p></header><main><section class="definition"><h2>Client definition</h2><p>${emphasizedSentence(view.definition, view.definitionComponents)}</p></section>${conditions}${progress}${decisionPathway}<div class="cards">${cards}</div>${questions}<p class="footnote">${escapeHtml(REPORT_FOOTNOTE_COPY)}</p><details class="supporting"><summary>Supporting answers and sources</summary>${sourceMarkup(saved, answers)}</details></main>`;
   })();
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${legacy ? "Desired Client Blueprint Â· Original version" : "Best Cases Profile"}</title><!--${EXPORT_BRAND_LICENSES}--><style>${EXPORT_BRAND_FONTS}
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${legacy ? "Desired Client Blueprint · Original version" : "Best Cases Profile"}</title><!--${EXPORT_BRAND_LICENSES}--><style>${EXPORT_BRAND_FONTS}
     :root{color-scheme:light;--navy:#1e2f58;--ink:#0D1520;--muted:#40516D;--paper:#f4f3ef;--line:#d7d8dc;--accent:#C4B49A}*{box-sizing:border-box}body{margin:0;padding:2rem;background:var(--paper);color:var(--ink);font:16px/1.5 'DC DM Sans',Arial,sans-serif}.page{width:min(100%,1000px);margin:auto;padding:2.25rem;background:white;border:1px solid var(--line);border-top:1px solid var(--line);box-shadow:none}header{padding-bottom:1.25rem;border-bottom:1px solid var(--line)}.eyebrow{margin:0 0 .5rem;color:var(--navy);font-size:.72rem;font-weight:700;letter-spacing:.1em}.meta,.status span,.footnote{color:var(--muted);font-size:.9rem}h1,h2,h3,p{max-width:none}h1{margin:.15rem 0;font-size:2rem;line-height:1.16}h2{font-size:1.05rem;line-height:1.25}header .status{display:flex;flex-wrap:wrap;gap:.5rem 1rem;margin:.8rem 0 0}.status strong{color:var(--navy)}.definition{margin:1.25rem 0;padding:1rem 1.15rem;border-inline-start:0;background:var(--paper)}.definition h2{margin:0 0 .45rem;color:var(--navy);font-size:.78rem;letter-spacing:.06em;text-transform:uppercase}.definition p{margin:0;font-size:1.1rem;line-height:1.5}.definition strong{color:var(--navy)}.cards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.75rem}.card,.legacy-card{break-inside:avoid;padding:1rem;border:1px solid var(--line);background:white}.card-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:.5rem}.card h2,.legacy-card h2{margin:0;color:var(--navy)}.card p,.legacy-card p{margin:.6rem 0 0;overflow-wrap:anywhere}.claim{padding-top:.45rem;border-top:1px solid var(--line)}.claim:first-of-type{padding-top:0;border:0}.calculated{display:grid;gap:.25rem;margin-top:.5rem;padding-top:.5rem;border-top:1px solid var(--line)}.calculated small{color:var(--muted)}.opportunity-basis{font-size:.85rem}.evidence{display:inline-block;flex:none;padding:.12rem .45rem;border:1px solid #cbd2de;border-radius:0;color:var(--navy);font-size:.72rem;line-height:1.5}.open-questions{margin-top:1rem;padding:.9rem 1rem;background:var(--paper)}.open-questions h2{margin:0;color:var(--navy)}.open-questions ul{margin:.5rem 0 0;padding-left:1.2rem}.footnote{margin:1rem 0 0}.supporting{margin-top:1.25rem;padding-top:.75rem;border-top:1px solid var(--line)}.supporting summary{cursor:pointer;color:var(--navy);font-weight:700}.source-entry{margin:1rem 0}.source-entry h3{margin:0;font-size:.95rem}.source-entry p{margin:.25rem 0}.source-entry ul{margin:.25rem 0;padding-left:1.2rem}.legacy-card{margin:.75rem 0}.legacy-card .evidence{margin-top:.5rem}.legacy-card p+p{margin-top:.5rem}
     .decision-pathway{margin:1rem 0 1.25rem;padding:1rem;border-top:1px solid var(--line);background:var(--paper);break-inside:avoid}.decision-pathway-heading{display:flex;justify-content:space-between;gap:1rem;align-items:baseline}.decision-pathway-heading h2{margin:0;color:var(--navy)}.decision-pathway-heading span{color:var(--muted);font-size:.8rem}.decision-pathway-steps{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.5rem;margin-top:.7rem}.decision-pathway-steps article{padding:.65rem;border:1px solid var(--line);background:#fff}.decision-pathway-steps h3{margin:0;color:var(--navy);font-size:.8rem}.decision-pathway-steps p{margin:.35rem 0;font-size:.9rem}
     .conditions,.progress{display:grid;gap:.5rem;margin:.75rem 0;padding:.8rem 1rem;background:var(--paper)}.conditions{border-top:1px solid var(--line)}.conditions h2,.progress h2{margin:0;color:var(--navy)}.conditions ul{margin:0;padding-left:1.2rem}.conditions li{overflow-wrap:anywhere}.progress dl{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.5rem;margin:0}.progress dl>div{min-width:0;padding:.5rem;background:#fff}.progress dt{font-size:.78rem;font-weight:700;color:var(--muted)}.progress dd{margin:.2rem 0 0;overflow-wrap:anywhere}

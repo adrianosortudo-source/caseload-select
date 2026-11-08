@@ -135,8 +135,8 @@ export function BriefView({
     <header className="dc-brief__header" data-ui-component-content="desired-client-blueprint-header">
       <Image className="dc-report-logo" src="/brand/logos/lockup-horizontal-tagline-light-transparent.png" alt="CaseLoad Select. Sign better cases." width={834} height={165} unoptimized />
       {legacy
-        ? <><p className="dc-eyebrow" data-ui-copy="supporting">ORIGINAL REPORT VERSION</p><h1 data-ui-copy="heading">Desired Client Blueprint</h1><p className="dc-report-status" data-ui-copy="supporting">Original dcm-blueprint-v1 Â· {saved.mode === "ai" ? "AI-assisted" : "Structured"} Â· {new Date(saved.generatedAt).toLocaleDateString("en-CA")}</p></>
-        : <><p className="dc-eyebrow" data-ui-copy="supporting">CASELOAD SELECT Â· BEST CASES PROFILE</p><h1 data-ui-copy="heading">{model!.title}</h1><p className="dc-report-meta" data-ui-copy="supporting">{model!.modeLabel} Â· Created {model!.date}</p><div className="dc-report-status"><strong data-ui-copy="supporting">{model!.status}</strong><span data-ui-copy="supporting">{model!.evidenceStatus}</span></div></>}
+        ? <><p className="dc-eyebrow" data-ui-copy="supporting">ORIGINAL REPORT VERSION</p><h1 data-ui-copy="heading">Desired Client Blueprint</h1><p className="dc-report-status" data-ui-copy="supporting">Original dcm-blueprint-v1 · {saved.mode === "ai" ? "AI-assisted" : "Structured"} · {new Date(saved.generatedAt).toLocaleDateString("en-CA")}</p></>
+        : <><p className="dc-eyebrow" data-ui-copy="supporting">CASELOAD SELECT · BEST CASES PROFILE</p><h1 data-ui-copy="heading">{model!.title}</h1><p className="dc-report-meta" data-ui-copy="supporting">{model!.modeLabel} · Created {model!.date}</p><div className="dc-report-status"><strong data-ui-copy="supporting">{model!.status}</strong><span data-ui-copy="supporting">{model!.evidenceStatus}</span></div></>}
     </header>
     {storageWarning && <p className="dc-alert dc-screen-only" data-ui-copy="supporting">This browser could not save your progress. You can still finish and download your profile.</p>}
     {analysisLoading && <p className="dc-alert dc-screen-only" role="status" data-ui-copy="supporting">{COMMON_COPY.previousBlueprintAvailable}</p>}
@@ -155,7 +155,7 @@ export function BriefView({
         <section className="dc-report-card dc-report-card--wide"><h2 data-ui-copy="heading">Open questions</h2>{report.open_questions.length ? <ul>{report.open_questions.map((item, index) => <li key={`${index}-${item.text}`}>{item.text}</li>)}</ul> : <p>No open questions were recorded.</p>}</section>
       </div>
       <p className="dc-report-footnote" data-ui-copy="supporting">This saved report remains in its original version. Create a new profile to use the current six-part format.</p>
-      {saved.sourceAnswersSnapshot && <details className="dc-report-supporting dc-screen-only"><summary>Original answer sources</summary><ul>{sourceSnapshotRows(saved, report).map((row) => <li key={row.path}><strong>{row.path.replaceAll(".", " Â· ").replaceAll("_", " ")}:</strong> {row.answer}</li>)}</ul></details>}
+      {saved.sourceAnswersSnapshot && <details className="dc-report-supporting dc-screen-only"><summary>Original answer sources</summary><ul>{sourceSnapshotRows(saved, report).map((row) => <li key={row.path}><strong>{row.path.replaceAll(".", " · ").replaceAll("_", " ")}:</strong> {row.answer}</li>)}</ul></details>}
     </> : model && <>
       <section className="dc-report-definition" data-ui-component-content="desired-client-definition">
         <h2 data-ui-copy="supporting">Client definition</h2>
@@ -184,7 +184,7 @@ export function BriefView({
         </dl>
       </section>
       {model.decisionPathway && <section className="dc-report-decision-pathway" aria-labelledby="dc-decision-pathway-title" data-ui-component-content="desired-client-decision-pathway">
-        <div className="dc-report-decision-pathway__heading"><h2 id="dc-decision-pathway-title" data-ui-copy="heading">Client decision pathway</h2><span data-ui-copy="supporting">Separate working interpretation Â· review with the firm</span></div>
+        <div className="dc-report-decision-pathway__heading"><h2 id="dc-decision-pathway-title" data-ui-copy="heading">Client decision pathway</h2><span data-ui-copy="supporting">Separate working interpretation · review with the firm</span></div>
         <div className="dc-report-decision-pathway__steps">{([
           ["Situation / trigger", model.decisionPathway.trigger],
           ["First contact", model.decisionPathway.first_contact],
@@ -209,7 +209,7 @@ export function BriefView({
             {card.contribution && <div className="dc-calculated-metric">
               <strong>{card.contribution.label}</strong><span>{card.contribution.amount}</span>
               {card.contribution.margin ? <div className="dc-calculated-metric__margin"><strong>{card.contribution.margin.label}</strong><span>{card.contribution.margin.amount}</span></div> : <small>Contribution margin not calculated because collected fees are zero.</small>}
-              <small>{EVIDENCE_BASIS_LABELS[card.contribution.basis]} Â· {card.contribution.scope}. Calculated as collected fees less direct delivery costs; overhead and acquisition costs are excluded. This is not net profit.</small>
+              <small>{EVIDENCE_BASIS_LABELS[card.contribution.basis]} · {card.contribution.scope}. Calculated as collected fees less direct delivery costs; overhead and acquisition costs are excluded. This is not net profit.</small>
             </div>}
             {card.opportunityBasis && <span className="dc-evidence-label dc-opportunity-basis">Numeric and source results: {card.opportunityBasis}</span>}
           </div>

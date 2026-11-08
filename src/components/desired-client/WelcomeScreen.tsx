@@ -67,7 +67,7 @@ export function WelcomeScreen({ onStart, aiAvailable = null, hasDraft = false, r
               <div className="detail-grid">{topic.details.map(([label, text]) => <div key={label} data-ui-component-content="desired-client-example-detail"><h3 className="detail-label">{label}</h3><p className="detail-text" data-ui-copy="body">{text}</p></div>)}</div>
               <div className="profile-note" data-ui-component-content="desired-client-example-note"><p className="note-title">{topic.noteTitle}</p><p className="note-text" data-ui-copy="body">{topic.note}</p></div>
             </div>
-            <div className="app-footer"><span>Schematic only Â· assumptions to test</span><span>Topic {selected + 1} of 6</span></div>
+            <div className="app-footer"><span>Schematic only · assumptions to test</span><span>Topic {selected + 1} of 6</span></div>
           </div>
           <p className="preview-caption">Explore the six tabs to see what a profile can contain</p>
         </div>
@@ -86,7 +86,7 @@ export function WelcomeScreen({ onStart, aiAvailable = null, hasDraft = false, r
       <section className="container process-section" aria-labelledby="dc-process-title">
         <div className="process-title" data-ui-component-content="desired-client-process-title"><p className="eyebrow">From thought to profile</p><h2 id="dc-process-title" data-ui-copy="heading">A guided process.</h2></div>
         <div className="steps">{[
-          ["Answer", "Work through six topics using your firmâ€™s experience and ambitions."],
+          ["Answer", "Work through six topics using your firm’s experience and ambitions."],
           ["Generate", "Bring your answers together in an AI-assisted draft profile."],
           ["Review and refine", "Check the reasoning, challenge assumptions and make the profile your own."],
         ].map(([heading, text], index) => <div className="step" key={heading} data-ui-component-content="desired-client-process-step"><div className="step-head"><span className="number">{index + 1}</span><h3>{heading}</h3></div><p data-ui-copy="body">{text}</p></div>)}</div>
