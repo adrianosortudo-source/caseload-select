@@ -266,7 +266,7 @@ for (const width of WIDTHS) {
     await assertLayout(page);
     await page.locator(`${INTAKE} textarea`).fill("Fictional test. A business client owes us $18,450 for completed work. I can approve hiring a lawyer. We have an invoice and signed contract.");
     await page.getByRole("button", { name: "Continue matter review", exact: true }).click();
-    await expect(page.getByRole("heading", { name: "Check the captured facts" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Review the facts" })).toBeVisible();
     await expect(page.getByText("Live AI completed the extraction. Review its interpretations before confirming.", { exact: true })).toBeVisible();
     await expect(page.getByText("Just me", { exact: true })).toBeVisible();
     await assertLayout(page);

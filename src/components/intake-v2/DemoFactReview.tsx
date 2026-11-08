@@ -12,7 +12,7 @@ export function DemoFactReview({ state, onConfirm, onEditDescription }: {
   const [editing, setEditing] = useState<string | null>(null);
   const [corrections, setCorrections] = useState<Record<string, string>>({});
   return <section className={styles.factReview} data-ui-component-content="demo-fact-review">
-    <h2 data-ui-copy="heading">Check the captured facts</h2>
+    <h2 data-ui-copy="heading">Review the facts</h2>
     <p data-ui-copy="body">Confirm these details or correct them before continuing. We will ask only for what is still missing.</p>
     <details className={styles.description}><summary>Your description</summary><p>{state.input}</p></details>
     <dl className={styles.reviewFacts}>

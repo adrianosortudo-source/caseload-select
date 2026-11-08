@@ -152,3 +152,7 @@
   .workspaceControls { padding-inline: 16px; }
   .pane { border-inline: 0; }
 }
+
+.brief :global(.reasoning-amount) dl { width: 100%; margin: 0; }
+.brief :global(.reasoning-amount) dt { font: 600 13px/1.5 var(--font-oxanium),sans-serif; color: #1e2f58; }
+.brief :global(.reasoning-amount) dd { width: 100%; margin: 8px 0 0; }

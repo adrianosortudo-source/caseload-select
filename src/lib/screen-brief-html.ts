@@ -1340,11 +1340,14 @@ export function renderBriefHtmlServer(
     // Tag real report content tracks for rendered copy gates. Compact source
     // chips and labels remain metadata; each fact value owns a full-width row.
     return demoHtml
+      // An amount is a labelled data record, rather than an awkward sentence
+      // split across narrow report columns. The original value is retained.
+      .replace(/<li>Amount at stake: ([^<]+)\.<\/li>/g, '<li class="reasoning-amount"><dl><div><dt>Amount at stake</dt><dd data-ui-copy="supporting">$1</dd></div></dl></li>')
       .replace(/<(div|ul)(\s[^>]*?)?>/g, '<$1$2 data-ui-component-content="demo-report-track">')
       .replace(/<li class="fact-row">/g, '<li class="fact-row" data-ui-component-content="demo-report-fact">')
       .replace(/<span class="fact-value">/g, '<span class="fact-value" data-ui-copy="supporting">')
       .replace(/<(p|h4|li)(\s[^>]*?)?>/g, (tag: string, name: string, attrs: string = '') => {
-        if (/class="(?:kicker|section-title|fact-row)"/.test(attrs)) return tag;
+        if (/class="(?:kicker|section-title|fact-row|reasoning-amount)"/.test(attrs)) return tag;
         return `<${name}${attrs} data-ui-copy="${name === 'h4' ? 'heading' : 'body'}">`;
       });
   }
