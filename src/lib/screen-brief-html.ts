@@ -1347,6 +1347,7 @@ export function renderBriefHtmlServer(
       'Confirm whether there is a prior business relationship to preserve, which affects whether to lead with demand or settlement.': 'Confirm whether preserving the business relationship favours a demand letter or settlement.',
       "The defendant's solvency. A judgment is only useful if collectable.": 'Check the ability to pay. A judgment needs to be collectable.',
       'Written terms or agreement not confirmed.': 'Are written terms available?',
+      'Likely a business advisory or commercial matter.': 'Likely commercial or business advisory work.',
       'Confirm the exact claim amount, relief sought and appropriate court before choosing a procedure.': 'Confirm the exact claim amount, relief and court before choosing a procedure.',
     };
     const readableDemoHtml = Object.entries(demoCopy).reduce((html, [before, after]) => html.split(esc(before)).join(esc(after)), demoHtml)
