@@ -1,22 +1,13 @@
-# Acceptance
-Updated2026-11-08. Gates0 and1 accepted:8/28 units. No later gate is marked complete.
+# Acceptance evidence
+Current runtime:2b0bc08c92fedd6f36db77ccd3b70880429bf2c2. Private pilot only; no production approval.
 
-## Current engineering evidence
-- cc9a21a8e: global TypeScript, ESLint, full Vitest, Vercel app/render builds and existing rendered regression jobs pass. Real-Postgres job status must be confirmed at final head.
-- Respective focused runs: normalize/provider/validator21/21, collector6/6, quota7/7, capture2/2 (36 across separate runs). New route/resource tests7/7 plus updated collector8/8 passed together15/15. Final-head CI required.
-- UI cloud final round:7/11 pass;640/390/375/320 fail only on nine distinct single-word endings. No width, overflow, natural-line-flow, contrast or interaction failure. Light/dark CTA contrast passes; Luna independently confirms readable contrast and no clipping.
-- Existing helper keeps the font increase within+2px. The next diagnostic records natural/pretty/balance combinations at+1/+2, exact word rectangles and canonical-padding alternatives, restores all styles, and leaves failing acceptance assertions intact. No new styling has been accepted as a pass.
-- Screenshots preserved in planning/ui-evidence/batch-1 and cloud-0359. The active test harness hides only development-tool chrome.
+- Final UI workflow42509859394/job128820347466:SUCCESS,11/11 tests in1.1m. Seven widths1440/1024/768/640/390/375/320; both parts, all directions, partial/error states, evidence links, keyboard, clipboard, full usable width, orphan/line-flow and light/dark CTA contrast. Retained typography and screenshots are in the artifact results.json. Root independently viewed375/320 and accepted readability/coherence. No remaining known finite-fixture UI failure.
+- The same workflow's bounded backend step passed. Cite the actual run, not source test-definition counts. Shared SSRF tests cover private/rebinding initial and redirect targets; feature tests exercise caps, deadline/cancellation, ownership, fallback provenance, validation and limiter failure behavior.
+- a49 required CI completed successfully, including real-Postgres128814595920 (18:04:12–18:24:32UTC). The final2b0 runtime's new long Postgres check and any docs-only head checks must be reported separately; no false all-current-head-green claim.
+- Actual hosted Gene:a49,HTTP200,37,737ms server,one model call,18,946 input/2,389 output tokens,7 pages,both screenshots analyzed/clipped. Actual MHC:HTTP200,41,137ms server (41.38s client),one call,10,160 input/1,854 output tokens,8 pages,both screenshots captured/analyzed. Both meet90s in this two-run sample; this is not a validated long-run percentile.
+- Hosted failure case:https://127.0.0.1 rejected before quota/provider; error heading focused, no retry or report. Actual source auto-expansion, direction choice, native clipboard brief and consultation destination verified. No enquiry/booked event/CRM write occurred.
+- Internal corpus:7 readable valid reports+1 unreadable/no AI output, plus two actual hosted agent reviews; no unresolved material support issue after the v6.1 label repair. Human-reviewed95% production criterion is NOT performed; no public accuracy or calibrated-confidence claim.
 
-## Current development semantic review
-- Coordinator source-based re-adjudication accepts MHC v4:41/41 non-question prose fields supported/acceptable in full hypothesis context;8/8 clarity within one point; references resolve; coverage correct. Effective wording is a minor limitation, not a blocker. Initial lexical flags were corrected after checking source evidence.
-- Gene normalized content is acceptable offline, but this is not a live endpoint pass. Historical v1-v3 and initial v4 findings remain preserved in evaluation references.
-- These are internal agent/coordinator judgments, not human-reviewed accuracy or public accuracy claims. Held-out and human-review criteria remain unperformed.
+Artifacts: D:\00_Work\01_CaseLoad_Select\05_Product\Planning\Positioning_Diagnostic\ui-evidence\cloud-2b0-final. Hosted JSON/screenshots: planning evaluation-local/hosted. Raw packets/provider bodies remain outside Git and contain no captured credentials.
 
-## Still required
-Actual new-route end-to-end report, remaining corpus/held-out checks, security matrix reconciliation, final copy acceptance, independent review of corrected artifacts and all required current-head CI. No source-only or offline result counts as live delivery. No production release or merge is authorized.
-- Hosted cc9 failure case: https://127.0.0.1 rejected as an invalid publicHTTPS address; focused error heading, no retry, no report; rejected before quota/provider.
-- cc9 real-Postgres required job128802533770 completedSUCCESS at17:31:45UTC (started17:14:48), including migrations, database/contracts, rendered checks and cleanup. It was running, not waiting for approval.
-- Selected3.8/v6 backend snapshot: combined focused52/52 across six suites; subsequent validator/Gemini25/25 after word-count feedback. Latest current-head CI must confirm the integrated source.
-- Accepted functional units now12/28:0/1 eight units;2.1 bounded collection reviewed by Sol;3.1–3.3 functional interface. Actual API/copy remains3.4, so Gate3 is not passed.
-- V6.1 narrow label guard: provider/validator tests26/26 pass; semantic regression and hosted result remain independent evidence.
+Limitations: structural prompt/data separation is not a semantic attack benchmark; no live malicious-DNS/page attack or concurrency-load stress was performed. Budget reservation is conservative, not provider-enforced billing. Gene's experience phrasing loses some lower-bound qualifiers; this is recorded as minor precision, not contradiction. Broader market/client perception and service quality were not assessed.

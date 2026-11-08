@@ -1,7 +1,11 @@
-Adds an isolated public website positioning review at `/tools/positioning-check`, backed by bounded same-site evidence collection and structured Gemini analysis. Visitors can inspect eight qualitative assessments and sources, consider optional directions, retain the current direction, and copy a discussion brief. No account, CRM writes, report history, or production release.
+Adds a private user-test preview at `/tools/positioning-check`: bounded public-site evidence collection, two-part source-linked interpretation, optional directions, keep-current/unsure choice, clipboard discussion brief and existing marketing consultation link.
 
-Draft integration checkpoint. Acceptance remains incomplete: real feature preview service smoke, full factual/semantic corpus, security/failure matrix, required responsive copy/contrast review, and CI must pass before this becomes test-ready. Current focused backend tests: 8/8; warmed local fixture interaction smoke passed. Full TypeScript recheck and responsive correction confirmation are pending.
+**Runtime tested:**2b0bc08c92fedd6f36db77ccd3b70880429bf2c2. Final browser workflow42509859394 passed11/11 across seven widths, both parts/all directions, partial/error states, keyboard/clipboard and light/dark CTA contrast. Actual hosted Gene/MHC reports passed200 in37.7/41.1s server with image evidence; independent agent review found no material issue. Human-reviewed production accuracy is not performed.
 
-Scope, ownership, gates and deviations: `docs/positioning-check/`. The feature is controlled by `POSITIONING_CHECK_ENABLED`; disabling it stops new analyses. Preview service configuration is scoped to this branch; production settings are unchanged. No migration or new dependency.
+**Boundaries:** no account, email/CRM write, database/migration, report history, new dependency or provider infrastructure. Node24 is pinned because the prior open engine selectedNode26, incompatible with the existing undici6 pinned-DNS transport. Same Gemini provider, stable3.8Flash/v6.1; conservative pilot8/day atUSD1.25 reservation/run,USD10/day model ceiling (estimate, not provider-enforced billing),max2 calls/105s.
 
-Do not merge without Adriano's explicit approval for this PR and passing required checks. Production deploys only through approved merge.
+**CI/release:** a49 required suite, including real Postgres, passed. The final runtime's new long Postgres job and any following docs-only head checks remain separately tracked; do not treat a docs-only head as fully green until it is. Production merge remains blocked on all required checks, human/owner review and Adriano's specific approval for PR472. No approval request is made during private testing.
+
+Disable new analyses with `POSITIONING_CHECK_ENABLED=false`; no data migration rollback. Current decisions, evidence, limitations and rollback/config notes: `docs/positioning-check/DECISIONS.md`, `ACCEPTANCE.md` and `CLOSEOUT.md`. Historical failed candidates are retained as superseded evidence.
+
+Private test link: https://caseload-select-git-codex-8126ad-adrianosortudo-7282s-projects.vercel.app/tools/positioning-check
