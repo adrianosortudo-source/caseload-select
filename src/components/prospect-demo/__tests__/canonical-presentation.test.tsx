@@ -45,8 +45,7 @@ describe("canonical prospect presentation", () => {
   });
   it("loads the same fixed sample without touching the private profile library", async () => {
     render(<ProspectDemoClient profileId="example-law-firm" sampleOnly embedded />);
-    await waitFor(() => expect(screen.getByLabelText("Fictional inquiry")).toBeTruthy());
-    expect(screen.getByLabelText("Fictional inquiry").getAttribute("data-runtime")).toBe("demo-live-ai");
+    await waitFor(() => expect(screen.getByLabelText("Fictional inquiry").getAttribute("data-runtime")).toBe("demo-live-ai"));
     expect(screen.queryByRole("img", { name: "CaseLoad Select" })).toBeNull();
     expect(store.ensureProspectDemoProfile).not.toHaveBeenCalled();
     expect(store.readProspectDemoProfile).not.toHaveBeenCalled();
