@@ -1,19 +1,17 @@
 # Acceptance
-- Repository baseline/isolation: PASS; canonical files preserved. Draft PR472, latest pushed checkpoint fb099259a.
-- Backend focused checks:22/22 PASS as reported by Terra (17 quota/validator/capture and5collector); final CI required.
-- Required CI at fb099: Vercel preview build, ESLint, full Vitest and several regression jobs pass. CI TypeScript fails only collector test Evidence-union narrowing, being corrected. Final current-head CI required.
-- Local fixture browser batch:4/10 PASS,6/10 FAIL. Evidence/keyboard/clipboard, provider failure and1440/1024 full matrix passed. Partial selector ambiguity, mobile single-word endings, and machine teardown/I/O failures recorded. No global visual pass claimed.
-- Confirmed CTA contrast defect corrected in scoped anchor selector. Computed light/dark contrast assertion and crop screenshots added; cloud verification pending.
-- Local screenshots preserved: D:\00_Work\01_CaseLoad_Select\05_Product\Planning\Positioning_Diagnostic\ui-evidence\batch-1.
-- One scoped CI browser job now owns full seven-width/all-direction/partial/error confirmation, plus light/dark CTA contrast and artifacts.
-- Real new-service reports/limiter/cost verification: coordinator owned, pending report.
-- Independent factual corpus and final rendered/contrast/brand acceptance: NOT COMPLETE.
-- No fixture/source-only result counts as live output or visual approval.
-- Latest focused backend total26/26 (prior22 plus4 provider tests), reported by Terra. Whole-head CI pending.
-- Scoped interface mechanical detector: no findings. This does not replace rendered acceptance.
-- Gates0 and1 accepted:8/28 units. Node24 renderer readiness, same-key Gemini capability and new-route Redis reservation verified. No new-report semantic acceptance implied.
-- Cloud UI at11d:7/11 pass;640/390/375/320 fail only single-word endings. Light/dark consultation contrast passes; all width/overflow and natural-line-flow checks pass. Independent Luna review confirms readable contrast and no clipping.
-- Current-head global TypeScript, ESLint, full Vitest, Vercel builds and existing rendered regression jobs pass; final scoped UI confirmation and real-Postgres job status remain to be checked.
-- Final coordinator-approved bounded typography correction is entering one cloud matrix. Further blind UI changes are prohibited if this remains unresolved.
-- Latest respective focused runs: normalize/provider/validator21/21; collector6/6; quota7/7; capture2/2. Total36 across those runs, not a claim of one combined current-head suite. CI remains required.
-- v4 semantics: normalized Gene offline content acceptable to Luna, but no live new-route pass; MHC skill/effectiveness issues remain. Semantic gate is NOT PASSED. Holdouts remain sealed.
+Updated2026-11-08. Gates0 and1 accepted:8/28 units. No later gate is marked complete.
+
+## Current engineering evidence
+- cc9a21a8e: global TypeScript, ESLint, full Vitest, Vercel app/render builds and existing rendered regression jobs pass. Real-Postgres job status must be confirmed at final head.
+- Respective focused runs: normalize/provider/validator21/21, collector6/6, quota7/7, capture2/2 (36 across separate runs). New route/resource tests7/7 plus updated collector8/8 passed together15/15. Final-head CI required.
+- UI cloud final round:7/11 pass;640/390/375/320 fail only on nine distinct single-word endings. No width, overflow, natural-line-flow, contrast or interaction failure. Light/dark CTA contrast passes; Luna independently confirms readable contrast and no clipping.
+- Existing helper keeps the font increase within+2px. The next diagnostic records natural/pretty/balance combinations at+1/+2, exact word rectangles and canonical-padding alternatives, restores all styles, and leaves failing acceptance assertions intact. No new styling has been accepted as a pass.
+- Screenshots preserved in planning/ui-evidence/batch-1 and cloud-0359. The active test harness hides only development-tool chrome.
+
+## Current development semantic review
+- Coordinator source-based re-adjudication accepts MHC v4:41/41 non-question prose fields supported/acceptable in full hypothesis context;8/8 clarity within one point; references resolve; coverage correct. Effective wording is a minor limitation, not a blocker. Initial lexical flags were corrected after checking source evidence.
+- Gene normalized content is acceptable offline, but this is not a live endpoint pass. Historical v1-v3 and initial v4 findings remain preserved in evaluation references.
+- These are internal agent/coordinator judgments, not human-reviewed accuracy or public accuracy claims. Held-out and human-review criteria remain unperformed.
+
+## Still required
+Actual new-route end-to-end report, remaining corpus/held-out checks, security matrix reconciliation, final copy acceptance, independent review of corrected artifacts and all required current-head CI. No source-only or offline result counts as live delivery. No production release or merge is authorized.

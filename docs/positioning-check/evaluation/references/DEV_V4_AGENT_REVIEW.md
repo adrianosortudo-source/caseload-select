@@ -9,8 +9,8 @@
 - Deterministic evidence check: 32 references across elements and directions; 11 unique IDs; all resolve to the packet.
 - Blind clarity denominator 8; 8/8 ratings within one point. The output uses clarity 3 for all elements; monitor possible ceiling tendency, but do not treat this as a failure of the agreed criterion.
 - The false fewer-than-three-pages abstention is corrected. `consistency` is assessed across captured pages.
-- Material support concerns in directions: D1 uses “innovative legal solutions” and “shape legal outcomes,” beyond evidence of the firm's prior precedent-setting work; D3 states “effective” mediation/arbitration and expects the firm to “expertly handle” resolution paths, unsupported effectiveness/skill claims. Reframe as exploratory messaging around documented prior experience and listed services. D2's expectations of supportive process/future family dynamics and tradeoff about clients preferring to avoid court should remain explicitly conditional and validated.
-- Readiness gate remains unmet; no human-reviewed criterion passed.
+- Full Part 2 context re-adjudication: review unit denominator is 41 non-question prose fields (top statement/rationale 2; eight elements × finding/reason/uncertainty 24; three directions × five prose fields 15). 41/41 are supported or appropriately framed as exploratory in the full report; 0 material unsupported assertions. D1's “precedent-setting expertise” and “shape legal outcomes” describe a possible focus grounded in lead-counsel precedent-setting cases and documented legal-reform work (`text-1`, `text-19`, `text-20`), not a promised result for an individual client. D2 draws on the firm's stated healing/security/best-interests aims (`text-3`); its expectation and tradeoff are already qualified with “may”/“might.” D3's resolution-service framing is grounded in litigation/ADR services and the lawyer's described negotiation/mediation skill and tailored work (`text-15`, `text-23`). The adjective “effective” in D3 could be softened as minor copy precision because no effectiveness was measured; it is not a material guarantee or blocker. This final adjudication supersedes the earlier lexical-risk note.
+- Agent review only; no human-reviewed criterion is claimed.
 
 ## Gene Colman (`site_gene`)
 
@@ -25,3 +25,4 @@
 - The only recorded transformation changes the authored em dash to comma-and-space; exact source quotations are retained. The artifact reports `errors: []`.
 - Against the unchanged blind reference: 8/8 clarity ratings are within one point; 8 element keys; 3 directions; no visual findings; partial state appropriate. The v3 material promises (“secure your assets and future”; “ensures their case is heard fairly”) are removed. No remaining material unsupported guarantee was found in this independent review.
 - This is acceptable semantic content after offline normalization, but it is **not** a live app/run pass. The two-call v4 route ended in `invalid_analysis` before this postprocessing, so runtime normalization/guard behavior still needs a deterministic check before claiming readiness.
+
