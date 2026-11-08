@@ -171,3 +171,5 @@
 .brief ul { padding-left: 0; list-style: none; }
 
 .widget [data-shell-layout="contained"] .factReview > p { text-wrap: pretty; }
+
+.widget [data-ui-component-content="demo-contact-status"] dt { font: 600 13px/1.5 var(--font-oxanium),sans-serif; }

@@ -843,7 +843,7 @@ export function ScreenEnginePublicWidget({
           <h2 className="w-full text-2xl font-extrabold" data-ui-copy="heading" style={{ fontFamily: fontDisplay }}>Contact details</h2>
           <p className="w-full" data-ui-copy="body">A real intake asks for:</p>
           <ul className="w-full" data-ui-component-content="demo-contact-fields"><li data-ui-copy="body">Name.</li><li data-ui-copy="body">Email address or phone number.</li></ul>
-          <p className="w-full" data-ui-copy="body">This demo collects no contact details.</p>
+          <dl className="w-full" data-ui-component-content="demo-contact-status"><dt>Contact details in this demo</dt><dd className="m-0 w-full" data-ui-copy="supporting">Not collected.</dd></dl>
           <button type="button" className="min-h-[48px] bg-[#1E2F58] px-5 py-3 text-white" onClick={() => { setHistory((items) => [...items, state]); setStage("done"); }}>Finish demonstration</button>
         </section>
       </Shell>
