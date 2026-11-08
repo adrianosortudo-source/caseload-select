@@ -32,12 +32,12 @@ afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 describe("canonical prospect presentation", () => {
   it("starts with Website and preserves the inquiry when switching layouts", async () => {
     const { container } = render(<ProspectDemoPresentation registrations={[{ profile, asset }]} initialProfileId={profile.id} browserLocalProfiles={false} appearance="caseload" sessionAdapter={{ renderIntake: () => <PersistentIntake />, renderReview: () => <p>Lawyer brief</p> }} />);
-    await waitFor(() => expect(screen.getByRole("button", { name: "Website", exact: true }).getAttribute("aria-pressed")).toBe("true"));
-    expect(screen.getByRole("button", { name: "Live AI", exact: true }).getAttribute("aria-pressed")).toBe("true");
+    await waitFor(() => expect(screen.getByRole("button", { name: "Website" }).getAttribute("aria-pressed")).toBe("true"));
+    expect(screen.getByRole("button", { name: "Live AI" }).getAttribute("aria-pressed")).toBe("true");
     fireEvent.change(screen.getByLabelText("Test answer"), { target: { value: "An answer already provided" } });
-    fireEvent.click(screen.getByRole("button", { name: "Lawyer view", exact: true }));
-    fireEvent.click(screen.getByRole("button", { name: "Split view", exact: true }));
-    fireEvent.click(screen.getByRole("button", { name: "Website", exact: true }));
+    fireEvent.click(screen.getByRole("button", { name: "Lawyer view" }));
+    fireEvent.click(screen.getByRole("button", { name: "Split view" }));
+    fireEvent.click(screen.getByRole("button", { name: "Website" }));
     expect((screen.getByLabelText("Test answer") as HTMLInputElement).value).toBe("An answer already provided");
     expect(container.querySelector("[data-prospect-demo-intake-overlay]")).toBeTruthy();
     expect(store.listProspectDemoProfiles).not.toHaveBeenCalled();
@@ -47,7 +47,7 @@ describe("canonical prospect presentation", () => {
     render(<ProspectDemoClient profileId="walker-law" sampleOnly embedded />);
     await waitFor(() => expect(screen.getByLabelText("Fictional inquiry")).toBeTruthy());
     expect(screen.getByLabelText("Fictional inquiry").getAttribute("data-runtime")).toBe("demo-live-ai");
-    expect(screen.queryByRole("img", { name: "CaseLoad Select", exact: true })).toBeNull();
+    expect(screen.queryByRole("img", { name: "CaseLoad Select" })).toBeNull();
     expect(store.ensureProspectDemoProfile).not.toHaveBeenCalled();
     expect(store.readProspectDemoProfile).not.toHaveBeenCalled();
     expect(store.listProspectDemoProfiles).not.toHaveBeenCalled();
