@@ -12,6 +12,7 @@ import {
   ProspectDemoPresentation,
   type ProspectDemoRegistration,
 } from "@/components/prospect-demo/ProspectDemoPresentation";
+import { exampleLawFirmProspectDemoProfile } from "@/lib/prospect-demo-profiles/example-law-firm";
 import { walkerLawProspectDemoProfile } from "@/lib/prospect-demo-profiles/walker-law";
 import {
   ensureProspectDemoProfile,
@@ -66,7 +67,14 @@ export function ProspectDemoClient({ profileId, embedded = false, sampleOnly = f
     async function prepareRequestedProfile() {
       let registration: ProspectDemoRegistration | null = null;
       try {
-        if (profileId === walkerLawProspectDemoProfile.id) {
+        if (sampleOnly && profileId === exampleLawFirmProspectDemoProfile.id) {
+          const response = await fetch("/prospect-demos/example-law-firm/example-law-firm.png", { cache: "force-cache" });
+          if (response.ok) {
+            const blob = await response.blob();
+            const asset = { ...exampleLawFirmProspectDemoProfile.screenshot, blob };
+            registration = { profile: exampleLawFirmProspectDemoProfile, asset };
+          }
+        } else if (!sampleOnly && profileId === walkerLawProspectDemoProfile.id) {
           const response = await fetch(
             "/prospect-demos/walker-law/walker-law-consultation-reference.png",
             { cache: "force-cache" },
@@ -118,7 +126,7 @@ export function ProspectDemoClient({ profileId, embedded = false, sampleOnly = f
       <div data-ui-component-content="demo-ai-status">
         <p role="status" className="w-full" data-ui-copy="supporting">{demoExtractionLabel(view)}</p>
         <p className="mt-3 w-full" data-ui-copy="body">Live AI can send the fictional description to Google Gemini. Guided samples run in your browser. Do not enter client or confidential information.</p>
-        {sampleOnly && <p className="mt-3 w-full" data-ui-copy="supporting">Walker Law website snapshot with fictional inquiries. This example does not represent the firm’s intake policies.</p>}
+        {sampleOnly && <p className="mt-3 w-full" data-ui-copy="supporting">Example Law Firm is fictional. The website and inquiries are for demonstration only.</p>}
       </div>
     ),
     renderReview: () => <DemoOperatorPanel view={view} contained />,
@@ -158,3 +166,4 @@ export function ProspectDemoClient({ profileId, embedded = false, sampleOnly = f
     </div>
   );
 }
+

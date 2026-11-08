@@ -9,5 +9,6 @@ export const metadata: Metadata = {
 
 export default async function ScreenToolPage({ searchParams }: { searchParams: Promise<{ embed?: string }> }) {
   const { embed } = await searchParams;
-  return <ProspectDemoClient profileId="walker-law" sampleOnly embedded={embed === "1"} />;
+  return <ProspectDemoClient profileId="example-law-firm" sampleOnly embedded={embed === "1"} />;
 }
+
