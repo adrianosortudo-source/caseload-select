@@ -4,3 +4,5 @@
 @media(max-width:400px){.pc-main{padding:24px 16px 40px}.pc-top{padding:20px 16px;flex-wrap:wrap;gap:15px}.pc-top img{width:215px;max-width:100%}.pc-tabs button{font-size:12px;padding:12px 9px;gap:8px}.pc-tabs button span{font-size:18px}.pc-notice,.pc-statement{padding:18px 16px}.pc-actions{display:grid;grid-template-columns:1fr}.pc-footer{padding:18px 16px}}
 
 .pc-root [data-ui-copy]{text-wrap:wrap}.pc-root .pc-details>summary[data-ui-copy]{width:100%}
+@media(max-width:400px){.pc-root h1{font-size:24px}.pc-root h2{font-size:22px}.pc-statement>p:last-child{font-size:18px}}
+@media(max-width:400px){.pc-root h1{font-size:26px}.pc-root h2{font-size:24px}}

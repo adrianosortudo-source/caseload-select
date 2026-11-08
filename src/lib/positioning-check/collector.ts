@@ -34,16 +34,18 @@ async function fetchPage(url: URL, anchor: URL, deadline: number): Promise<{res:
 /** Bounded same-site crawl. Substantive claims are represented by collector-owned text chunks. */
 export async function collectSite(requestedUrl: string, deadline: number): Promise<CollectedSite> {
   const start = new URL(requestedUrl); if (start.protocol !== "https:" || start.username || start.password) throw new Error("invalid_url");
-  const queue: {url:URL;depth:number}[] = [{url:start,depth:0}]; const seen = new Set<string>(); const queued = new Set<string>([start.href]); const pages:PageCoverage[]=[]; const evidence:Evidence[]=[]; const limitations:string[]=[]; let total=0; let origin=start.origin;
+  const queue: {url:URL;depth:number}[] = [{url:start,depth:0}]; const seen = new Set<string>(); const finalSeen = new Set<string>(); const queued = new Set<string>([start.href]); const pages:PageCoverage[]=[]; const evidence:Evidence[]=[]; const limitations:string[]=[]; let total=0; let origin=start.origin;
   while(queue.length && pages.length<MAX_PAGES && Date.now()<deadline && total<MAX_TOTAL) {
     const item=queue.shift()!; item.url.hash=""; if(seen.has(item.url.href)) continue; seen.add(item.url.href);
     try {
       const {res,url} = await fetchPage(item.url,start,deadline); if (!res.ok || !/text\/html|application\/xhtml\+xml/i.test(res.headers.get("content-type") ?? "")) { await res.body?.cancel().catch(()=>{}); throw new Error("unreadable"); }
+      if(finalSeen.has(url.href)){await res.body?.cancel().catch(()=>{});continue;} finalSeen.add(url.href);
       if (pages.length===0) origin=url.origin;
-      const body=await readBody(res,deadline); const links:URL[]=[]; let title="";
-      const cleaned=sanitizeHtml(body.text,{allowedTags:["a","h1","h2","h3","h4","p","li","title","br"],allowedAttributes:{a:["href"]},nonTextTags:["script","style","textarea","option","noscript","nav","footer","svg","iframe"],transformTags:{a:(tag,attrs)=>{try{const link=new URL(attrs.href,url); link.hash=""; if(sameSite(start,link) && !/\.(?:pdf|jpg|png|zip|docx?)(?:$|\?)/i.test(link.pathname))links.push(link);}catch{} return {tagName:tag,attribs:{}};},title:(tag,attrs)=>({tagName:tag,attribs:attrs})}});
+      const body=await readBody(res,deadline); const links:URL[]=[]; const linkSet=new Set<string>(); let title="";
+      sanitizeHtml(body.text,{allowedTags:["a"],allowedAttributes:{a:["href"]},transformTags:{a:(tag,attrs)=>{try{if(!attrs.href || !attrs.href.trim())return {tagName:tag,attribs:{}};const link=new URL(attrs.href,url);link.hash="";if(sameSite(start,link)&&!linkSet.has(link.href)&&links.length<100&&!/\.(?:pdf|jpg|png|zip|docx?)(?:$|\?)/i.test(link.pathname)){linkSet.add(link.href);links.push(link);}}catch{}return {tagName:tag,attribs:{}};}}});
+      const cleaned=sanitizeHtml(body.text,{allowedTags:["h1","h2","h3","h4","p","li","title","br"],allowedAttributes:{},nonTextTags:["script","style","textarea","option","noscript","nav","footer","svg","iframe"]});
       const match=cleaned.match(/<title[^>]*>([\s\S]*?)<\/title>/i); title=(match?.[1]??url.hostname).replace(/<[^>]*>/g,"").trim().slice(0,200);
-      const text=sanitizeHtml(cleaned,{allowedTags:[],allowedAttributes:{}}).replace(/\s+/g," ").trim(); const usable=text.slice(0,Math.min(MAX_PAGE,MAX_TOTAL-total)); total+=usable.length; const truncated=body.truncated || usable.length<text.length; const capturedAt=new Date().toISOString();
+      const text=sanitizeHtml(cleaned.replace(/<\/(?:h[1-4]|p|li|title)>|<br\s*\/?\s*>/gi," "),{allowedTags:[],allowedAttributes:{}}).replace(/\s+/g," ").trim(); if(text.length<2000 && /verify (?:you are|you're) human|checking your browser|enable javascript and cookies|just a moment\.\.\.|access denied/i.test(text))throw new Error("challenge"); const usable=text.slice(0,Math.min(MAX_PAGE,MAX_TOTAL-total)); total+=usable.length; const truncated=body.truncated || usable.length<text.length; const capturedAt=new Date().toISOString();
       pages.push({url:url.href,title,capturedAt,state:truncated?"truncated":"readable",retainedChars:usable.length});
       for(let offset=0;offset<usable.length;offset+=1000){const excerpt=usable.slice(offset,offset+1000); evidence.push({id:`text-${evidence.length+1}`,kind:"text",sourceUrl:url.href,title,capturedAt,excerpt,truncated});}
       if(item.depth<2){links.sort((a,b)=>score(a)-score(b)||a.href.localeCompare(b.href)); for(const link of links)if(score(link)<10&&!seen.has(link.href)&&!queued.has(link.href)&&queue.length<80){queued.add(link.href);queue.push({url:link,depth:item.depth+1});}}
@@ -55,5 +57,7 @@ export async function collectSite(requestedUrl: string, deadline: number): Promi
   if (pages.some(p=>p.state==="truncated")) limitations.push("Some page text was truncated.");
   return {requestedUrl,resolvedOrigin:origin,pages,evidence,limitations};
 }
+
+
 
 

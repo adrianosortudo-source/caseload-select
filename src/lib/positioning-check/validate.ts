@@ -5,7 +5,7 @@ const isRecord = (v: unknown): v is Record<string, unknown> => !!v && typeof v =
 const hasIds = (ids: unknown, known: Map<string, Evidence>, allowEmpty = false): ids is string[] => Array.isArray(ids) && (allowEmpty || ids.length > 0) && ids.every(id => typeof id === "string" && known.has(id));
 
 /** Validate model output against collector-owned evidence. Traceability is not proof of semantic support. */
-export function validateAnalysis(raw: unknown, evidence: Evidence[]): string[] {
+export function validateAnalysis(raw: unknown, evidence: Evidence[], substantivePages?: number): string[] {
   const errors: string[] = [];
   if (!isRecord(raw)) return ["analysis_not_object"];
   const known = new Map(evidence.map(item => [item.id, item]));
@@ -23,6 +23,7 @@ export function validateAnalysis(raw: unknown, evidence: Evidence[]): string[] {
       if (!["observed", "inferred", "unclear", "not_observed", "not_assessable"].includes(String(e.status))) errors.push("element_status");
       if (e.clarity !== null && ![0, 1, 2, 3].includes(e.clarity as number)) errors.push("element_clarity");
       if (e.confidence !== null && !["high", "moderate", "low"].includes(String(e.confidence))) errors.push("element_confidence");
+      if (e.key === "consistency" && substantivePages !== undefined && substantivePages < 3 && e.status !== "not_assessable") errors.push("consistency_coverage");
       if (e.status === "not_assessable" && (e.clarity !== null || e.confidence !== null)) errors.push("unassessable_scored");
       if (!words(e.finding, 45) || !words(e.reason, 45) || !words(e.uncertainty, 30) || typeof e.conflict !== "boolean") errors.push("element_copy");
       if (!hasIds(e.evidenceIds, known, e.status === "not_assessable" || e.status === "not_observed")) errors.push("element_evidence");
@@ -49,5 +50,6 @@ export function validateAnalysis(raw: unknown, evidence: Evidence[]): string[] {
   return [...new Set(errors)];
 }
 export type AnalysisParts = Pick<PositioningResult, "part1" | "part2">;
+
 
 

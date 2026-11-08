@@ -5,3 +5,10 @@
 - Model and operational caps: backend constants and coordinator readiness record are authority; Gate 0 remains pending until verified. No public launch with unverified costs.
 - Brand: approved prototype composition, canonical palette/type/assets, square geometry. Utility H1 has no terminal square. No global brand changes.
 - Preview configuration by coordinator: branch-scoped Google key, enabled switch and existing Upstash settings; global Preview renderer settings. Production unchanged. If abandoning, restore Upstash Preview gitBranch to codex/desired-client-focused-improvement-20261005. No secret values recorded.
+
+## Gate 0 resource freeze (coordinator, 2026-11-08)
+- gemini-2.5-flash, at most two calls, 8192 output tokens/call, thinking budget zero.
+- Conservative Gemini reservation USD 0.25/run, 40 feature reservations/day = USD 10/day model ceiling. Three submissions/hour/network and one active analysis/network. Existing renderer hosting charges are separate; at most 40 render requests/day.
+- Nonimage serialized request cap 256 KiB. Up to eight pages, 48,000 retained characters; max 8000/page. Two PNGs maximum, 4 MiB each; desktop max1440x7800 and mobile max390x7800 (backend common maximum dimension1440x7800).
+- Total app deadline105s; collection envelope40s; first model call45s; second call only within remaining time. No infrastructure or provider expansion.
+- This replaces the provisional100/day atUSD0.10 before Gate0 acceptance. Live preview verification is still required.
