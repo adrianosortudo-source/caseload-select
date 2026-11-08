@@ -1190,7 +1190,15 @@ export function renderBriefHtmlServer(
     // 3 most important scope checks as a compact grid (no nested section
     // subtitles). The axis grid sits directly below as the "why this band"
     // block, with its own internal hierarchy.
-    const scopeItems = options.presentation === 'demo' ? (report.strategic_considerations ?? []) : (report.strategic_considerations ?? []).slice(0, 3);
+    // The broad $25,000-$100,000 bucket straddles Ontario's Small Claims
+    // jurisdiction. Do not turn the engine's legacy bucket hint into a court
+    // determination. Ontario O. Reg. 626/00, s.1 (current from 2025-10-01).
+    const scopeChecks = (report.strategic_considerations ?? []).map((item) =>
+      item === 'Above Small Claims threshold. Superior Court action with proper pleadings; consider summary judgment if defence is thin.'
+        ? 'Confirm the exact claim amount, relief sought and appropriate court before choosing a procedure.'
+        : item,
+    );
+    const scopeItems = options.presentation === 'demo' ? scopeChecks : scopeChecks.slice(0, 3);
     const scopeGrid =
       scopeItems.length > 0
         ? `<div class="callback-scope-grid">${scopeItems.map((s) => `<div class="callback-scope-item">${esc(s)}</div>`).join('')}</div>`
@@ -1231,7 +1239,7 @@ export function renderBriefHtmlServer(
     // callback walkthrough). Do not quote until -> the what-to-confirm
     // gates that protect the fee quote from being premature.
     const openWith = options.presentation === 'demo' ? (report.call_openers ?? []) : (report.call_openers ?? []).slice(0, 3);
-    const confirmNext = options.presentation === 'demo' ? (report.strategic_considerations ?? []) : (report.strategic_considerations ?? []).slice(0, 4);
+    const confirmNext = options.presentation === 'demo' ? scopeChecks : scopeChecks.slice(0, 4);
     const doNotQuote = options.presentation === 'demo' ? (report.what_to_confirm ?? []) : (report.what_to_confirm ?? []).slice(0, 4);
     const callPrepGrid = `
       <div class="callprep-grid">
@@ -1312,13 +1320,14 @@ export function renderBriefHtmlServer(
     const groups = leftBody.replace(
       /<section class="brief-group" data-group="([^"]+)">\s*<h3 class="brief-group-title">([^<]+)<\/h3>([\s\S]*?)<\/section>/g,
       (_match, group: string, title: string, body: string) =>
-        `<details class="brief-group" data-group="${group}"${group === 'headline' || group === 'routing' ? ' open' : ''}><summary>${title}</summary><div class="brief-group-content">${body}</div></details>`,
+        `<details class="brief-group" data-group="${group}"${group === 'headline' || group === 'routing' ? ' open' : ''}><summary>${title}</summary><div class="brief-group-content">${body}${group === 'callprep' && report.best_next_question ? `<h4>Suggested next question</h4>${textBlock(report.best_next_question)}` : ''}</div></details>`,
     );
-    return [
+    const demoHtml = [
       languageCalloutHtml(intakeLanguage),
       classificationNote,
       truthWarningsHtml(report.truth_warnings),
       `<p class="demo-report-boundary">Fictional inquiry. The lawyer makes the engagement decision.</p>`,
+      `<p class="kicker">Review priority</p>${textBlock(report.lawyer_time_priority)}`,
       groups,
       `<details class="brief-group" data-group="reasoning"><summary>Reasons and uncertainty</summary><div class="brief-group-content">
         <h4>Band reasoning</h4>${bullets(report.band_reasoning_bullets)}
@@ -1328,6 +1337,16 @@ export function renderBriefHtmlServer(
       </div></details>`,
       `<details class="brief-group" data-group="contact"><summary>Contact details</summary><div class="brief-group-content"><p>Contact details are not collected in this demonstration. A real intake asks for a name and a way for the firm to reply.</p></div></details>`,
     ].join('\n');
+    // Tag real report content tracks for rendered copy gates. Compact source
+    // chips and labels remain metadata; each fact value owns a full-width row.
+    return demoHtml
+      .replace(/<(div|ul)(\s[^>]*?)?>/g, '<$1$2 data-ui-component-content="demo-report-track">')
+      .replace(/<li class="fact-row">/g, '<li class="fact-row" data-ui-component-content="demo-report-fact">')
+      .replace(/<span class="fact-value">/g, '<span class="fact-value" data-ui-copy="supporting">')
+      .replace(/<(p|h4|li)(\s[^>]*?)?>/g, (tag: string, name: string, attrs: string = '') => {
+        if (/class="(?:kicker|section-title|fact-row)"/.test(attrs)) return tag;
+        return `<${name}${attrs} data-ui-copy="${name === 'h4' ? 'heading' : 'body'}">`;
+      });
   }
 
   // The ACTION_RAIL_SLOT marker is the split point for the React page

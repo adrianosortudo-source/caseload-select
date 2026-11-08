@@ -91,6 +91,7 @@ export function Shell({ totalScreens, currentScreen, roundLabel, onBack, onSkip,
   // Main body: vertical centering ONLY in standalone. When embedded the
   // iframe is resized to match content exactly, so centering would only
   // add empty padding the host doesn't want.
+  const Content = layout === "contained" ? "div" : "main";
   const mainClass = [
     "flex-1 flex flex-col px-5",
     flowsToContent ? "py-5" : "py-6 items-center justify-center",
@@ -169,9 +170,9 @@ export function Shell({ totalScreens, currentScreen, roundLabel, onBack, onSkip,
       </header>
 
       {/* Body */}
-      <main className={mainClass}>
+      <Content className={mainClass} data-shell-content>
         <div className="w-full max-w-[720px]">{children}</div>
-      </main>
+      </Content>
 
       {/* Footer (optional). In standalone it sticks to viewport bottom; when
           embedded we drop sticky positioning because the host iframe sized to

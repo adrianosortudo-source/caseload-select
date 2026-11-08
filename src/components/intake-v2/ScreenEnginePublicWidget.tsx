@@ -385,12 +385,12 @@ export function ScreenEnginePublicWidget({
     onDemoStateChange?.({
       stage,
       state,
-      currentQuestion: pendingDemoReview ? null : currentItem,
+      currentQuestion: pendingDemoReview || isReading || stage !== "questions" || next?.type === "capture_contact" ? null : currentItem,
       report: demoReport,
       extraction,
       runtime,
     });
-  }, [isDemo, runtime, onDemoStateChange, stage, state, currentItem, demoReport, extraction, pendingDemoReview]);
+  }, [isDemo, runtime, onDemoStateChange, stage, state, currentItem, demoReport, extraction, pendingDemoReview, isReading, next?.type]);
 
   async function start() {
     await runStart(description);

@@ -184,23 +184,24 @@ test("Guided intake reaches the brief and keeps answers across view switches", a
   await page.getByRole("button", { name: "Split view", exact: true }).click();
   await page.getByRole("button", { name: "Guided sample", exact: true }).click();
   await page.getByRole("button", { name: "Continue matter review", exact: true }).click();
-  await expect(page.getByText("Review in progress", { exact: true }).first()).toBeVisible();
+  await expect(page.getByText("Draft brief", { exact: true }).first()).toBeVisible();
+  const readback = page.getByRole("button", { name: "Confirm details and continue" });
+  if (await readback.isVisible()) await readback.click();
   for (let count = 0; count < 12; count += 1) {
-    const contact = page.getByRole("button", { name: "Continue to contact details", exact: true });
+    const contact = page.getByRole("button", { name: "See the contact step", exact: true });
     if (await contact.isVisible()) { await contact.click(); break; }
-    if (await page.locator('input[name="client_name"]').isVisible()) break;
+    if (await page.getByRole("button", { name: "Finish demonstration", exact: true }).isVisible()) break;
     const skip = page.getByRole("button", { name: "Skip this question", exact: true });
     await expect(skip).toBeVisible();
     await skip.click();
     await settle(page);
   }
-  await page.locator('input[name="client_name"]').fill("Fictional Alex");
-  await page.locator('input[name="client_phone"]').fill("4165550123");
-  await page.locator('input[name="client_email"]').fill("alex@example.test");
+  await expect(page.getByRole("heading", { name: "How the firm would reply" })).toBeVisible();
+  await expect(page.locator('input[name="client_name"],input[name="client_email"],input[name="client_phone"]')).toHaveCount(0);
   await page.getByRole("button", { name: "Lawyer view", exact: true }).click();
   await page.getByRole("button", { name: "Split view", exact: true }).click();
-  await expect(page.locator('input[name="client_name"]')).toHaveValue("Fictional Alex");
-  await page.getByRole("button", { name: "Complete demonstration", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "How the firm would reply" })).toBeVisible();
+  await page.getByRole("button", { name: "Finish demonstration", exact: true }).click();
   await expect(page.getByRole("heading", { name: "The demonstration is complete." })).toBeVisible();
   await expect(page.getByText("Brief ready", { exact: true }).first()).toBeVisible();
   await assertImages(page);
@@ -265,8 +266,8 @@ for (const width of WIDTHS) {
     await assertLayout(page);
     await page.locator(`${INTAKE} textarea`).fill("Fictional test. A business client owes us $18,450 for completed work. I can approve hiring a lawyer. We have an invoice and signed contract.");
     await page.getByRole("button", { name: "Continue matter review", exact: true }).click();
-    await expect(page.getByRole("heading", { name: "Check what we captured." })).toBeVisible();
-    await expect(page.getByText("Live AI completed.", { exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Check the captured facts" })).toBeVisible();
+    await expect(page.getByText("Live AI completed the extraction. Review its interpretations before confirming.", { exact: true })).toBeVisible();
     await expect(page.getByText("Just me", { exact: true })).toBeVisible();
     await assertLayout(page);
     await page.screenshot({ path: testInfo.outputPath(`ai-readback-${width}.png`), fullPage: true });
@@ -278,7 +279,7 @@ for (const width of WIDTHS) {
       if (!(await skip.isVisible())) break;
       await skip.click();
     }
-    await expect(page.getByRole("button", { name: "Continue to contact details" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "See the contact step" })).toBeVisible();
     await assertLayout(page);
     await page.screenshot({ path: testInfo.outputPath(`ai-brief-${width}.png`), fullPage: true });
     expect(mutations).toEqual(["/api/extract"]);

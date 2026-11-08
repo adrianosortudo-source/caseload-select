@@ -48,19 +48,21 @@ export function ScreenDemoWorkspace({ firmId = "caseload-fictional-demo", firmNa
         <div className={styles.settings}>
           <label>Fictional scenario<select value={scenario} onChange={(event) => restart(Number(event.target.value))}>{SCREEN_DEMO_SCENARIOS.map((item, index) => <option key={item.label} value={index}>{item.label}</option>)}</select></label>
           <fieldset><legend>Demo mode</legend><div className={styles.modeControls}>
-            <button type="button" aria-pressed={runtime === "demo-live-ai"} onClick={() => restart(scenario, "demo-live-ai")}>Live AI</button>
-            <button type="button" aria-pressed={runtime === "demo"} onClick={() => restart(scenario, "demo")}>Guided sample</button>
+            <button type="button" aria-pressed={runtime === "demo-live-ai"} onClick={() => { if (runtime !== "demo-live-ai") restart(scenario, "demo-live-ai"); }}>Live AI</button>
+            <button type="button" aria-pressed={runtime === "demo"} onClick={() => { if (runtime !== "demo") restart(scenario, "demo"); }}>Guided sample</button>
           </div></fieldset>
           <button type="button" className={styles.restart} onClick={() => restart()}>Restart demo</button>
         </div>
         <p className={styles.restartNote} data-ui-copy="supporting">Changing the scenario or mode restarts the demonstration. Use fictional details only.</p>
       </div>
     </header>
-    <main className={styles.body}>
+    <main className={styles.body} data-ui-component-content="demo-workspace-body">
+      <div className={styles.workspaceControls} data-ui-component-content="demo-workspace-controls">
       <p className={styles.status} role="status" data-extraction-status={view.extraction.status} data-ui-copy="supporting">{demoExtractionLabel(view)}</p>
       <div className={styles.views}>
         <div className={styles.viewControls} aria-label="Presentation layout">{([ ["split", "Side by side"], ["intake", "Intake"], ["brief", "Lawyer brief"] ] as const).map(([value,label]) => <button type="button" key={value} aria-pressed={layout === value} onClick={() => setLayout(value)}>{label}</button>)}</div>
         <nav className={styles.jumpLinks} aria-label="Demo panels"><a href="#screen-demo-intake" onClick={() => setLayout("split")}>Go to intake</a><a href="#screen-demo-brief" onClick={() => setLayout("split")}>Go to brief</a></nav>
+      </div>
       </div>
       <div className={styles.panels} data-layout={layout}>
         <section id="screen-demo-intake" className={styles.pane} aria-label="Prospective client intake" hidden={layout === "brief"}>

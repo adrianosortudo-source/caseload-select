@@ -62,7 +62,9 @@ export function confirmDemoFacts(state: EngineState, corrections: Readonly<Recor
   for (const fact of demoCapturedFacts(state)) {
     const value = Object.hasOwn(corrections, fact.id) ? corrections[fact.id] : fact.value;
     if (value === "") {
-      next = { ...next, slots: { ...next.slots, [fact.id]: null }, slot_meta: { ...next.slot_meta, [fact.id]: { source: "answered", confidence: 1, evidence: "Client chose to leave this unanswered during demo review" } } };
+      const slot_evidence = { ...next.slot_evidence };
+      delete slot_evidence[fact.id];
+      next = { ...next, slot_evidence, slots: { ...next.slots, [fact.id]: null }, slot_meta: { ...next.slot_meta, [fact.id]: { source: "answered", confidence: 1, evidence: "Client chose to leave this unanswered during demo review" } } };
       continue;
     }
     if (!fact.options.some((option) => option.value === value)) continue;

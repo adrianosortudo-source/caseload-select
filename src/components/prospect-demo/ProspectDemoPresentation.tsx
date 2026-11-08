@@ -259,7 +259,7 @@ export function ProspectDemoPresentation({
             ))}
             <span className="h-8 w-px bg-[#182538]/15" aria-hidden="true" />
             {(["guided", "live-ai"] as ProspectDemoMode[]).map((item) => (
-              <button key={item} type="button" onClick={() => { setMode(item); setSessionKey((current) => current + 1); }} aria-pressed={mode === item} className={mode === item ? "border border-[#B28B50] bg-[#F7F1E6] px-3 py-2 text-xs font-bold text-[#765724]" : "border border-[#182538]/20 bg-white px-3 py-2 text-xs font-bold text-[#374457] hover:border-[#182538]/50"}>{item === "guided" ? "Guided sample" : "Live AI"}</button>
+              <button key={item} type="button" onClick={() => { if (mode !== item) { setMode(item); setSessionKey((current) => current + 1); } }} aria-pressed={mode === item} className={mode === item ? "border border-[#B28B50] bg-[#F7F1E6] px-3 py-2 text-xs font-bold text-[#765724]" : "border border-[#182538]/20 bg-white px-3 py-2 text-xs font-bold text-[#374457] hover:border-[#182538]/50"}>{item === "guided" ? "Guided sample" : "Live AI"}</button>
             ))}
           </div>
         </div>

@@ -10,11 +10,14 @@ afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 describe("current SCREEN workspace", () => {
   it("preserves a running intake when switching panes and restarts explicitly without network in guided mode", () => {
     render(<ScreenDemoWorkspace />);
+    expect(document.querySelectorAll("main").length).toBe(1);
     expect(screen.getByRole("button", {name: "Live AI"}).getAttribute("aria-pressed")).toBe("true");
     fireEvent.click(screen.getByRole("button", {name: "Guided sample"}));
-    expect(screen.getByRole("status").textContent).toContain("AI is not being called");
+    expect(screen.getByText("Guided sample. AI is not being called.")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", {name: "Continue matter review"}));
     fireEvent.click(screen.getByRole("button", {name: "Confirm details and continue"}));
+    fireEvent.click(screen.getByRole("button", {name: "Guided sample"}));
+    expect(screen.queryByRole("button", {name: "Continue matter review"})).toBeNull();
     const intakeBefore = document.querySelector('[aria-label="Prospective client intake"] [data-shell-layout]');
     fireEvent.click(screen.getByRole("button", {name: "Lawyer brief"}));
     expect(document.querySelector('[aria-label="Prospective client intake"]')?.hasAttribute("hidden")).toBe(true);
