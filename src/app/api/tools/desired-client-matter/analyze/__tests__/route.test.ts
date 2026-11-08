@@ -250,7 +250,7 @@ describe("POST /api/tools/desired-client-matter/analyze", () => {
     expect(modelOptions.generationConfig).toHaveProperty("responseSchema");
     expect(requestOptions).toEqual({ timeout: 24_000 });
     const prompt = mocks.generateContent.mock.calls[0][0] as string;
-    expect(prompt).toContain("Desired Client Blueprint");
+    expect(prompt).toContain("Best Cases Profile");
     expect(prompt).toContain('"eligible_codes":[]');
     expect(prompt).not.toContain("203.0.113.42");
     expect(prompt).not.toContain("app.caseloadselect.ca");

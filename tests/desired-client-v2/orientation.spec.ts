@@ -350,7 +350,7 @@ test("canonical branding spans the landing, questionnaire, review, failure, repo
   await expect(page.locator(".dc-brief")).toBeVisible();
   await audit("report");
   await page.getByRole("button", { name: "Copy profile", exact: true }).click();
-  expect(await page.evaluate(() => (window as Window & { copiedProfile?: string }).copiedProfile)).toContain("OUR DESIRED-CLIENT DEFINITION");
+  expect(await page.evaluate(() => (window as Window & { copiedProfile?: string }).copiedProfile)).toContain("OUR CLIENT AND MATTER DEFINITION");
   expect(await page.evaluate(() => (window as Window & { copiedProfile?: string }).copiedProfile)).toContain("CLIENT DECISION PATHWAY");
   await page.getByRole("button", { name: "Yes, this reflects our direction", exact: true }).click();
   await page.reload();

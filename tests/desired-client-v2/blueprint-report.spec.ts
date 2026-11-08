@@ -112,7 +112,7 @@ test("a reviewed six-section draft becomes a synthesized blueprint and HTML repo
   });
   expect(printPdf.byteLength).toBeGreaterThan(0);
   await printPage.close();
-  expect(html).toContain("Desired Client Blueprint");
+  expect(html).toContain("Best Cases Profile");
   expect(html).toContain(REPORT_FOOTNOTE_COPY);
   const progressReview = html.match(/<section class="progress"><h2>Progress review<\/h2>[\s\S]*?<\/section>/)?.[0];
   expect(progressReview).toBeDefined();
