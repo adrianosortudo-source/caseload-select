@@ -15,3 +15,6 @@
 
 ## Preview renderer correction
 The first new-route Gene Colman request returned422 before report generation; distributed quota access succeeded. The inherited Preview renderer URL pointed to an obsolete deployment. Coordinator added a branch-specific override to existing stable caseload-render.vercel.app; inherited token unchanged pending live verification. Production/global settings and other branches were untouched. This is a configuration correction, not a functional pass. If abandoning, remove the branch-specific override along with other feature-only Preview settings.
+
+## Analysis v3 decision (not semantic acceptance)
+After v1/v2 semantic failures, coordinator approved the same Gemini2.5Flash model/provider with thinking budget1024 and temperature0.2. Output maximum8192 and maximum two calls remain unchanged, as do USD0.25/run reservation and40/day ceiling; reservation covers the reasoning allowance. Terra owns implementation and actual usage checks. No semantic gate has passed. Version/source freeze must be recorded before bounded v3 runs.

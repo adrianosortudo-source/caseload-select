@@ -23,3 +23,5 @@ The page shell caps at 1100px as a structural tool frame. Input/control tracks a
 ## State contract
 
 Idle; invalid input; processing; complete; partial; blocked/unreadable; rate-limited; provider unavailable; invalid analysis; timeout; disabled. Processing is indeterminate; exactly one explicit retry action appears for retryable responses. Report is memory-only. Direction selection and clipboard copy are user-initiated; no automatic transmission.
+
+Browser fixture captures hide only Next.js development-tool chrome through the test harness. Production interface styling and content remain untouched; this prevents an environment badge from obscuring report text in review screenshots.

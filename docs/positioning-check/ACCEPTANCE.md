@@ -11,3 +11,7 @@
 - No fixture/source-only result counts as live output or visual approval.
 - Latest focused backend total26/26 (prior22 plus4 provider tests), reported by Terra. Whole-head CI pending.
 - Scoped interface mechanical detector: no findings. This does not replace rendered acceptance.
+- Gates0 and1 accepted:8/28 units. Node24 renderer readiness, same-key Gemini capability and new-route Redis reservation verified. No new-report semantic acceptance implied.
+- Cloud UI at11d:7/11 pass;640/390/375/320 fail only single-word endings. Light/dark consultation contrast passes; all width/overflow and natural-line-flow checks pass. Independent Luna review confirms readable contrast and no clipping.
+- Current-head global TypeScript, ESLint, full Vitest, Vercel builds and existing rendered regression jobs pass; final scoped UI confirmation and real-Postgres job status remain to be checked.
+- Final coordinator-approved bounded typography correction is entering one cloud matrix. Further blind UI changes are prohibited if this remains unresolved.
