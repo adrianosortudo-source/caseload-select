@@ -1355,6 +1355,10 @@ export function renderBriefHtmlServer(
       .replace(/<p class="axis-block-prose">([^<]+)<\/p>/g, (_tag, prose: string) =>
         (prose.match(/[^.!?]+[.!?]+|[^.!?]+$/g) ?? [prose]).map(sentence => `<p class="axis-block-prose">${sentence.trim()}</p>`).join(''));
     return readableDemoHtml
+      // Display the scope factors as the list encoded in the original note.
+      // Keep the fee range and the explicit not-a-quote qualification intact.
+      .replace(/<p class="fee-supporting">Internal estimate based on likely scope, not a quote\. \(([^<]+)\)\.<\/p>/g,
+        (_tag: string, basis: string) => `<div class="demo-fee-note"><p>Internal scope estimate, not a quote.</p><p class="kicker">Estimate basis</p><ul>${basis.split(',').map(factor => `<li>${factor.trim()}</li>`).join('')}</ul></div>`)
       // An amount is a labelled data record, rather than an awkward sentence
       // split across narrow report columns. The original value is retained.
       .replace(/<li>Amount at stake: ([^<]+)\.<\/li>/g, '<li class="reasoning-amount"><dl><div><dt>Amount at stake</dt><dd data-ui-copy="supporting">$1</dd></div></dl></li>')

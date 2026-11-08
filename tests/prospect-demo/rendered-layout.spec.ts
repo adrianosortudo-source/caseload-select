@@ -203,11 +203,11 @@ test("Guided intake reaches the brief and keeps answers across view switches", a
     await skip.click();
     await settle(page);
   }
-  await expect(page.getByRole("heading", { name: "How the firm would reply" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Contact details" })).toBeVisible();
   await expect(page.locator('input[name="client_name"],input[name="client_email"],input[name="client_phone"]')).toHaveCount(0);
   await page.getByRole("button", { name: "Lawyer view", exact: true }).click();
   await page.getByRole("button", { name: "Split view", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "How the firm would reply" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Contact details" })).toBeVisible();
   await page.getByRole("button", { name: "Finish demonstration", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Demo complete" })).toBeVisible();
   await expect(page.getByText("Brief ready", { exact: true }).first()).toBeVisible();

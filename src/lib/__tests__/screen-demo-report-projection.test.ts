@@ -55,3 +55,16 @@ it("does not choose a court from a broad amount bucket in either projection", ()
   }
   expect(report.strategic_considerations[0]).toContain("Above Small Claims threshold");
 });
+
+it("preserves the fee illustration and every basis factor without presenting a quote", () => {
+  const state = startDemoState(input);
+  const report = buildDemoReport(state);
+  const original = "$4,000-$10,000. Internal estimate based on likely scope, not a quote. (commercial dispute, meaningful amount).";
+  report.fee_estimate = original;
+  const demo = htmlRoot(renderBriefHtmlServer(report, "web", "en", undefined, state.matter_type, state.practice_area, {presentation: "demo"}));
+  expect(demo.textContent).toContain("$4,000-$10,000");
+  expect(demo.querySelector(".demo-fee-note")?.textContent).toContain("not a quote");
+  expect(demo.querySelector(".demo-fee-note")?.textContent).toContain("commercial dispute");
+  expect(demo.querySelector(".demo-fee-note")?.textContent).toContain("meaningful amount");
+  expect(report.fee_estimate).toBe(original);
+});

@@ -840,8 +840,10 @@ export function ScreenEnginePublicWidget({
     if (isDemo) return (
       <Shell totalScreens={1} currentScreen={0} roundLabel="Contact step" onBack={back} backLabel={backLabel} layout={layout} reportHeight={reportEmbeddedHeight} footer={demoReviewFooter}>
         <section className="flex flex-col gap-5" data-ui-component-content="demo-contact-step">
-          <h2 className="w-full text-2xl font-extrabold" data-ui-copy="heading" style={{ fontFamily: fontDisplay }}>How the firm would reply</h2>
-          <p className="w-full" data-ui-copy="body">A real intake asks for a name and either an email address or phone number. This demonstration does not collect contact details.</p>
+          <h2 className="w-full text-2xl font-extrabold" data-ui-copy="heading" style={{ fontFamily: fontDisplay }}>Contact details</h2>
+          <p className="w-full" data-ui-copy="body">A real intake asks for:</p>
+          <ul className="w-full" data-ui-component-content="demo-contact-fields"><li data-ui-copy="body">Name.</li><li data-ui-copy="body">Email address or phone number.</li></ul>
+          <p className="w-full" data-ui-copy="body">This demo collects no contact details.</p>
           <button type="button" className="min-h-[48px] bg-[#1E2F58] px-5 py-3 text-white" onClick={() => { setHistory((items) => [...items, state]); setStage("done"); }}>Finish demonstration</button>
         </section>
       </Shell>

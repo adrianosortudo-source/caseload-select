@@ -169,3 +169,5 @@
 
 .calibration { text-wrap: pretty; }
 .brief ul { padding-left: 0; list-style: none; }
+
+.widget [data-shell-layout="contained"] .factReview > p { text-wrap: pretty; }
