@@ -31,7 +31,7 @@ export function DemoOperatorPanel({ view }: { view: ScreenDemoView; contained?: 
             <div><dt>Core facts</dt><dd>{percent(state.coreCompleteness)}</dd></div>
             <div><dt>Confidence</dt><dd>{percent(state.confidence)}</dd></div>
           </dl>
-          <p className={styles.calibration} data-ui-copy="supporting">Confidence reflects the available intake evidence.</p>
+          <p className={styles.calibration} data-ui-copy="supporting">Confidence depends on the available facts.</p>
           {view.currentQuestion && <section className={styles.currentQuestion} data-ui-component-content="demo-current-question">
             <h3>Still to resolve</h3><p data-ui-copy="body">{view.currentQuestion.question}</p>
           </section>}

@@ -202,7 +202,7 @@ test("Guided intake reaches the brief and keeps answers across view switches", a
   await page.getByRole("button", { name: "Split view", exact: true }).click();
   await expect(page.getByRole("heading", { name: "How the firm would reply" })).toBeVisible();
   await page.getByRole("button", { name: "Finish demonstration", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "The demonstration is complete." })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Demo complete" })).toBeVisible();
   await expect(page.getByText("Brief ready", { exact: true }).first()).toBeVisible();
   await assertImages(page);
   await assertLayout(page);
@@ -267,7 +267,7 @@ for (const width of WIDTHS) {
     await page.locator(`${INTAKE} textarea`).fill("Fictional test. A business client owes us $18,450 for completed work. I can approve hiring a lawyer. We have an invoice and signed contract.");
     await page.getByRole("button", { name: "Continue matter review", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Review the facts" })).toBeVisible();
-    await expect(page.getByText("Live AI completed the extraction. Review its interpretations before confirming.", { exact: true })).toBeVisible();
+    await expect(page.getByText("Live AI read the description. Review and confirm the facts.", { exact: true })).toBeVisible();
     await expect(page.getByText("Just me", { exact: true })).toBeVisible();
     await assertLayout(page);
     await page.screenshot({ path: testInfo.outputPath(`ai-readback-${width}.png`), fullPage: true });

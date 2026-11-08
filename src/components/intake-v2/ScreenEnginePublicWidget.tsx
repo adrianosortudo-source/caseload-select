@@ -759,7 +759,7 @@ export function ScreenEnginePublicWidget({
           </div>
           <h2 data-ui-copy={isDemo ? "heading" : undefined} className="text-[28px] font-extrabold text-balance text-[var(--cls-text,#1E2F58)]" style={{ fontFamily: fontDisplay }}>
             {isDemo
-              ? "The demonstration is complete."
+              ? "Demo complete"
               : ws("done_heading", "Your matter review was submitted.")}
           </h2>
           <p data-ui-copy={isDemo ? "body" : undefined}

@@ -18,7 +18,7 @@ export function demoExtractionLabel(view: ScreenDemoView): string {
   switch (view.extraction.status) {
     case "not-needed": return "AI extraction was not needed. The guided engine is handling this inquiry.";
     case "reading": return "AI is reading the fictional description.";
-    case "live": return "Live AI completed the extraction. Review its interpretations before confirming.";
+    case "live": return "Live AI read the description. Review and confirm the facts.";
     case "fallback": return "AI is unavailable. The demo is continuing with the guided engine.";
     default: return "Live AI selected. Start the inquiry to test the extraction.";
   }
