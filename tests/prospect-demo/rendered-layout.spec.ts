@@ -70,7 +70,14 @@ async function assertLayout(page: Page, rootSelector = ROOT) {
   await settle(page);
   const failures = await page.locator(rootSelector).evaluate((root) => {
     const failures: string[] = [];
-    const visible = (element: Element) => element.getClientRects().length > 0 && getComputedStyle(element).visibility !== "hidden";
+    const visible = (element: Element) => {
+      // Chromium can retain layout boxes for closed disclosure descendants.
+      // Only their summary is visible and should enter rendered copy checks.
+      for (let parent = element.parentElement; parent; parent = parent.parentElement) {
+        if (parent.tagName === "DETAILS" && !parent.hasAttribute("open") && !parent.querySelector(":scope > summary")?.contains(element)) return false;
+      }
+      return element.getClientRects().length > 0 && getComputedStyle(element).visibility !== "hidden";
+    };
     if (document.documentElement.scrollWidth > document.documentElement.clientWidth + 1) failures.push("Document scrolls horizontally");
     if (document.body.scrollWidth > document.documentElement.clientWidth + 1) failures.push("Body scrolls horizontally");
     for (const element of Array.from(root.querySelectorAll<HTMLElement>("*"))) {

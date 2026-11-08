@@ -161,4 +161,4 @@
 .widget [data-ui-component-content="demo-complete"] { align-items: stretch; text-align: left; }
 
 .calibration { text-wrap: pretty; }
-.brief [data-group="reasoning"] li { text-wrap: wrap; }
+.brief ul { padding-left: 0; list-style: none; }

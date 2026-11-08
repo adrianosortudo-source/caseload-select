@@ -1339,7 +1339,20 @@ export function renderBriefHtmlServer(
     ].join('\n');
     // Tag real report content tracks for rendered copy gates. Compact source
     // chips and labels remain metadata; each fact value owns a full-width row.
-    return demoHtml
+    // Short display explanations preserve the report's meaning. Structured
+    // facts, source evidence, scores and the portal projection stay unchanged.
+    const demoCopy: Record<string, string> = {
+      'Strong commercial engagement signal. Likely a meaningful scoped mandate.': 'Likely commercial engagement. The scope appears meaningful.',
+      'Strong readiness. The lead has thought through their situation.': 'Strong readiness. The inquiry shows preparation.',
+      'Confirm whether there is a prior business relationship to preserve, which affects whether to lead with demand or settlement.': 'Confirm whether preserving the business relationship favours a demand letter or settlement.',
+      "The defendant's solvency. A judgment is only useful if collectable.": 'Check the ability to pay. A judgment needs to be collectable.',
+      'Written terms or agreement not confirmed.': 'Are written terms available?',
+      'Confirm the exact claim amount, relief sought and appropriate court before choosing a procedure.': 'Confirm the exact claim amount, relief and court before choosing a procedure.',
+    };
+    const readableDemoHtml = Object.entries(demoCopy).reduce((html, [before, after]) => html.split(esc(before)).join(esc(after)), demoHtml)
+      .replace(/<p class="axis-block-prose">([^<]+)<\/p>/g, (_tag, prose: string) =>
+        (prose.match(/[^.!?]+[.!?]+|[^.!?]+$/g) ?? [prose]).map(sentence => `<p class="axis-block-prose">${sentence.trim()}</p>`).join(''));
+    return readableDemoHtml
       // An amount is a labelled data record, rather than an awkward sentence
       // split across narrow report columns. The original value is retained.
       .replace(/<li>Amount at stake: ([^<]+)\.<\/li>/g, '<li class="reasoning-amount"><dl><div><dt>Amount at stake</dt><dd data-ui-copy="supporting">$1</dd></div></dl></li>')

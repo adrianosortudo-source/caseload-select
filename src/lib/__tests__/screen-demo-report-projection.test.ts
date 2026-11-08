@@ -50,7 +50,7 @@ it("does not choose a court from a broad amount bucket in either projection", ()
   for (const presentation of ["portal", "demo"] as const) {
     const html = htmlRoot(renderBriefHtmlServer(report, "web", "en", undefined, state.matter_type, state.practice_area, {presentation}));
     expect(html.textContent).not.toContain("Above Small Claims threshold");
-    expect(html.textContent).toContain("Confirm the exact claim amount, relief sought and appropriate court");
+    expect(html.textContent).toContain(presentation === "demo" ? "Confirm the exact claim amount, relief and court before choosing a procedure." : "Confirm the exact claim amount, relief sought and appropriate court");
   }
   expect(report.strategic_considerations[0]).toContain("Above Small Claims threshold");
 });
