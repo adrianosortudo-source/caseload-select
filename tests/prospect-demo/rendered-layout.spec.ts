@@ -227,8 +227,9 @@ test("Guided intake reaches the brief and keeps answers across view switches", a
   await page.getByRole("button", { name: "Preview a reply", exact: true }).click();
   await expect(page.getByLabel("Simulated lawyer reply", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Show reply in demo", exact: true }).click();
-  await expect(page.getByText("Shown in this demo", { exact: true })).toBeVisible();
-  await expect(page.locator('[role="status"]').filter({ hasText: "Shown in this demo" })).toContainText(/thank you/i);
+  const report = page.locator("[data-demo-report]");
+  await expect(report.getByText("Shown in this demo", { exact: true })).toBeVisible();
+  await expect(report.locator('[role="status"]').filter({ hasText: "Shown in this demo" })).toContainText(/thank you/i);
   const simulatedReply = await page.getByLabel("Simulated lawyer reply", { exact: true }).inputValue();
   await page.getByRole("button", { name: "Website preview", exact: true }).click();
   const receipt = page.locator('[data-ui-component-content="demo-reply-receipt"]');
