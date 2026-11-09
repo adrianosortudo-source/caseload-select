@@ -161,3 +161,5 @@
 /* Natural screenshot dimensions scroll inside their structural viewer. */
 .dc-page .dc-report-header > p, .dc-page .dc-capture > p { text-wrap: wrap; }
 @media (max-width: 340px) { .dc-report-header { padding: 8px; } }
+
+.dc-page .dc-capture > p[role="alert"] { text-wrap: pretty; }
