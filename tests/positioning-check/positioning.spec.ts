@@ -31,7 +31,7 @@ test("one report contains both parts and retains the complete evidence", async (
  await expect(page.getByText(d.communicationImplication,{exact:true})).toBeVisible();
  await expect(page.getByText(d.tradeoff,{exact:true})).toBeVisible();
  await page.getByRole("button",{name:"Why we reached this reading",exact:true}).click();
- await expect(page.getByRole("heading",{name:"Evidence and references",exact:true})).toBeFocused();
+ await expect(page.getByRole("heading",{name:"Evidence",exact:true})).toBeFocused();
  await expect(page.locator(".pc-assessment")).toHaveCount(8);
  await expect(page.getByText(fixture.part1.statement,{exact:true})).toBeVisible();
  await expect(page.getByText(fixture.part1.rationale,{exact:true})).toBeVisible();
@@ -50,7 +50,7 @@ test("one report contains both parts and retains the complete evidence", async (
  await expect(page.locator("#evidence-direction-"+d.id)).toBeFocused();
  await page.getByRole("button",{name:"Return to report",exact:true}).first().click();
  await page.getByRole("button",{name:"Explore next steps",exact:true}).click();
- await expect(page.getByRole("heading",{name:"Next steps with CaseLoad Select"})).toBeFocused();
+ await expect(page.getByRole("heading",{name:"Next steps",exact:true})).toBeFocused();
  await expect(page.locator(".pc-next-steps>li")).toHaveCount(3);
  await expect(page.getByRole("link",{name:"Discuss your positioning"})).toHaveAttribute("href","https://caseloadselect.ca/conversation.html");
  await page.getByRole("button",{name:"Copy discussion brief"}).click();
@@ -59,7 +59,7 @@ test("one report contains both parts and retains the complete evidence", async (
  expect(clipboard).toContain(d.label); expect(clipboard).toContain(d.possibleStatement);
  for(const q of d.validationQuestions) expect(clipboard).toContain(q);
  await page.getByRole("button",{name:"Evidence and references",exact:true}).click();
- await expect(page.getByRole("heading",{name:"Evidence and references",exact:true})).toBeVisible();
+ await expect(page.getByRole("heading",{name:"Evidence",exact:true})).toBeVisible();
  await page.getByRole("button",{name:"Return to report",exact:true}).first().click();
  for(const [label,reading] of [["Keep the current direction","Retaining your present direction is a valid choice."],["I’m unsure","You do not need to choose now."]]) {
   await page.getByRole("button",{name:label,exact:true}).click(); await expect(page.getByText(reading,{exact:false})).toBeVisible();
