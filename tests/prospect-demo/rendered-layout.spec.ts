@@ -49,6 +49,12 @@ async function openDemo(page: Page) {
   await expect(page.locator(`${INTAKE} textarea`)).toBeVisible();
   await assertStandaloneChrome(page);
   await settle(page);
+  await expect(page.getByRole("group", { name: "View", exact: true })).toBeVisible();
+  await expect(page.getByText("AI mode: Live AI", { exact: true })).toBeVisible();
+  await expect(page.getByText("Changing sample or mode starts a new demonstration.", { exact: true })).toBeVisible();
+  const demoOptions = page.getByText("Demo options", { exact: true });
+  await expect(demoOptions).toBeVisible();
+  expect(await demoOptions.evaluate((summary) => (summary.parentElement as HTMLDetailsElement).open)).toBe(false);
 }
 
 async function openAdminBuilder(page: Page) {
@@ -163,16 +169,16 @@ for (const width of WIDTHS) {
     const longDescription = "A fictional business is owed money for completed services. The client has the signed proposal, invoice, and email messages. ".repeat(26);
     await textarea.fill(longDescription);
     await assertLayout(page);
-    await page.getByRole("button", { name: "Split view", exact: true }).click();
+    await page.getByRole("button", { name: "Side by side", exact: true }).click();
     await expect(textarea).toHaveValue(longDescription);
     await assertImages(page);
     await assertLayout(page);
     await textarea.fill(initial);
     await assertLayout(page);
     await page.screenshot({ path: testInfo.outputPath(`split-${width}.png`), fullPage: true });
-    await page.getByRole("button", { name: "Lawyer view", exact: true }).click();
+    await page.getByRole("button", { name: "Lawyer brief", exact: true }).click();
     await assertLayout(page);
-    await page.getByRole("button", { name: "Website", exact: true }).click();
+    await page.getByRole("button", { name: "Website preview", exact: true }).click();
     await expect(textarea).toHaveValue(initial);
     expect(errors).toEqual([]);
     expect(mutations).toEqual([]);
@@ -188,7 +194,8 @@ test("Guided intake reaches the brief and keeps answers across view switches", a
   page.on("request", (request) => { if (!["GET", "HEAD"].includes(request.method())) mutations.push(`${request.method()} ${request.url()}`); });
   await page.setViewportSize({ width: 1440, height: 900 });
   await openDemo(page);
-  await page.getByRole("button", { name: "Split view", exact: true }).click();
+  await page.getByRole("button", { name: "Side by side", exact: true }).click();
+  await page.getByText("Demo options", { exact: true }).click();
   await page.getByRole("button", { name: "Guided sample", exact: true }).click();
   await page.getByRole("button", { name: "Continue matter review", exact: true }).click();
   await expect(page.getByText("Draft brief", { exact: true }).first()).toBeVisible();
@@ -205,8 +212,8 @@ test("Guided intake reaches the brief and keeps answers across view switches", a
   }
   await expect(page.getByRole("heading", { name: "Contact details" })).toBeVisible();
   await expect(page.locator('input[name="client_name"],input[name="client_email"],input[name="client_phone"]')).toHaveCount(0);
-  await page.getByRole("button", { name: "Lawyer view", exact: true }).click();
-  await page.getByRole("button", { name: "Split view", exact: true }).click();
+  await page.getByRole("button", { name: "Lawyer brief", exact: true }).click();
+  await page.getByRole("button", { name: "Side by side", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Contact details" })).toBeVisible();
   await page.getByRole("button", { name: "Finish demonstration", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Demo complete" })).toBeVisible();
@@ -268,11 +275,12 @@ for (const width of WIDTHS) {
     await page.route("**/api/extract", async (route) => route.fulfill({ json: { mode: "live", extracted: { amount_at_stake: "$5,000–$25,000", dispute_reason: "No clear reason" } } }));
     await page.setViewportSize({ width, height: 1000 });
     await openDemo(page);
+    await page.getByText("Demo options", { exact: true }).click();
     await expect(page.getByRole("button", { name: "Live AI", exact: true })).toHaveAttribute("aria-pressed", "true");
-    await expect(page.getByRole("button", { name: "Website", exact: true })).toHaveAttribute("aria-pressed", "true");
+    await expect(page.getByRole("button", { name: "Website preview", exact: true })).toHaveAttribute("aria-pressed", "true");
     await assertLayout(page);
-    await page.getByRole("button", { name: "Split view", exact: true }).click();
-    await expect(page.getByRole("button", { name: "Split view", exact: true })).toHaveAttribute("aria-pressed", "true");
+    await page.getByRole("button", { name: "Side by side", exact: true }).click();
+    await expect(page.getByRole("button", { name: "Side by side", exact: true })).toHaveAttribute("aria-pressed", "true");
     await assertLayout(page);
     await page.locator(`${INTAKE} textarea`).fill("Fictional test. A business client owes us $18,450 for completed work. I can approve hiring a lawyer. We have an invoice and signed contract.");
     await page.getByRole("button", { name: "Continue matter review", exact: true }).click();

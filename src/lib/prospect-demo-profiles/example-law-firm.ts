@@ -11,7 +11,7 @@ export const exampleLawFirmProspectDemoProfile: ProspectDemoProfile = {
   theme: { accent: "#B59A6F", surface: "#FAF9F6", text: "#1C2B39", buttonText: "#FFFFFF" },
   scenarios: [
     { id: "fictional-unpaid-invoice", label: "Unpaid invoice", description: "I own a small business and can decide whether to hire a lawyer. A client has not paid a $4,800 invoice for work delivered on March 15, 2026, under a written services agreement. I have the agreement, invoice, and follow-up email." },
-    { id: "fictional-employment-dispute", label: "Employment issue", description: "I worked for my employer for seven years and received a written offer of eight weeks of pay in exchange for signing a release. I have not signed; the offer says I must respond by November 20, 2026. I want to understand what else a lawyer needs to review." },
+    { id: "fictional-employment-dispute", label: "Employment issue", description: "My employer dismissed me after I worked there for seven years. It offered eight weeks of severance pay in exchange for signing a release. I have not signed. The offer says I must respond by November 20, 2026. I want to understand what else a lawyer needs to review." },
   ],
   defaultView: "website", defaultMode: "guided",
 };

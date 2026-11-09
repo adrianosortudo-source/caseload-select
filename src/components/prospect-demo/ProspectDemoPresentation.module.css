@@ -177,7 +177,7 @@
 }
 
 .modeStatus,
-.demoNote {
+.sessionNote {
   width: 100%;
   margin: 0;
   color: #0D1520;
@@ -202,13 +202,11 @@
   outline-offset: 3px;
 }
 
-.demoNote {
-  margin-block: 8px;
-}
+
 
 .caseload > header .groupLegend,
 .caseload > header .modeStatus,
-.caseload > header .demoNote {
+.caseload > header .sessionNote {
   color: #FFFFFF;
 }
 
@@ -241,4 +239,11 @@
 
 .caseload > header .demoOptions summary {
   color: #FFFFFF;
+}
+
+.sessionNote {
+  width: 100%;
+  margin: 0;
+  color: #4A5A72;
+  font: 400 14px/1.5 "DM Sans Variable", sans-serif;
 }

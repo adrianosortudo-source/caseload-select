@@ -293,6 +293,7 @@ export function ProspectDemoPresentation({
             </label>
             <button type="button" onClick={restart} className={styles.startOver}>Start over</button>
           </div>
+          <p className={styles.sessionNote} data-ui-copy="supporting">Changing sample or mode starts a new demonstration.</p>
           <fieldset className={styles.viewGroup}>
             <legend className={styles.groupLegend}>View</legend>
             <div className={styles.viewButtons}>
@@ -305,7 +306,7 @@ export function ProspectDemoPresentation({
             <p className={styles.modeStatus} role="status" aria-live="polite">AI mode: {mode === "live-ai" ? "Live AI" : "Guided sample"}</p>
             <details className={styles.demoOptions}>
               <summary>Demo options</summary>
-              <p className={styles.demoNote}>Changing sample or mode starts a new demonstration.</p>
+
               <fieldset className={styles.modeGroup}>
                 <legend className={styles.groupLegend}>AI mode</legend>
                 <div className={styles.viewButtons}>
