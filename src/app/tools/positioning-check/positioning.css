@@ -15,4 +15,4 @@
 @media(max-width:600px){.pc-facts{grid-template-columns:1fr;gap:20px}.pc-main{padding-top:24px}.pc-report-heading h1{font-size:20px}.pc-report-heading{padding-bottom:12px}.pc-possibilities{padding:20px 16px}.pc-root .pc-direction-card{padding:14px 12px}.pc-card-body{margin-top:8px}.pc-reference>.pc-back+.pc-back{display:block;margin-left:0}.pc-choice-actions{display:grid;grid-template-columns:1fr}.pc-next-steps{padding-left:22px}.pc-choice-reading{margin-top:20px}}
 @media(max-width:360px){.pc-possibilities{padding-left:12px;padding-right:12px}}
 .pc-partial-note{margin:20px 0}.pc-partial-note h3{font-size:17px}.pc-partial-note p{margin-top:8px}
-@media(max-width:360px){.pc-root .pc-main{padding-left:8px;padding-right:8px}}
+@media(max-width:360px){.pc-root .pc-main:has(.pc-today){padding-left:8px;padding-right:8px}}
