@@ -101,7 +101,7 @@ export async function POST(request: NextRequest) {
     if (!desktopCapture) {
       let rawVisual: unknown;
       if (mobileCapture && captures[1].available) { try { rawVisual = (await judgeScreenshot(mobileCapture.screenshotPng, [], captures)).visual; } catch { /* Explicit unavailable visual review below. */ } }
-      const visualReview = enforceVisualEvidence(buildVisualReview(captures, rawVisual), { ...(desktopCapture ? { desktop: desktopCapture.domSnapshot } : {}), ...(mobileCapture ? { mobile: mobileCapture.domSnapshot } : {}) });
+      const visualReview = enforceVisualEvidence(buildVisualReview(captures, rawVisual), { ...(mobileCapture ? { mobile: mobileCapture.domSnapshot } : {}) });
       const payload = { domain, checkedAt: new Date().toISOString(), visualReview, legacyUnavailable: true };
       for (const c of [...visualReview.captures].sort((a,b) => (b.base64?.length ?? 0) - (a.base64?.length ?? 0))) { if (Buffer.byteLength(JSON.stringify(payload)) <= 3 * 1024 * 1024) break; if (c.available) removeCapture(visualReview, c.id); }
       if (Buffer.byteLength(JSON.stringify(payload)) > 3 * 1024 * 1024) return NextResponse.json({ error: "The report was too large to return." }, { status: 502, headers: { "Cache-Control": "no-store" } });
@@ -165,22 +165,20 @@ export async function POST(request: NextRequest) {
 
     const track1Report = buildTrack1Report([...desktopDimensions, ...(mobileDimension ? [mobileDimension] : [])], authorityResult, generalJudgments, desktopCapture.domSnapshot.darkPatterns);
 
-    const visualReview = enforceVisualEvidence(buildVisualReview(captures, rawVisual), { ...(desktopCapture ? { desktop: desktopCapture.domSnapshot } : {}), ...(mobileCapture ? { mobile: mobileCapture.domSnapshot } : {}) });
+    const visualReview = enforceVisualEvidence(buildVisualReview(captures, rawVisual), { desktop: desktopCapture.domSnapshot, ...(mobileCapture ? { mobile: mobileCapture.domSnapshot } : {}) });
     const payload = {
         domain,
         visualReview,
         checkedAt: new Date().toISOString(),
         score: track1Report.score,
         // The uncapped weighted average, before any red-flag ceiling.
-        // Named on the report as "the underlying measured craft" when a
-        // disqualifying flag is capping the visible score. Not itself the
-        // grade shown; see letterGrade below and attainable further down.
+        // Retained with the combined rubric in supporting details;
+        // authority and content signals remain part of this calculation.
         uncappedScore: track1Report.uncappedScore,
         letterGrade: track1Report.letterGrade,
         // The grade within reach if every item in the path (the findings
         // carrying inAttainablePath: true, see rankedFindings) were
-        // fixed. Leads the report per Phase 4 of
-        // docs/BUILD_PLAN_design_check_calibration_v1.md.
+        // fixed. Retained in supporting details with the combined rubric.
         attainable: track1Report.attainable,
         dimensionBar: track1Report.dimensionBar,
         notMeasuredDimensions: track1Report.notMeasuredDimensions,

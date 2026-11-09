@@ -56,4 +56,14 @@ describe("visual report API boundary", () => {
   const response = await POST(request()); const body = await response.json();
   expect(m.general).not.toHaveBeenCalled(); expect(body.visualReview.status).toBe("unavailable"); expect(body.visualReview.findings).toEqual([]);
  });
+ it("returns a mobile-only visual assessment without inventing desktop scores", async () => {
+  const png = await sharp({ create: { width: 80, height: 120, channels: 3, background: "white" } }).png().toBuffer();
+  m.render.mockResolvedValue({ captures: [{ viewport: "mobile", screenshotPng: png, screenshotClippedFromPx: null, domSnapshot: { darkPatterns: [] }, finalUrl: "https://synthetic-fixture.example", webVitals: {} }] });
+  m.general.mockResolvedValue({ judgments: [], visual: { ...visual, viewportReviews: [review("mobile")], findings: [{ ...visual.findings[0], captureId: "mobile" }] } });
+  const response = await POST(request()); const body = await response.json();
+  expect(response.status).toBe(200); expect(body.legacyUnavailable).toBe(true); expect(body.score).toBeUndefined();
+  expect(body.visualReview.status).toBe("partial"); expect(body.visualReview.findings[0].captureId).toBe("mobile");
+  expect(m.authority).not.toHaveBeenCalled(); expect(m.aggregate).not.toHaveBeenCalled();
+ });
+
 });
