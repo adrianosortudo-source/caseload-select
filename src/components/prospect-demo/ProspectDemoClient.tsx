@@ -143,7 +143,7 @@ export function ProspectDemoClient({ profileId, embedded = false, sampleOnly = f
           initialDescription={context.scenario.id === "your-inquiry" ? "" : context.scenario.description}
           configuredPracticeAreas={context.profile.practiceAreas}
           onDemoStateChange={receiveView}
-          demoContinuation={{ workflow: "meta", contactUsed, onUseSampleContact: () => setContactUsed(true), reply, onShowReview: context.showReview }}
+          demoContinuation={{ workflow: "meta", contactUsed, onUseSampleContact: () => setContactUsed(true), onResetSession: resetContinuation, reply, onShowReview: context.showReview }}
           consentCaptureEnabled={false}
         />
       </div>

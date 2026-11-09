@@ -198,34 +198,27 @@ test("Guided intake reaches the brief and keeps answers across view switches", a
   await page.getByText("Demo options", { exact: true }).click();
   await page.getByRole("button", { name: "Guided sample", exact: true }).click();
   await page.locator(`${INTAKE} textarea`).fill("Fictional test. A business client owes us $18,450 for completed work. We have a signed contract and invoice. I can approve hiring a lawyer.");
-  await page.getByRole("button", { name: "Continue matter review", exact: true }).click();
+  await page.getByRole("button", { name: "Send in demo", exact: true }).click();
   await expect(page.getByText("Draft brief", { exact: true }).first()).toBeVisible();
-  const readback = page.getByRole("button", { name: "Confirm details and continue" });
-  if (await readback.isVisible()) await readback.click();
-  for (let count = 0; count < 12; count += 1) {
-    const contact = page.getByRole("button", { name: "See the contact step", exact: true });
-    if (await contact.isVisible()) { await contact.click(); break; }
-    if (await page.getByRole("button", { name: "Use sample contact", exact: true }).isVisible()) break;
-    const skip = page.getByRole("button", { name: "Skip this question", exact: true });
-    await expect(skip).toBeVisible();
-    await skip.click();
-    await settle(page);
-  }
-  await expect(page.getByRole("heading", { name: "Contact details" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Use fictional contact", exact: true })).toBeVisible();
   await expect(page.locator('input[name="client_name"],input[name="client_email"],input[name="client_phone"]')).toHaveCount(0);
   await page.getByRole("button", { name: "Lawyer brief", exact: true }).click();
   await page.getByRole("button", { name: "Side by side", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Contact details" })).toBeVisible();
-  await page.getByRole("button", { name: "Use sample contact", exact: true }).click();
-  // The restored Meta flow captures contact before substantive discovery.
+  await expect(page.getByRole("button", { name: "Use fictional contact", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Use fictional contact", exact: true }).click();
+  const log = page.getByRole("log", { name: "" });
   for (let turn = 0; turn < 12; turn += 1) {
-    if (await page.getByRole("heading", { name: "Demo complete", exact: true }).isVisible()) break;
-    const finish = page.getByRole("button", { name: "Finish demonstration", exact: true });
-    if (await finish.isVisible()) { await finish.click(); break; }
-    const skip = page.getByRole("button", { name: "Skip this question", exact: true });
-    await expect(skip).toBeVisible(); await skip.click(); await settle(page);
+    if (await log.getByText(/The fictional intake is complete/).isVisible()) break;
+    const messages = log.locator('[data-ui-component-content="demo-conversation-message"]');
+    const before = await messages.count();
+    const hasOptions = await messages.last().locator("ol li").count() > 0;
+    const composer = page.getByLabel("Your fictional message");
+    await expect(composer).toBeEnabled();
+    await composer.fill(hasOptions ? "1" : "Not sure");
+    await page.getByRole("button", { name: "Send in demo", exact: true }).click();
+    await expect.poll(async () => await messages.count()).toBeGreaterThan(before + 1);
   }
-  await expect(page.getByRole("heading", { name: "Demo complete" })).toBeVisible();
+  await expect(log.getByText(/The fictional intake is complete/)).toBeVisible();
   await expect(page.getByText("Brief ready", { exact: true }).first()).toBeVisible();
   await page.getByRole("button", { name: "Lawyer brief", exact: true }).click();
   await expect(page.getByText("Sample contact", { exact: true })).toBeVisible();
@@ -241,7 +234,7 @@ test("Guided intake reaches the brief and keeps answers across view switches", a
   await expect(report.locator('[role="status"]').filter({ hasText: "Shown in this demo" })).toContainText(/thank you/i);
   const simulatedReply = await page.getByLabel("Simulated lawyer reply", { exact: true }).inputValue();
   await page.getByRole("button", { name: "Website preview", exact: true }).click();
-  const receipt = page.locator('[data-ui-component-content="demo-reply-receipt"]');
+  const receipt = page.locator('[data-ui-component-content="demo-conversation-message"]').filter({ hasText: simulatedReply });
   await expect(receipt).toBeVisible();
   await expect(receipt).toContainText(simulatedReply);
   await page.getByRole("button", { name: "Side by side", exact: true }).click();
@@ -308,26 +301,27 @@ for (const width of WIDTHS) {
     await page.getByRole("button", { name: "Side by side", exact: true }).click();
     await expect(page.getByRole("button", { name: "Side by side", exact: true })).toHaveAttribute("aria-pressed", "true");
     await assertLayout(page);
-    await page.locator(`${INTAKE} textarea`).fill("Fictional test. A business client owes us $18,450 for completed work. I can approve hiring a lawyer. We have an invoice and signed contract.");
-    await page.getByRole("button", { name: "Continue matter review", exact: true }).click();
-    await expect(page.getByRole("heading", { name: "Review the facts" })).toBeVisible();
-    await expect(page.getByText("Live AI read the description. Review and confirm the facts.", { exact: true })).toBeVisible();
-    await expect(page.getByText("Just me", { exact: true })).toBeVisible();
+    await page.locator(`${INTAKE} textarea`).fill("Fictional test. A business client owes us $20,000 for completed work. I can approve hiring a lawyer. We have an invoice and signed contract.");
+    await page.getByRole("button", { name: "Send in demo", exact: true }).click();
+    await expect(page.getByRole("button", { name: "Use fictional contact", exact: true })).toBeVisible();
     await assertLayout(page);
     await page.screenshot({ path: testInfo.outputPath(`ai-readback-${width}.png`), fullPage: true });
-    await page.getByRole("button", { name: "Confirm details and continue" }).click();
-    await expect(page.getByRole("button", { name: "Use sample contact", exact: true })).toBeVisible();
-    await page.getByRole("button", { name: "Use sample contact", exact: true }).click();
-    for (let i = 0; i < 10; i++) {
-      await expect(page.getByRole("heading", { name: "About how much money is involved?" })).toHaveCount(0);
-      await expect(page.getByRole("heading", { name: "Who decides whether to hire a lawyer for this?" })).toHaveCount(0);
-      const skip = page.getByRole("button", { name: "Skip this question" });
-      if (!(await skip.isVisible())) break;
-      await skip.click();
+    await page.getByRole("button", { name: "Use fictional contact", exact: true }).click();
+    const log = page.getByRole("log", { name: "" });
+    for (let i = 0; i < 12; i++) {
+      await expect(log.getByText("About how much money is involved?", { exact: true })).toHaveCount(0);
+      await expect(log.getByText("Who decides whether to hire a lawyer for this?", { exact: true })).toHaveCount(0);
+      if (await log.getByText(/The fictional intake is complete/).isVisible()) break;
+      const messages = log.locator('[data-ui-component-content="demo-conversation-message"]');
+      const before = await messages.count();
+      const hasOptions = await messages.last().locator("ol li").count() > 0;
+      const composer = page.getByLabel("Your fictional message");
+      await expect(composer).toBeEnabled();
+      await composer.fill(hasOptions ? "1" : "Not sure");
+      await page.getByRole("button", { name: "Send in demo", exact: true }).click();
+      await expect.poll(async () => await messages.count()).toBeGreaterThan(before + 1);
     }
-    await expect(page.getByRole("button", { name: "Finish demonstration", exact: true })).toBeVisible();
-    await page.getByRole("button", { name: "Finish demonstration", exact: true }).click();
-    await expect(page.getByRole("heading", { name: "Demo complete", exact: true })).toBeVisible();
+    await expect(log.getByText(/The fictional intake is complete/)).toBeVisible();
     await assertLayout(page);
     await page.screenshot({ path: testInfo.outputPath(`ai-brief-${width}.png`), fullPage: true });
     expect(mutations).toEqual(["/api/extract"]);

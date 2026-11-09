@@ -30,6 +30,8 @@ import { getWebAttribution } from "@/lib/screen-engine/persist";
 import type { EngineState, LawyerReport, MatterType, SlotDefinition } from "@/lib/screen-engine/types";
 import { answerDemoState, buildDemoReport, startDemoState } from "@/lib/screen-demo";
 import { DemoFactReview } from "./DemoFactReview";
+import { DemoConversation, type DemoConversationMessage } from "./DemoConversation";
+import { groundDemoConversationFacts } from "@/lib/screen-demo-conversation-grounding";
 import { prepareFamilyDemoState } from "@/lib/screen-demo-family";
 import { applyPendingSlotReply } from "@/lib/pending-slot-reply";
 import { meetsDiscoveryFloor } from "@/lib/discovery-floor";
@@ -148,7 +150,7 @@ export interface ScreenEnginePublicWidgetProps {
   /** Read-only state bridge for the separate sales presentation panel. */
   onDemoStateChange?: (view: ScreenDemoView) => void;
   /** Optional, browser-only continuation for the prospect presentation. */
-  demoContinuation?: { workflow?: "meta"; contactUsed?: boolean; onUseSampleContact: () => void; reply: string | null; onShowReview?: () => void };
+  demoContinuation?: { workflow?: "meta"; contactUsed?: boolean; onUseSampleContact: () => void; onResetSession?: () => void; reply: string | null; onShowReview?: () => void };
   configuredPracticeAreas?: readonly import("@/lib/screen-engine/types").PracticeArea[];
   /** Optional fictional opening used by the presentation toolbar. */
   initialDescription?: string;
@@ -312,6 +314,12 @@ export function ScreenEnginePublicWidget({
   const persistedRef = useRef(false);
   const extractionRun = useRef(0);
   const demoReplyHistory = useRef<string[]>([]);
+  const demoUserEvidence = useRef<string[]>([]);
+  const conversationBusy = useRef(false);
+  const [conversationVersion, setConversationVersion] = useState(0);
+  const [conversation, setConversation] = useState<DemoConversationMessage[]>([
+    { id: "welcome", role: "assistant", text: "Tell us about your fictional situation in your own words. We will ask a few follow-up questions." },
+  ]);
   useEffect(() => () => { extractionRun.current += 1; }, []);
   // Clarify state (DR-071, 2026-06-11). When the engine cannot classify
   // the lead's input (matter_type stays 'unknown' after the LLM merge,
@@ -345,7 +353,7 @@ export function ScreenEnginePublicWidget({
     if (!metaWorkflow || !state || isReading || pendingDemoReview || stage !== "questions" ||
         state.matter_type === "out_of_scope" || next?.type === "clarify") return;
     if (!demoContinuation?.contactUsed) setStage("contact");
-    else if (next?.type === "capture_contact" || next?.type === "stop") setStage("done");
+    else if (next?.type === "capture_contact" || next?.type === "stop" || next?.type === "present_insight") setStage("done");
   }, [metaWorkflow, state, isReading, pendingDemoReview, stage, next?.type, demoContinuation?.contactUsed]);
 
   // Drop-off checkpoint (qualification audit F2/F6/item 5, 2026-07-02).
@@ -405,6 +413,29 @@ export function ScreenEnginePublicWidget({
     return slotToItem(next.slot, language, i18n);
   }, [next, language, i18n]);
 
+  useEffect(() => {
+    if (!metaWorkflow || isReading || pendingDemoReview || !state) return;
+    let message: DemoConversationMessage | null = null;
+    if (state.matter_type === "out_of_scope") {
+      message = { id: "scope", role: "assistant", text: "This area is not configured in this demo. You can edit your inquiry or choose another sample." };
+    } else if (stage === "contact" && !demoContinuation?.contactUsed) {
+      message = { id: "contact", role: "assistant", text: "First, we need a name and a way to reach the person. Use the fictional sample contact to continue. You can reply with the number of an option or answer in your own words." };
+    } else if (stage === "questions" && demoContinuation?.contactUsed && next?.type === "continue" && currentItem) {
+      message = { id: `question:${state.questionHistory.length}:${currentItem.id}`, role: "assistant", text: currentItem.question, options: currentItem.options?.map((option) => option.label) };
+    } else if (stage === "questions" && next?.type === "clarify") {
+      message = { id: `clarify:${clarifyAttempts}`, role: "assistant", text: "Could you share a little more about what is happening?" };
+    } else if (stage === "done") {
+      message = { id: "complete", role: "assistant", text: "The fictional intake is complete and the demonstration brief is ready. No firm was contacted." };
+    }
+    if (message) setConversation((items) => items.some((item) => item.id === message!.id) ? items : [...items, message!]);
+  }, [metaWorkflow, isReading, pendingDemoReview, state, stage, demoContinuation?.contactUsed, next, currentItem, clarifyAttempts]);
+
+  useEffect(() => {
+    if (!metaWorkflow || stage !== "done" || !demoContinuation?.reply) return;
+    const text = demoContinuation.reply;
+    setConversation((items) => items.some((item) => item.id === "simulated-reply") ? items : [...items, { id: "simulated-reply", role: "assistant", text, speaker: `Simulated reply from ${firmName}`, verbatim: true }]);
+  }, [metaWorkflow, stage, demoContinuation?.reply, firmName]);
+
   const demoReport = useMemo(() => {
     if (!isDemo || !state || pendingDemoReview || isReading) return null;
     return buildDemoReport(state);
@@ -434,15 +465,17 @@ export function ScreenEnginePublicWidget({
     const text = rawText.trim();
     if (text.length < 10) return;
     demoReplyHistory.current = [];
+    demoUserEvidence.current = [text];
     setPendingDemoReview(false);
     setAnswerFeedback(null);
     setReadingAnswer(false);
     const run = ++extractionRun.current;
 
     if (policy.usesFixtureEngine) {
-      const fixtureState = prepareFamilyDemoState(startDemoState(text), configuredPracticeAreas);
+      let fixtureState = prepareFamilyDemoState(startDemoState(text), configuredPracticeAreas);
+      if (metaWorkflow) fixtureState = scoreState(groundDemoConversationFacts(fixtureState, text));
       setState(fixtureState);
-      setPendingDemoReview(demoCapturedFacts(fixtureState).length > 0);
+      setPendingDemoReview(!metaWorkflow && demoCapturedFacts(fixtureState).length > 0);
       setStage("questions");
       setIsReading(false);
       setExtraction({ status: "not-requested" });
@@ -452,6 +485,7 @@ export function ScreenEnginePublicWidget({
     let nextState = initialiseState(text);
     if (isDemo) nextState = prepareFamilyDemoState(nextState, configuredPracticeAreas);
     nextState = runEvidencePass(text, nextState);
+    if (metaWorkflow) nextState = groundDemoConversationFacts(nextState, text);
     nextState = scoreState(nextState);
     setState(nextState);
     setStage("questions");
@@ -468,11 +502,12 @@ export function ScreenEnginePublicWidget({
       if (run !== extractionRun.current) return;
       if (extracted.mode === "live") {
         nextState = scoreState(mergeLlmResults(nextState, extracted.extracted));
+        if (metaWorkflow) nextState = scoreState(groundDemoConversationFacts(nextState, text));
         setState(nextState);
-        if (runtime === "demo-live-ai") setPendingDemoReview(demoCapturedFacts(nextState).length > 0);
+        if (runtime === "demo-live-ai") setPendingDemoReview(!metaWorkflow && demoCapturedFacts(nextState).length > 0);
       }
       if (isDemo) {
-        setPendingDemoReview(demoCapturedFacts(nextState).length > 0);
+        setPendingDemoReview(!metaWorkflow && demoCapturedFacts(nextState).length > 0);
         setExtraction(
           extracted.mode === "live"
             ? extracted.reason === "out_of_scope" || extracted.reason === "no_applicable_slots" ? { status: "not-needed" } : { status: "live" }
@@ -484,7 +519,7 @@ export function ScreenEnginePublicWidget({
       // llmExtract normally resolves failures as { mode: "error" }, but keep
       // the presentation state truthful if that contract is ever violated.
       if (isDemo) {
-        setPendingDemoReview(demoCapturedFacts(nextState).length > 0);
+        setPendingDemoReview(!metaWorkflow && demoCapturedFacts(nextState).length > 0);
         setExtraction({
           status: "fallback",
           reason: error instanceof Error ? error.message : "Live extraction was unavailable.",
@@ -533,6 +568,7 @@ export function ScreenEnginePublicWidget({
     if (metaWorkflow && next?.slot?.id === slotId) {
       const reply = value.startsWith("other:") ? value.slice("other:".length).trim() : value;
       demoReplyHistory.current = [...demoReplyHistory.current, `Question: ${next.slot.question}\nAnswer: ${reply}`];
+      demoUserEvidence.current = [...demoUserEvidence.current, reply];
     }
     setAnswerFeedback(null);
     if (!metaWorkflow || !value.startsWith("other:")) {
@@ -567,19 +603,22 @@ export function ScreenEnginePublicWidget({
       let updated = mergeLlmResults({ ...state, input: context }, result.extracted);
       // Keep the original inquiry intact while grounding this turn in its actual reply.
       updated = { ...updated, input: state.input };
+      if (metaWorkflow) updated = groundDemoConversationFacts(updated, demoUserEvidence.current.join("\n"));
       const mapped = result.mapped_answer;
       const mappedAnswer = mapped?.slotId === slotId && asked.options?.some((option) => option.value === mapped.value);
       if (mappedAnswer) updated = applyAnswer(updated, slotId, mapped!.value);
       const captured = demoReviewFacts(updated).some((fact) => state.slots[fact.id] !== fact.value);
-      if (!captured && !mappedAnswer) {
+      const directlyGrounded = updated.slot_meta[slotId]?.source === "explicit" && updated.slots[slotId] !== state.slots[slotId];
+      if (!captured && !mappedAnswer && !directlyGrounded) {
         setExtraction({ status: "live" });
         setAnswerFeedback("That answer did not resolve this question. Choose the closest option or add a little more detail."); return;
       }
-      if (!mappedAnswer && updated.slots[slotId] && updated.slots[slotId] !== state.slots[slotId]) {
+      if (!metaWorkflow && !mappedAnswer && !directlyGrounded && updated.slots[slotId] && updated.slots[slotId] !== state.slots[slotId]) {
         updated = { ...updated, pendingAskedSlotId: null, questionHistory: [...state.questionHistory, slotId] };
       }
       setHistory((items) => [...items, state]); mutate(updated);
-      setPendingDemoReview(captured); setExtraction({ status: "live" });
+      if (metaWorkflow && !mappedAnswer && !directlyGrounded) setAnswerFeedback("That answer did not resolve this question. Choose the closest option or add a little more detail.");
+      setPendingDemoReview(!metaWorkflow && captured); setExtraction({ status: "live" });
     } catch {
       if (run !== extractionRun.current) return;
       setExtraction({ status: "fallback", reason: "The answer could not be read." });
@@ -606,7 +645,7 @@ export function ScreenEnginePublicWidget({
     }
     setHistory((items) => items.slice(0, -1));
     setState(prev);
-    if (isDemo) setPendingDemoReview(demoReviewFacts(prev).length > 0);
+    if (isDemo) setPendingDemoReview(!metaWorkflow && demoReviewFacts(prev).length > 0);
     setStage("questions");
   }
 
@@ -723,9 +762,49 @@ export function ScreenEnginePublicWidget({
     void persist(nextState);
   }
 
-  const demoReviewFooter = isDemo && state && !pendingDemoReview && !isReading && demoCapturedFacts(state).length > 0
+  const demoReviewFooter = isDemo && !metaWorkflow && state && !pendingDemoReview && !isReading && demoCapturedFacts(state).length > 0
     ? <button type="button" className="min-h-[44px] w-full border border-[#1E2F58] bg-white px-4 py-3 text-[#1E2F58]" onClick={() => setPendingDemoReview(true)}>Review captured facts</button>
     : undefined;
+
+  if (metaWorkflow) {
+    const familyOnly = configuredPracticeAreas.length === 1 && configuredPracticeAreas[0] === "family";
+    const awaitingContact = stage === "contact" && !demoContinuation?.contactUsed;
+    const completed = stage === "done";
+    const outOfScope = state?.matter_type === "out_of_scope";
+    const actions = [];
+    if (awaitingContact && demoContinuation) actions.push({ label: "Use fictional contact", onClick: () => {
+      setConversation((items) => [...items, { id: "sample-contact", role: "visitor", text: "Alex Morgan, alex.morgan@example.com (fictional sample contact)" }]);
+      demoContinuation.onUseSampleContact();
+      setStage("questions");
+    }});
+    if (completed && demoContinuation?.onShowReview) actions.push({ label: "Review the lawyer brief", onClick: demoContinuation.onShowReview });
+    if (stage !== "kickoff" && !completed) actions.push({ label: "Edit inquiry", onClick: () => {
+      extractionRun.current += 1;
+      setIsReading(false); setPendingDemoReview(false); setState(null); setHistory([]);
+      setExtraction({ status: "not-requested" }); setAnswerFeedback(null); setStage("kickoff");
+      setClarifyAttempts(0); setClarifyFallback(false); demoReplyHistory.current = []; demoUserEvidence.current = [];
+      demoContinuation?.onResetSession?.();
+      setConversation([{ id: "welcome", role: "assistant", text: "Edit your fictional inquiry. Earlier answers have been cleared." }]);
+      setConversationVersion((version) => version + 1);
+    }});
+    return <DemoConversation key={conversationVersion} messages={conversation} actions={actions}
+      initialDraft={stage === "kickoff" ? description : ""} minChars={stage === "kickoff" ? 10 : 1}
+      placeholder={stage === "kickoff" && familyOnly ? "I recently separated and need help agreeing on a parenting schedule. We live in Ontario." : "Type a fictional message"}
+      disabled={isReading || awaitingContact || completed || Boolean(outOfScope)} actionsDisabled={isReading}
+      status={isReading ? "Reading your message..." : answerFeedback}
+      onSend={(text) => {
+        if (conversationBusy.current) return;
+        conversationBusy.current = true;
+        setConversation((items) => [...items, { id: `visitor:${crypto.randomUUID()}`, role: "visitor", text }]);
+        void (async () => {
+          try {
+            if (stage === "kickoff") { setDescription(text); await runStart(text); }
+            else if (next?.type === "clarify") await submitClarify(text);
+            else if (next?.slot) await answer(next.slot.id, `other:${text}`);
+          } finally { conversationBusy.current = false; }
+        })();
+      }} />;
+  }
 
   if (stage === "kickoff") {
     const familyOnlyDemo = isDemo && configuredPracticeAreas.length === 1 && configuredPracticeAreas[0] === "family";
