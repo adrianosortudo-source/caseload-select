@@ -61,6 +61,8 @@ const ALL_MATTER_TYPES_RECORD: Record<MatterType, true> = {
   probate: true,
   estate_dispute: true,
   estates_general: true,
+  // Family is available only through an explicitly configured demo adapter.
+  family_general: true,
   // Routing states (contact still applies — we want to capture lead info
   // even before classification and even on OOS matters that the firm
   // may forward elsewhere).
@@ -93,14 +95,15 @@ export const ALL_MATTER_TYPES: readonly MatterType[] =
 export type DisqualifierMatterType = Extract<MatterType, 'out_of_scope' | 'unknown'>;
 
 /**
- * Every MatterType that is NOT a disqualifier. The engine is expected
+ * Every production MatterType that is not a disqualifier. The engine is expected
  * to extract slots for these, score them on four axes, and route them
  * into the lawyer's queue.
  */
-export type InScopeMatterType = Exclude<MatterType, DisqualifierMatterType>;
+// Demo-only family is intentionally outside production scoring-coverage enumeration.
+export type InScopeMatterType = Exclude<MatterType, DisqualifierMatterType | 'family_general'>;
 
 /**
- * Every in-scope MatterType (excludes `out_of_scope` and `unknown`).
+ * Production in-scope matters (excludes disqualifiers and the demo-only family lane).
  *
  * The type guard `(t): t is InScopeMatterType` narrows the array
  * element type so the result is genuinely `readonly InScopeMatterType[]`,
@@ -116,7 +119,7 @@ export type InScopeMatterType = Exclude<MatterType, DisqualifierMatterType>;
  */
 export const IN_SCOPE_MATTER_TYPES: readonly InScopeMatterType[] =
   ALL_MATTER_TYPES.filter(
-    (t): t is InScopeMatterType => t !== 'out_of_scope' && t !== 'unknown',
+    (t): t is InScopeMatterType => t !== 'out_of_scope' && t !== 'unknown' && t !== 'family_general',
   );
 
 /** Concrete `applies_to` array for the universal contact slots. */
@@ -2737,6 +2740,7 @@ export const SLOT_REGISTRY: SlotDefinition[] = [
       'probate',
       'estate_dispute',
       'estates_general',
+      'family_general',
     ],
     tier: 'core',
     question_group: 'readiness',
@@ -2784,6 +2788,7 @@ export const SLOT_REGISTRY: SlotDefinition[] = [
       'probate',
       'estate_dispute',
       'estates_general',
+      'family_general',
     ],
     tier: 'core',
     question_group: 'readiness',
@@ -2832,6 +2837,7 @@ export const SLOT_REGISTRY: SlotDefinition[] = [
       'probate',
       'estate_dispute',
       'estates_general',
+      'family_general',
     ],
     tier: 'core',
     question_group: 'readiness',
@@ -3654,6 +3660,42 @@ export const SLOT_REGISTRY: SlotDefinition[] = [
     abstraction_level: 'concrete',
     required: false,
     priority: 20,
+  },
+  // Opt-in family demonstration pack. Default classification remains out of scope.
+  {
+    id: 'family_help_sought', question: 'What would you like help with?', input_type: 'single_select',
+    options: [
+      { value: 'Parenting or decision-making', label: 'Parenting or decision-making' },
+      { value: 'Child or spousal support', label: 'Child or spousal support' },
+      { value: 'Separation or divorce', label: 'Separation or divorce' },
+      { value: 'Agreement or court order', label: 'Agreement or court order' },
+      { value: 'Other family issue', label: 'Other family issue' },
+      { value: 'Not sure', label: 'Not sure' },
+    ], applies_to: ['family_general'], tier: 'core', question_group: 'generic', resolves: 'none',
+    decision_value: 0, abstraction_level: 'concrete', required: true, priority: 10,
+  },
+  {
+    id: 'family_children', question: 'Are children or parenting arrangements part of this matter?', input_type: 'single_select',
+    options: [{ value: 'Yes', label: 'Yes' }, { value: 'No', label: 'No' }, { value: 'Not sure', label: 'Not sure' }],
+    applies_to: ['family_general'], tier: 'core', question_group: 'generic', resolves: 'none',
+    decision_value: 0, abstraction_level: 'concrete', required: true, priority: 11,
+  },
+  {
+    id: 'family_existing_order', question: 'Is there an existing agreement or court order?', input_type: 'single_select',
+    options: [{ value: 'Court order', label: 'Court order' }, { value: 'Written agreement', label: 'Written agreement' }, { value: 'Both', label: 'Both' }, { value: 'Neither', label: 'Neither' }, { value: 'Not sure', label: 'Not sure' }],
+    applies_to: ['family_general'], tier: 'core', question_group: 'generic', resolves: 'none',
+    decision_value: 0, abstraction_level: 'concrete', required: true, priority: 12,
+  },
+  {
+    id: 'family_timing', question: 'Is there an upcoming court date or deadline? Share the date if you know it.', input_type: 'free_text',
+    applies_to: ['family_general'], tier: 'core', question_group: 'generic', resolves: 'none',
+    decision_value: 0, abstraction_level: 'concrete', required: true, priority: 13,
+  },
+  {
+    id: 'family_jurisdiction', question: 'Where is this matter located?', input_type: 'single_select',
+    options: [{ value: 'Ontario', label: 'Ontario' }, { value: 'Outside Ontario', label: 'Outside Ontario' }, { value: 'Not sure', label: 'Not sure' }],
+    applies_to: ['family_general'], tier: 'core', question_group: 'generic', resolves: 'none',
+    decision_value: 0, abstraction_level: 'concrete', required: true, priority: 14,
   },
 ];
 

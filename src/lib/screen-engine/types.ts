@@ -58,6 +58,8 @@ export type MatterType =
   | 'probate'
   | 'estate_dispute'
   | 'estates_general'
+  // Explicitly configured demonstration only; default family classification remains out of scope.
+  | 'family_general'
   // Out of scope (detected but not yet supported)
   | 'out_of_scope'
   | 'unknown';
