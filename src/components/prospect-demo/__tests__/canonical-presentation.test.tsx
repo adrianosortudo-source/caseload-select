@@ -42,7 +42,7 @@ describe("canonical prospect presentation", () => {
     expect(screen.queryByLabelText("Prospect")).toBeNull();
     expect(screen.getByRole("group", { name: "View" })).toBeTruthy();
     expect(screen.getByText("AI mode: Live AI")).toBeTruthy();
-    expect(screen.getByText("Changing sample or mode starts a new demonstration.")).toBeTruthy();
+    expect(screen.getByText("Changing a sample or mode resets this demo.")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Start over" })).toBeTruthy();
     expect(screen.getByText("Demo options").closest("details")?.open).toBe(false);
 

@@ -293,7 +293,7 @@ export function ProspectDemoPresentation({
             </label>
             <button type="button" onClick={restart} className={styles.startOver}>Start over</button>
           </div>
-          <p className={styles.sessionNote} data-ui-copy="supporting">Changing sample or mode starts a new demonstration.</p>
+          <p className={styles.sessionNote} data-ui-copy="supporting">Changing a sample or mode resets this demo.</p>
           <fieldset className={styles.viewGroup}>
             <legend className={styles.groupLegend}>View</legend>
             <div className={styles.viewButtons}>

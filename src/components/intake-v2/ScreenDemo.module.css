@@ -183,3 +183,5 @@
 .continuation button:disabled { opacity: .65; cursor: not-allowed; }
 .replyText { white-space: pre-wrap; overflow-wrap: anywhere; }
 @media (max-width: 639px) { .continuation { padding: 20px 16px; } }
+
+.humanBoundary { text-wrap: pretty; }

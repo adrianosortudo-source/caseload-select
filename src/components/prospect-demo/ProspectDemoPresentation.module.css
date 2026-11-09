@@ -97,6 +97,7 @@
 @media (max-width: 639px) { .caseload .presentationBody { padding-inline: 0; } .caseload [aria-label="Lawyer review"], .caseload [data-demo-layout="split"] .websiteStage { border-inline: 0; } }
 
 .caseload .introduction, .caseload [data-ui-component-content="demo-ai-status"] p { text-wrap: pretty; }
+.caseload [data-ui-component-content="demo-ai-status"] p[data-ui-copy="body"] { text-wrap: wrap; }
 .caseload [data-ui-component-content="demo-ai-status"] p { width: 100%; margin: 0; color: white; font: 400 17px/1.6 "DM Sans Variable",sans-serif; }
 .caseload [data-ui-component-content="demo-ai-status"] p[role="status"] { font: 600 15px/1.5 var(--font-oxanium),sans-serif; }
 
@@ -246,4 +247,5 @@
   margin: 0;
   color: #4A5A72;
   font: 400 14px/1.5 "DM Sans Variable", sans-serif;
+  text-wrap: pretty;
 }

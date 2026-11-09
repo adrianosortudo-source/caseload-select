@@ -49,7 +49,7 @@ export function DemoOperatorPanel({ view, continuation }: { view: ScreenDemoView
       {view.stage === "done" && continuation?.contactUsed && <section className={styles.continuation} data-ui-component-content="demo-continuation">
         <h3 data-ui-copy="heading">Sample contact</h3><p data-ui-copy="supporting">Fictional details</p>
         <dl><dt>Name</dt><dd>Alex Morgan</dd><dt>Email</dt><dd>alex.morgan@example.com</dd></dl>
-        <p data-ui-copy="body">The Screen prioritizes attention. The lawyer decides.</p>
+        <p className={styles.humanBoundary} data-ui-copy="body">The Screen prioritizes attention. The lawyer decides.</p>
         {!continuation.replyOpen && <button type="button" className={styles.secondary} onClick={continuation.onOpenReply}>Preview a reply</button>}
         {continuation.replyOpen && <>
           <label htmlFor="demo-simulated-reply">Simulated lawyer reply</label>

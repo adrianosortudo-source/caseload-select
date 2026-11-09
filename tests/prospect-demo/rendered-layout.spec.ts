@@ -51,7 +51,7 @@ async function openDemo(page: Page) {
   await settle(page);
   await expect(page.getByRole("group", { name: "View", exact: true })).toBeVisible();
   await expect(page.getByText("AI mode: Live AI", { exact: true })).toBeVisible();
-  await expect(page.getByText("Changing sample or mode starts a new demonstration.", { exact: true })).toBeVisible();
+  await expect(page.getByText("Changing a sample or mode resets this demo.", { exact: true })).toBeVisible();
   const demoOptions = page.getByText("Demo options", { exact: true });
   await expect(demoOptions).toBeVisible();
   expect(await demoOptions.evaluate((summary) => (summary.parentElement as HTMLDetailsElement).open)).toBe(false);
