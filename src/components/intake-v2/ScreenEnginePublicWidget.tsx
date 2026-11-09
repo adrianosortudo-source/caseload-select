@@ -552,23 +552,26 @@ export function ScreenEnginePublicWidget({
     setReadingAnswer(true); setIsReading(true); setExtraction({ status: "reading" });
     try {
       const context = `${state.input}\n\nFollow-up question: ${asked.question}\nThe person's answer: ${text}`;
-      const result = await llmExtract(context, state);
+      const result = await llmExtract(context, state, { pendingSlotId: slotId, reply: text });
       if (run !== extractionRun.current) return;
-      if (result.mode !== "live") {
+      if (result.mode !== "live" && !result.mapped_answer) {
         setExtraction({ status: "fallback", reason: result.reason });
         setAnswerFeedback("AI could not read this answer. Please choose an option or try your answer again."); return;
       }
       let updated = mergeLlmResults(state, result.extracted);
+      const mapped = result.mapped_answer;
+      const mappedAnswer = mapped?.slotId === slotId && asked.options?.some((option) => option.value === mapped.value);
+      if (mappedAnswer) updated = applyAnswer(updated, slotId, mapped!.value);
       const captured = demoReviewFacts(updated).some((fact) => state.slots[fact.id] !== fact.value);
-      if (!captured) {
+      if (!captured && !mappedAnswer) {
         setExtraction({ status: "live" });
         setAnswerFeedback("That answer did not resolve this question. Choose the closest option or add a little more detail."); return;
       }
-      if (updated.slots[slotId] && updated.slots[slotId] !== state.slots[slotId]) {
+      if (!mappedAnswer && updated.slots[slotId] && updated.slots[slotId] !== state.slots[slotId]) {
         updated = { ...updated, pendingAskedSlotId: null, questionHistory: [...state.questionHistory, slotId] };
       }
       setHistory((items) => [...items, state]); mutate(updated);
-      setPendingDemoReview(true); setExtraction({ status: "live" });
+      setPendingDemoReview(captured); setExtraction({ status: "live" });
     } catch {
       if (run !== extractionRun.current) return;
       setExtraction({ status: "fallback", reason: "The answer could not be read." });

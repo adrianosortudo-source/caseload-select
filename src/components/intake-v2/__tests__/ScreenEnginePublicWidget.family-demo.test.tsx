@@ -76,6 +76,23 @@ describe("Meta family demo free-text regression", () => {
     expect(views.at(-1)?.currentQuestion?.id).not.toBe("family_timing");
   });
 
+  it("maps a natural readiness reply through the original Meta answer mapper", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce({ ok: true, json: async () => ({ mode: "live", extracted: { family_help_sought: "Parenting or decision-making", family_children: "Yes", family_existing_order: "Neither", family_timing: "No court date is scheduled.", family_jurisdiction: "Ontario" } }) } as Response);
+    const views: ScreenDemoView[] = []; render(<Harness views={views} />);
+    fireEvent.click(screen.getByRole("button", { name: "Continue matter review" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Confirm details and continue" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Use sample contact" }));
+    await waitFor(() => expect(views.at(-1)?.currentQuestion?.id).toBe("hiring_timeline"));
+    vi.mocked(fetch).mockResolvedValueOnce({ ok: true, json: async () => ({ mode: "live", extracted: {}, mapped_answer: { slotId: "hiring_timeline", value: "Now (this week)" } }) } as Response);
+    fireEvent.click(screen.getByRole("button", { name: /Something else/i }));
+    fireEvent.change(screen.getByPlaceholderText("Describe what happened in your situation..."), { target: { value: "I would like to get someone working on this as soon as possible, ideally this week." } });
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    await waitFor(() => expect(views.at(-1)?.state?.slots.hiring_timeline).toBe("Now (this week)"));
+    expect(views.at(-1)?.state?.slot_meta.hiring_timeline.source).toBe("answered");
+    expect(views.at(-1)?.currentQuestion?.id).not.toBe("hiring_timeline");
+    expect(vi.mocked(fetch)).toHaveBeenCalledTimes(2);
+  });
+
   it("uses the actual asked question when reading a natural follow-up answer", async () => {
     const views: ScreenDemoView[] = []; render(<Harness views={views} />);
     fireEvent.click(screen.getByRole("button", { name: "Continue matter review" }));

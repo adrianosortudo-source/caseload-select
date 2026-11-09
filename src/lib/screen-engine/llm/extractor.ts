@@ -33,6 +33,8 @@ export interface LlmExtractionResponse {
   extracted: Record<string, string | null>;
   mode: 'live' | 'disabled' | 'error';
   reason?: string;
+  mapped_answer?: { slotId: string; value: string };
+  mapping_mode?: 'live' | 'disabled' | 'error';
   tokens?: { prompt?: number; completion?: number };
 }
 
@@ -41,6 +43,7 @@ const REQUEST_TIMEOUT_MS = 12_000;
 export async function llmExtract(
   description: string,
   state: EngineState,
+  followUp?: { pendingSlotId: string; reply: string },
 ): Promise<LlmExtractionResponse> {
   try {
     const controller = new AbortController();
@@ -53,6 +56,7 @@ export async function llmExtract(
         description,
         matter_type: state.matter_type,
         already_extracted: state.slots,
+        ...(followUp ? { pending_slot_id: followUp.pendingSlotId, reply: followUp.reply } : {}),
       }),
       signal: controller.signal,
     });
@@ -66,6 +70,8 @@ export async function llmExtract(
       extracted: data.extracted ?? {},
       mode: data.mode ?? 'live',
       reason: data.reason,
+      mapped_answer: data.mapped_answer,
+      mapping_mode: data.mapping_mode,
       tokens: data.tokens,
     };
   } catch (err) {
