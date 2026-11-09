@@ -728,6 +728,7 @@ export function ScreenEnginePublicWidget({
     : undefined;
 
   if (stage === "kickoff") {
+    const familyOnlyDemo = isDemo && configuredPracticeAreas.length === 1 && configuredPracticeAreas[0] === "family";
     // Kickoff language: seeded by `initialLang` (the embedding page's
     // locale hint via ?lang=). English embeds default to "en"; a /pt
     // route passes "pt" so the first screen matches the visitor's chosen
@@ -758,10 +759,9 @@ export function ScreenEnginePublicWidget({
                   `A few plain-language sentences are enough. Include what is happening, any deadline, and the documents you have. After that, the Screen usually asks ${WEB_DISCOVERY_TARGET_MIN}–${WEB_DISCOVERY_TARGET_MAX} short questions and never more than ${WEB_DISCOVERY_HARD_CAP}.`,
                 ),
             presentation: "text",
-            placeholder: ws(
-              "kickoff_placeholder",
-              "I am about to sign a commercial lease and want to know what risks I should check before committing.",
-            ),
+            placeholder: familyOnlyDemo
+              ? "I recently separated and need help agreeing on a parenting schedule. We live in Ontario."
+              : ws("kickoff_placeholder", "I am about to sign a commercial lease and want to know what risks I should check before committing."),
           }}
           value={description}
           onChange={setDescription}
@@ -770,7 +770,11 @@ export function ScreenEnginePublicWidget({
           minChars={10}
           enableVoice={policy.allowsVoice}
           voiceHint={ws("voice_hint", "speak your answer instead of typing it")}
-          examplePrompts={[
+          examplePrompts={familyOnlyDemo ? [
+            "I recently separated...",
+            "I need help with a parenting schedule...",
+            "I have a family court date...",
+          ] : [
             ws("kickoff_example_1", "I am about to sign..."),
             ws("kickoff_example_2", "I received a document and need to know..."),
             ws("kickoff_example_3", "I need to decide whether..."),

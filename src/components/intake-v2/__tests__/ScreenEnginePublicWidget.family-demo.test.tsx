@@ -18,6 +18,13 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 describe("Meta family demo free-text regression", () => {
+  it("offers family-appropriate examples for a family-only demo", () => {
+    render(<Harness views={[]} description="" />);
+    expect(screen.getByPlaceholderText("I recently separated and need help agreeing on a parenting schedule. We live in Ontario.")).toBeTruthy();
+    expect(screen.getByText(/I need help with a parenting schedule/)).toBeTruthy();
+    expect(screen.queryByPlaceholderText(/commercial lease/)).toBeNull();
+  });
+
   it("reads a typed parenting inquiry, captures contact, then asks unresolved questions", async () => {
     const views: ScreenDemoView[] = []; render(<Harness views={views} />);
     fireEvent.click(screen.getByRole("button", { name: "Continue matter review" }));
