@@ -311,6 +311,7 @@ export function ScreenEnginePublicWidget({
   const [persistStatus, setPersistStatus] = useState<string | null>(null);
   const persistedRef = useRef(false);
   const extractionRun = useRef(0);
+  const demoReplyHistory = useRef<string[]>([]);
   useEffect(() => () => { extractionRun.current += 1; }, []);
   // Clarify state (DR-071, 2026-06-11). When the engine cannot classify
   // the lead's input (matter_type stays 'unknown' after the LLM merge,
@@ -432,6 +433,7 @@ export function ScreenEnginePublicWidget({
   async function runStart(rawText: string) {
     const text = rawText.trim();
     if (text.length < 10) return;
+    demoReplyHistory.current = [];
     setPendingDemoReview(false);
     setAnswerFeedback(null);
     setReadingAnswer(false);
@@ -528,6 +530,10 @@ export function ScreenEnginePublicWidget({
   async function answer(slotId: string, rawValue: string | string[]) {
     if (!state || isReading) return;
     const value = Array.isArray(rawValue) ? rawValue.join(", ") : rawValue;
+    if (metaWorkflow && next?.slot?.id === slotId) {
+      const reply = value.startsWith("other:") ? value.slice("other:".length).trim() : value;
+      demoReplyHistory.current = [...demoReplyHistory.current, `Question: ${next.slot.question}\nAnswer: ${reply}`];
+    }
     setAnswerFeedback(null);
     if (!metaWorkflow || !value.startsWith("other:")) {
       setHistory((items) => [...items, state]);
@@ -551,7 +557,7 @@ export function ScreenEnginePublicWidget({
     const run = ++extractionRun.current;
     setReadingAnswer(true); setIsReading(true); setExtraction({ status: "reading" });
     try {
-      const context = `${state.input}\n\nFollow-up question: ${asked.question}\nThe person's answer: ${text}`;
+      const context = `${state.input}\n\n${demoReplyHistory.current.join("\n\n")}`;
       const result = await llmExtract(context, state, { pendingSlotId: slotId, reply: text });
       if (run !== extractionRun.current) return;
       if (result.mode !== "live" && !result.mapped_answer) {
@@ -584,6 +590,7 @@ export function ScreenEnginePublicWidget({
   }
 
   function back() {
+    demoReplyHistory.current = [];
     extractionRun.current += 1;
     setIsReading(false);
     setPendingDemoReview(false);

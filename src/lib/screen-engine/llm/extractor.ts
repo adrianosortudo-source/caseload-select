@@ -220,12 +220,12 @@ export function familyNegativeIsGrounded(slotId: string, value: string, input: s
     return /\b(?:no (?:children|kids)|(?:do not|don't|dont|have not|haven't|havent) have (?:any )?(?:children|kids)|childless)\b/i.test(input);
   }
   if (slotId === 'family_existing_order' && value.trim().toLowerCase() === 'neither') {
-    const neither = /\bneither\s+(?:a(?:n)?\s+)?(?:court\s+)?order(?:s)?\s+nor\s+(?:a(?:n)?\s+)?(?:written\s+)?agreement(?:s)?\b/i.test(input)
-      || /\bno\s+(?:court\s+)?orders?\s+(?:or|and)\s+(?:written\s+)?agreements?\b/i.test(input)
+    const neither = /\bneither\s+(?:a(?:n)?\s+)?(?:(?:court|parenting)\s+)?order(?:s)?\s+nor\s+(?:a(?:n)?\s+)?(?:written\s+)?(?:(?:parenting|separation)\s+)?agreement(?:s)?\b/i.test(input)
+      || /\bno\s+(?:(?:court|parenting)\s+)?orders?\s+(?:or|and)\s+(?:written\s+)?(?:(?:parenting|separation)\s+)?agreements?\b/i.test(input)
       || /\bneither\s+(?:an?\s+)?(?:agreement|order)\s+nor\s+(?:an?\s+)?(?:agreement|order)\b/i.test(input)
-      || /\bno\s+(?:written\s+)?agreements?\s+(?:or|and)\s+(?:court\s+)?orders?\b/i.test(input);
-    const negOrder = /\b(?:no|without)\s+(?:existing\s+)?(?:court\s+)?orders?\b/i.test(input);
-    const negAgreement = /\b(?:no|without)\s+(?:existing\s+)?(?:written\s+)?agreements?\b/i.test(input);
+      || /\bno\s+(?:written\s+)?(?:(?:parenting|separation)\s+)?agreements?\s+(?:or|and)\s+(?:(?:court|parenting)\s+)?orders?\b/i.test(input);
+    const negOrder = /\b(?:no|without)\s+(?:existing\s+)?(?:(?:court|parenting)\s+)?orders?\b/i.test(input);
+    const negAgreement = /\b(?:no|without)\s+(?:existing\s+)?(?:written\s+)?(?:(?:parenting|separation)\s+)?agreements?\b/i.test(input);
     return neither || (negOrder && negAgreement);
   }
   return true;

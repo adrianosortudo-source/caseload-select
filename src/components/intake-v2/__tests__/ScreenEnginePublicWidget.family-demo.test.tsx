@@ -93,6 +93,30 @@ describe("Meta family demo free-text regression", () => {
     expect(vi.mocked(fetch)).toHaveBeenCalledTimes(2);
   });
 
+  it("keeps a partial answer available when the person clarifies it on the next turn", async () => {
+    const views: ScreenDemoView[] = []; render(<Harness views={views} />);
+    fireEvent.click(screen.getByRole("button", { name: "Continue matter review" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Confirm details and continue" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Use sample contact" }));
+    vi.mocked(fetch).mockResolvedValueOnce({ ok: true, json: async () => ({ mode: "live", extracted: {} }) } as Response);
+    fireEvent.click(screen.getByRole("button", { name: /Something else/i }));
+    fireEvent.change(screen.getByPlaceholderText("Describe what happened in your situation..."), { target: { value: "There is no court order that I know of." } });
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    await screen.findByText(/That answer did not resolve this question/);
+    vi.mocked(fetch).mockResolvedValueOnce({ ok: true, json: async () => ({ mode: "live", extracted: { family_existing_order: "Neither" } }) } as Response);
+    fireEvent.click(screen.getByRole("button", { name: /Something else/i }));
+    fireEvent.change(screen.getByPlaceholderText("Describe what happened in your situation..."), { target: { value: "There is no written agreement either." } });
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    await screen.findByRole("heading", { name: "Review the facts" });
+    const body = JSON.parse(vi.mocked(fetch).mock.calls[2][1]!.body as string);
+    expect(body.description).toContain("There is no court order that I know of.");
+    expect(body.description).toContain("There is no written agreement either.");
+    fireEvent.click(screen.getByRole("button", { name: "Confirm details and continue" }));
+    await waitFor(() => expect(views.at(-1)?.state?.slots.family_existing_order).toBe("Neither"));
+    expect(views.at(-1)?.currentQuestion?.id).not.toBe("family_existing_order");
+    expect(views.at(-1)?.state?.input).toBe(inquiry);
+  });
+
   it("uses the actual asked question when reading a natural follow-up answer", async () => {
     const views: ScreenDemoView[] = []; render(<Harness views={views} />);
     fireEvent.click(screen.getByRole("button", { name: "Continue matter review" }));
@@ -108,6 +132,7 @@ describe("Meta family demo free-text regression", () => {
     const body = JSON.parse(vi.mocked(fetch).mock.calls[1][1]!.body as string);
     expect(body.description).toContain("Is there an existing agreement or court order?");
     expect(body.description).toContain("A judge made an order");
+    expect(body.description).toContain("Question: Is there an existing agreement or court order?");
     fireEvent.click(screen.getByRole("button", { name: "Confirm details and continue" }));
     await waitFor(() => expect(views.at(-1)?.state?.slots.family_existing_order).toBe("Court order"));
     expect(views.at(-1)?.state?.slot_meta.family_existing_order.source).toBe("answered");

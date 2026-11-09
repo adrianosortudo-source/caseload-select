@@ -54,6 +54,8 @@ describe("configured family demonstration", () => {
     const none = prepareFamilyDemoState(initialiseState("I need a family lawyer. We have no children, no court order and no written agreement."), ["family"]);
     const result = mergeLlmResults(none, { family_existing_order: "Neither", family_children: "No" });
     expect(result.slots.family_existing_order).toBe("Neither"); expect(result.slots.family_children).toBe("No");
+    const parenting = prepareFamilyDemoState(initialiseState("My family lawyer says there is no court order or written parenting agreement."), ["family"]);
+    expect(mergeLlmResults(parenting, { family_existing_order: "Neither" }).slots.family_existing_order).toBe("Neither");
     const positive = prepareFamilyDemoState(initialiseState("We have an Ontario parenting order and a court date on December 12, 2026."), ["family"]);
     const facts = mergeLlmResults(positive, { family_existing_order: "Court order", family_timing: "December 12, 2026" });
     expect(facts.slots.family_existing_order).toBe("Court order"); expect(facts.slots.family_timing).toBe("December 12, 2026");

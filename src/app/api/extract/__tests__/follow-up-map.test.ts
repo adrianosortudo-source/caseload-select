@@ -32,7 +32,7 @@ describe("focused follow-up mapping", () => {
     const body = { description: "Family parenting issue", matter_type: "family_general", pending_slot_id: "family_existing_order" };
     const partial = await (await POST(request({ ...body, reply: "There is no court order that I know of." }))).json();
     expect(partial.mapped_answer).toBeUndefined();
-    for (const reply of ["Neither", "There is no agreement or court order."]) {
+    for (const reply of ["Neither", "There is no agreement or court order.", "There is no court order or written parenting agreement.", "There is no parenting order or separation agreement."]) {
       const data = await (await POST(request({ ...body, reply }))).json();
       expect(data.mapped_answer).toEqual({ slotId: "family_existing_order", value: "Neither" });
     }
