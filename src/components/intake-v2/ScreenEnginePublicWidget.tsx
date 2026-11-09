@@ -284,6 +284,24 @@ function FreeTextAnswerCard({
   );
 }
 
+const demoEnglishQuestions: Record<string, string> = {
+    amount_at_stake: "How much money is involved?",
+    invoice_exists: "Any invoice, bill or statement?",
+    payment_status: "Has any of it been paid?",
+    proof_of_performance: "Do you have proof of delivery?",
+    dispute_reason: "What reason did they give?",
+    desired_outcome_unpaid_invoice: "What outcome do you want?",
+    family_help_sought: "What would you like help with?",
+    family_children: "Are children involved?",
+    family_existing_order: "Any agreement or court order?",
+    family_timing: "Upcoming court date or deadline?",
+    family_jurisdiction: "Where is this matter located?",
+    hiring_timeline: "When do you need a lawyer?",
+    other_counsel: "Spoken to a lawyer about this?",
+    decision_authority: "Who decides on hiring a lawyer?",
+  };
+
+
 export function ScreenEnginePublicWidget({
   firmId,
   firmName,
@@ -421,14 +439,14 @@ export function ScreenEnginePublicWidget({
     } else if (stage === "contact" && !demoContinuation?.contactUsed) {
       message = { id: "contact", role: "assistant", text: "First, we need a name and a way to reach the person. Use the fictional sample contact to continue. You can reply with the number of an option or answer in your own words." };
     } else if (stage === "questions" && demoContinuation?.contactUsed && next?.type === "continue" && currentItem) {
-      message = { id: `question:${state.questionHistory.length}:${currentItem.id}`, role: "assistant", text: currentItem.id === "proof_of_performance" ? "Do you have proof of delivery?" : currentItem.question, options: currentItem.options?.map((option) => option.label) };
+      message = { id: `question:${state.questionHistory.length}:${currentItem.id}`, role: "assistant", text: language === "en" ? demoEnglishQuestions[currentItem.id] ?? currentItem.question : currentItem.question, options: currentItem.options?.map((option) => option.label) };
     } else if (stage === "questions" && next?.type === "clarify") {
       message = { id: `clarify:${clarifyAttempts}`, role: "assistant", text: "Could you share a little more about what is happening?" };
     } else if (stage === "done") {
       message = { id: "complete", role: "assistant", text: "Brief ready. No firm contacted." };
     }
     if (message) setConversation((items) => items.some((item) => item.id === message!.id) ? items : [...items, message!]);
-  }, [metaWorkflow, isReading, pendingDemoReview, state, stage, demoContinuation?.contactUsed, next, currentItem, clarifyAttempts]);
+  }, [metaWorkflow, isReading, pendingDemoReview, state, stage, demoContinuation?.contactUsed, next, currentItem, clarifyAttempts, language]);
 
   useEffect(() => {
     if (!metaWorkflow || stage !== "done" || !demoContinuation?.reply) return;

@@ -73,7 +73,7 @@ export function DemoConversation({ messages, onSend, placeholder, initialDraft =
 
   return <section className={styles.conversation} aria-label="Fictional intake conversation" data-ui-component-content="demo-conversation">
     <div ref={history} className={styles.history} data-ui-control-scroll="conversation-history" role="log" aria-live="polite" aria-relevant="additions text">
-      {messages.map((message) => <div key={message.id} className={`${styles.message} ${message.role === "visitor" ? styles.visitorMessage : styles.assistantMessage}`} data-ui-component-content="demo-conversation-message">
+      {messages.map((message) => <div key={message.id} className={`${styles.message} ${message.role === "visitor" ? styles.visitorMessage : styles.assistantMessage}`} data-ui-component-content="demo-conversation-message" data-message-id={message.id}>
         <span className={styles.speaker}>{message.speaker ?? (message.role === "visitor" ? "You" : "CaseLoad Select")}</span>
         <p data-ui-copy="body" {...(message.role === "visitor" || message.verbatim ? { "data-ui-copy-exception": "User-authored fictional message preserved verbatim" } : {})}>{message.text}</p>
         {message.options && message.options.length > 0 && <ol className={styles.options}>{message.options.map((option, index) => <li className={styles.option} key={`${index}-${option}`}>{option}</li>)}</ol>}

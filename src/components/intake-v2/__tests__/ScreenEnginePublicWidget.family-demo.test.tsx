@@ -56,7 +56,7 @@ describe("Meta family conversation", () => {
     expect(views.at(-1)?.state?.slot_meta.family_help_sought.source).toBe("explicit");
     expect(screen.getByText(inquiry)).toBeTruthy();
     expect(screen.queryByText("Review the facts")).toBeNull();
-    expect(screen.getByText("Is there an existing agreement or court order?")).toBeTruthy();
+    expect(screen.getByText("Any agreement or court order?")).toBeTruthy();
     expect(JSON.parse(vi.mocked(fetch).mock.calls[0][1]!.body as string).matter_type).toBe("family_general");
     expect(vi.mocked(fetch).mock.calls.every(([url, init]) => url === "/api/extract" && !String(init?.body).includes("alex.morgan"))).toBe(true);
   });
