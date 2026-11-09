@@ -204,23 +204,23 @@ test("Guided intake reaches the brief and keeps answers across view switches", a
   for (let count = 0; count < 12; count += 1) {
     const contact = page.getByRole("button", { name: "See the contact step", exact: true });
     if (await contact.isVisible()) { await contact.click(); break; }
-    if (await page.getByRole("button", { name: "Finish demonstration", exact: true }).isVisible()) break;
-    const skip = page.getByRole("button", { name: "Skip this question", exact: true });
-    await expect(skip).toBeVisible();
-    await skip.click();
-    await settle(page);
-  }
-  await expect(page.getByRole("heading", { name: "Contact details" })).toBeVisible();
-  await expect(page.locator('input[name="client_name"],input[name="client_email"],input[name="client_phone"]')).toHaveCount(0);
-  await page.getByRole("button", { name: "Lawyer brief", exact: true }).click();
-  await page.getByRole("button", { name: "Side by side", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Contact details" })).toBeVisible();
-  await page.getByRole("button", { name: "Finish demonstration", exact: true }).click();
+  await page.getByRole("button", { name: "Use sample contact", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Demo complete" })).toBeVisible();
   await expect(page.getByText("Brief ready", { exact: true }).first()).toBeVisible();
+  await page.getByRole("button", { name: "Lawyer brief", exact: true }).click();
+  await expect(page.getByText("Sample contact", { exact: true })).toBeVisible();
+  await expect(page.getByText("Fictional details", { exact: true })).toBeVisible();
+  await expect(page.getByText("alex.morgan@example.com", { exact: true })).toBeVisible();
+  await page.getByText("Original inquiry", { exact: true }).click();
+  await expect(page.locator("[data-demo-original-inquiry]")).toContainText(/invoice/i);
+  await page.getByRole("button", { name: "Preview a reply", exact: true }).click();
+  await expect(page.getByLabel("Simulated lawyer reply", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Show reply in demo", exact: true }).click();
+  await expect(page.getByText("Shown in this demo", { exact: true })).toBeVisible();
+  await expect(page.locator("[role=status]").filter({ hasText: "Shown in this demo" })).toContainText(/thank you/i);
   await assertImages(page);
   await assertLayout(page);
-  await page.screenshot({ path: testInfo.outputPath("completed-brief.png"), fullPage: true });
+  await page.screenshot({ path: testInfo.outputPath("completed-brief-contact-reply.png"), fullPage: true });
   expect(errors).toEqual([]);
   expect(mutations).toEqual([]);
 });
