@@ -27,6 +27,16 @@ describe("focused follow-up mapping", () => {
     const data = await (await POST(request({ description: "Family issue", matter_type: "family_general", pending_slot_id: "hiring_timeline", reply: "next week" }))).json();
     expect(data).toMatchObject({ mode: "error", mapping_mode: "live" }); expect(data.mapped_answer).toBeUndefined();
   });
+  it("does not map absence of a court order to absence of both order and agreement", async () => {
+    mocks.map.mockResolvedValue({ mode: "live", value: "Neither" });
+    const body = { description: "Family parenting issue", matter_type: "family_general", pending_slot_id: "family_existing_order" };
+    const partial = await (await POST(request({ ...body, reply: "There is no court order that I know of." }))).json();
+    expect(partial.mapped_answer).toBeUndefined();
+    for (const reply of ["Neither", "There is no agreement or court order."]) {
+      const data = await (await POST(request({ ...body, reply }))).json();
+      expect(data.mapped_answer).toEqual({ slotId: "family_existing_order", value: "Neither" });
+    }
+  });
   it("passes the focused context and result through the client wrapper", async () => {
     const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ mode: "live", extracted: {}, mapping_mode: "live", mapped_answer: { slotId: "hiring_timeline", value: "Within the next 30 days" } }) });
     vi.stubGlobal("fetch", fetchMock);

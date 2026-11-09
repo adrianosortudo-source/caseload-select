@@ -214,6 +214,23 @@ export interface MergeLlmOptions {
   allowGeneralPromotion?: boolean;
 }
 
+/** Family negatives must be supported by the person's words, not omission. */
+export function familyNegativeIsGrounded(slotId: string, value: string, input: string): boolean {
+  if (slotId === 'family_children' && value.trim().toLowerCase() === 'no') {
+    return /\b(?:no (?:children|kids)|(?:do not|don't|dont|have not|haven't|havent) have (?:any )?(?:children|kids)|childless)\b/i.test(input);
+  }
+  if (slotId === 'family_existing_order' && value.trim().toLowerCase() === 'neither') {
+    const neither = /\bneither\s+(?:a(?:n)?\s+)?(?:court\s+)?order(?:s)?\s+nor\s+(?:a(?:n)?\s+)?(?:written\s+)?agreement(?:s)?\b/i.test(input)
+      || /\bno\s+(?:court\s+)?orders?\s+(?:or|and)\s+(?:written\s+)?agreements?\b/i.test(input)
+      || /\bneither\s+(?:an?\s+)?(?:agreement|order)\s+nor\s+(?:an?\s+)?(?:agreement|order)\b/i.test(input)
+      || /\bno\s+(?:written\s+)?agreements?\s+(?:or|and)\s+(?:court\s+)?orders?\b/i.test(input);
+    const negOrder = /\b(?:no|without)\s+(?:existing\s+)?(?:court\s+)?orders?\b/i.test(input);
+    const negAgreement = /\b(?:no|without)\s+(?:existing\s+)?(?:written\s+)?agreements?\b/i.test(input);
+    return neither || (negOrder && negAgreement);
+  }
+  return true;
+}
+
 export function mergeLlmResults(
   state: EngineState,
   extracted: Record<string, string | null>,
@@ -323,6 +340,7 @@ export function mergeLlmResults(
     if (slotId === LEAD_INTENT_FIELD) continue;
 
     if (value === null || value === '' || value === undefined) continue;
+    if (state.matter_type === 'family_general' && !familyNegativeIsGrounded(slotId, value, state.input)) continue;
     // Drop non-answer literals — except when BOTH (a) the lead's own
     // text shows uncertainty AND (b) the slot's own option set
     // explicitly includes this value. The two-gate check (Codex

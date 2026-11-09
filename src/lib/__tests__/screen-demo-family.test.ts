@@ -42,6 +42,22 @@ describe("configured family demonstration", () => {
     expect(next.pendingAskedSlotId).toBeNull();
     expect(getNextStep(next).slot?.id).not.toBe("family_timing");
   });
+  it("does not infer absence of children or orders from silence", () => {
+    for (const input of ["My former partner and I separated. They stopped letting me see our son.", "My spouse and I are living separately for now. We have not decided what happens next.", "My family lawyer says there is no court order."]) {
+      const state = prepareFamilyDemoState(initialiseState(input), ["family"]);
+      const result = mergeLlmResults(state, { family_existing_order: "Neither", family_children: "No" });
+      expect(result.slots.family_existing_order).toBeFalsy();
+      expect(result.slots.family_children).toBeFalsy();
+    }
+  });
+  it("retains explicit negative family facts and positive order and date", () => {
+    const none = prepareFamilyDemoState(initialiseState("I need a family lawyer. We have no children, no court order and no written agreement."), ["family"]);
+    const result = mergeLlmResults(none, { family_existing_order: "Neither", family_children: "No" });
+    expect(result.slots.family_existing_order).toBe("Neither"); expect(result.slots.family_children).toBe("No");
+    const positive = prepareFamilyDemoState(initialiseState("We have an Ontario parenting order and a court date on December 12, 2026."), ["family"]);
+    const facts = mergeLlmResults(positive, { family_existing_order: "Court order", family_timing: "December 12, 2026" });
+    expect(facts.slots.family_existing_order).toBe("Court order"); expect(facts.slots.family_timing).toBe("December 12, 2026");
+  });
   it("asks all five family facts and readiness questions in order for a sparse case", () => {
     let state = prepareFamilyDemoState(initialiseState("I need a family lawyer about child custody."), ["family"]);
     const ids = ["family_help_sought", "family_children", "family_existing_order", "family_timing", "family_jurisdiction", "hiring_timeline", "other_counsel", "decision_authority"];

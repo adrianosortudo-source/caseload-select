@@ -558,7 +558,9 @@ export function ScreenEnginePublicWidget({
         setExtraction({ status: "fallback", reason: result.reason });
         setAnswerFeedback("AI could not read this answer. Please choose an option or try your answer again."); return;
       }
-      let updated = mergeLlmResults(state, result.extracted);
+      let updated = mergeLlmResults({ ...state, input: context }, result.extracted);
+      // Keep the original inquiry intact while grounding this turn in its actual reply.
+      updated = { ...updated, input: state.input };
       const mapped = result.mapped_answer;
       const mappedAnswer = mapped?.slotId === slotId && asked.options?.some((option) => option.value === mapped.value);
       if (mappedAnswer) updated = applyAnswer(updated, slotId, mapped!.value);
