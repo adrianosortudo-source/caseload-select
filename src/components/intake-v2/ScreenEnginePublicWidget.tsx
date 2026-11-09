@@ -910,7 +910,7 @@ export function ScreenEnginePublicWidget({
             style={{ fontFamily: fontBody }}
           >
             {isDemo
-              ? "See the contact step without entering any personal information."
+              ? metaWorkflow && demoContinuation?.contactUsed ? "The sample contact is attached. Finish the demonstration to review the brief." : "See the contact step without entering any personal information."
               : ws(
                   "insight_contact_note",
                   "A lawyer reviews what you share and reaches out directly. Add your contact details below so the firm can get back to you.",

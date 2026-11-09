@@ -316,6 +316,8 @@ for (const width of WIDTHS) {
     await assertLayout(page);
     await page.screenshot({ path: testInfo.outputPath(`ai-readback-${width}.png`), fullPage: true });
     await page.getByRole("button", { name: "Confirm details and continue" }).click();
+    await expect(page.getByRole("button", { name: "Use sample contact", exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "Use sample contact", exact: true }).click();
     for (let i = 0; i < 10; i++) {
       await expect(page.getByRole("heading", { name: "About how much money is involved?" })).toHaveCount(0);
       await expect(page.getByRole("heading", { name: "Who decides whether to hire a lawyer for this?" })).toHaveCount(0);
@@ -323,7 +325,9 @@ for (const width of WIDTHS) {
       if (!(await skip.isVisible())) break;
       await skip.click();
     }
-    await expect(page.getByRole("button", { name: "See the contact step" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Finish demonstration", exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "Finish demonstration", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "Demo complete", exact: true })).toBeVisible();
     await assertLayout(page);
     await page.screenshot({ path: testInfo.outputPath(`ai-brief-${width}.png`), fullPage: true });
     expect(mutations).toEqual(["/api/extract"]);
