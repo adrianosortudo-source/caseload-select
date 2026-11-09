@@ -143,6 +143,8 @@ export interface ScreenEnginePublicWidgetProps {
   reportEmbeddedHeight?: boolean;
   /** Read-only state bridge for the separate sales presentation panel. */
   onDemoStateChange?: (view: ScreenDemoView) => void;
+  /** Optional, browser-only continuation for the prospect presentation. */
+  demoContinuation?: { onUseSampleContact: () => void; reply: string | null; onShowReview?: () => void };
   /** Optional fictional opening used by the presentation toolbar. */
   initialDescription?: string;
 }
@@ -286,6 +288,7 @@ export function ScreenEnginePublicWidget({
   layout = "default",
   reportEmbeddedHeight = true,
   onDemoStateChange,
+  demoContinuation,
   initialDescription = "",
 }: ScreenEnginePublicWidgetProps) {
   const policy = SCREEN_WIDGET_EXECUTION_POLICY[runtime];
@@ -734,7 +737,7 @@ export function ScreenEnginePublicWidget({
     );
     const doneBody = doneBodyTemplate.replace(/\{firmName\}/g, trimmedFirmName);
     const visibleDoneBody = isDemo
-      ? "The brief is ready. No lead was saved and no firm was contacted."
+      ? "The fictional intake is complete and the demonstration brief is ready. No firm was contacted."
       : doneBody;
     // Translate the "submitted" sentinel; pass other reason strings
     // through verbatim (they are server-supplied and not user-facing
@@ -768,6 +771,14 @@ export function ScreenEnginePublicWidget({
           >
             {visibleDoneBody}
           </p>
+          {isDemo && demoContinuation && <>
+            {demoContinuation.onShowReview && <button type="button" className="min-h-[48px] border border-[#1E2F58] px-5 py-3 text-[#1E2F58]" onClick={demoContinuation.onShowReview}>Review the lawyer brief</button>}
+            {demoContinuation.reply !== null && <section className="w-full text-left" aria-live="polite" data-ui-component-content="demo-reply-receipt">
+              <h3 className="w-full" data-ui-copy="heading">Simulated reply from {trimmedFirmName}</h3>
+              <p className="w-full whitespace-pre-wrap break-words" data-ui-copy="body" data-ui-copy-exception="User-authored simulated message preserved verbatim">{demoContinuation.reply}</p>
+              <p className="w-full" data-ui-copy="supporting">Shown in this demo</p>
+            </section>}
+          </>}
           {statusLabel && (
             <p className="text-[12px] uppercase tracking-[0.12em] text-[color-mix(in_srgb,var(--cls-text,#1E2F58)_45%,transparent)]">{statusLabel}</p>
           )}
@@ -841,10 +852,16 @@ export function ScreenEnginePublicWidget({
       <Shell totalScreens={1} currentScreen={0} roundLabel="Contact step" onBack={back} backLabel={backLabel} layout={layout} reportHeight={reportEmbeddedHeight} footer={demoReviewFooter}>
         <section className="flex flex-col gap-5" data-ui-component-content="demo-contact-step">
           <h2 className="w-full text-2xl font-extrabold" data-ui-copy="heading" style={{ fontFamily: fontDisplay }}>Contact details</h2>
-          <p className="w-full" data-ui-copy="body">A real intake asks for:</p>
-          <ul className="w-full" data-ui-component-content="demo-contact-fields"><li data-ui-copy="body">Name.</li><li data-ui-copy="body">Email address or phone number.</li></ul>
-          <dl className="w-full" data-ui-component-content="demo-contact-status"><dt>Contact details in this demo</dt><dd className="m-0 w-full" data-ui-copy="supporting">Not collected.</dd></dl>
-          <button type="button" className="min-h-[48px] bg-[#1E2F58] px-5 py-3 text-white" onClick={() => { setHistory((items) => [...items, state]); setStage("done"); }}>Finish demonstration</button>
+          {demoContinuation ? <>
+            <p className="w-full" data-ui-copy="body">Sample contact. Fictional details used only in this demo.</p>
+            <dl className="w-full" data-ui-component-content="demo-contact-status"><dt>Name</dt><dd className="m-0">Alex Morgan</dd><dt>Email</dt><dd className="m-0">alex.morgan@example.com</dd></dl>
+            <button type="button" className="min-h-[48px] bg-[#1E2F58] px-5 py-3 text-white" onClick={() => { demoContinuation.onUseSampleContact(); setHistory((items) => [...items, state]); setStage("done"); }}>Use sample contact</button>
+          </> : <>
+            <p className="w-full" data-ui-copy="body">A real intake asks for:</p>
+            <ul className="w-full" data-ui-component-content="demo-contact-fields"><li data-ui-copy="body">Name.</li><li data-ui-copy="body">Email address or phone number.</li></ul>
+            <dl className="w-full" data-ui-component-content="demo-contact-status"><dt>Contact details in this demo</dt><dd className="m-0 w-full" data-ui-copy="supporting">Not collected.</dd></dl>
+            <button type="button" className="min-h-[48px] bg-[#1E2F58] px-5 py-3 text-white" onClick={() => { setHistory((items) => [...items, state]); setStage("done"); }}>Finish demonstration</button>
+          </>}
         </section>
       </Shell>
     );

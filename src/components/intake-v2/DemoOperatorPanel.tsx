@@ -13,7 +13,7 @@ const STAGES: Record<ScreenDemoView["stage"], string> = {
 function percent(value: number) { return `${Math.max(0, Math.min(100, Math.round(value <= 1 ? value * 100 : value)))}%`; }
 function label(value: string) { return value.replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase()); }
 
-export function DemoOperatorPanel({ view }: { view: ScreenDemoView; contained?: boolean }) {
+export function DemoOperatorPanel({ view, continuation }: { view: ScreenDemoView; contained?: boolean; continuation?: { contactUsed: boolean; replyOpen: boolean; onOpenReply: () => void; draft: string; onDraftChange: (value: string) => void; reply: string | null; onShowReply: () => void } }) {
   const { state, report } = view;
   const corrections = state ? demoCapturedFacts(state).filter((fact) => state.slot_meta[fact.id]?.evidence === "Client corrected this fact during demo review") : [];
   const reportHtml = useMemo(() => report && state ? renderBriefHtmlServer(report, "web", state.language, undefined, state.matter_type, state.practice_area, { presentation: "demo" }) : "", [report, state]);
@@ -46,7 +46,19 @@ export function DemoOperatorPanel({ view }: { view: ScreenDemoView; contained?: 
           <p data-ui-copy="body">The brief shows reasons, open questions and preparation for the first call.</p>
         </section>}
       </div>
-      <footer className={styles.paneFooter} data-ui-component-content="demo-operator-footer"><p data-ui-copy="supporting">Demonstration only. No lead, message or follow-up is created.</p></footer>
+      {view.stage === "done" && continuation?.contactUsed && <section className={styles.continuation} data-ui-component-content="demo-continuation">
+        <h3 data-ui-copy="heading">Sample contact</h3><p data-ui-copy="supporting">Fictional details</p>
+        <dl><dt>Name</dt><dd>Alex Morgan</dd><dt>Email</dt><dd>alex.morgan@example.com</dd></dl>
+        <p data-ui-copy="body">The Screen prioritizes attention. The lawyer decides.</p>
+        {!continuation.replyOpen && <button type="button" className={styles.secondary} onClick={continuation.onOpenReply}>Preview a reply</button>}
+        {continuation.replyOpen && <>
+          <label htmlFor="demo-simulated-reply">Simulated lawyer reply</label>
+          <textarea id="demo-simulated-reply" rows={5} maxLength={2000} value={continuation.draft} onChange={(event) => continuation.onDraftChange(event.target.value)} disabled={continuation.reply !== null} />
+          <button type="button" className={styles.primary} disabled={!continuation.draft.trim() || continuation.reply !== null} onClick={continuation.onShowReply}>Show reply in demo</button>
+          {continuation.reply !== null && <div role="status"><p>Shown in this demo</p><p className={styles.replyText}>{continuation.reply}</p></div>}
+        </>}
+      </section>}
+      <footer className={styles.paneFooter} data-ui-component-content="demo-operator-footer"><p data-ui-copy="supporting">Demonstration only. No lead, external message or real follow-up is created.</p></footer>
     </div>
   );
 }

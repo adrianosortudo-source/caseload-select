@@ -56,6 +56,21 @@ export function ProspectDemoClient({ profileId, embedded = false, sampleOnly = f
   sampleOnly?: boolean;
 }) {
   const [view, setView] = useState<ScreenDemoView>(EMPTY_VIEW);
+  const [contactUsed, setContactUsed] = useState(false);
+  const [replyOpen, setReplyOpen] = useState(false);
+  const [draft, setDraft] = useState("Thank you for sharing these details. We can discuss the next steps together.");
+  const [reply, setReply] = useState<string | null>(null);
+  const replyShown = useRef(false);
+  const resetContinuation = useCallback(() => {
+    replyShown.current = false;
+    setView(EMPTY_VIEW); setContactUsed(false); setReplyOpen(false);
+    setDraft("Thank you for sharing these details. We can discuss the next steps together."); setReply(null);
+  }, []);
+  const showReply = useCallback(() => {
+    if (replyShown.current || !draft.trim()) return;
+    replyShown.current = true;
+    setReply(draft);
+  }, [draft]);
   const [registrations, setRegistrations] = useState<ProspectDemoRegistration[]>([]);
   const [availability, setAvailability] = useState<"loading" | "ready" | "missing">("loading");
 
@@ -68,12 +83,15 @@ export function ProspectDemoClient({ profileId, embedded = false, sampleOnly = f
       let registration: ProspectDemoRegistration | null = null;
       try {
         if (sampleOnly && profileId === exampleLawFirmProspectDemoProfile.id) {
-          const response = await fetch("/prospect-demos/example-law-firm/example-law-firm.png", { cache: "force-cache" });
-          if (response.ok) {
-            const blob = await response.blob();
-            const asset = { ...exampleLawFirmProspectDemoProfile.screenshot, blob };
-            registration = { profile: exampleLawFirmProspectDemoProfile, asset };
+          let blob = new Blob([], { type: exampleLawFirmProspectDemoProfile.screenshot.mimeType });
+          try {
+            const response = await fetch("/prospect-demos/example-law-firm/example-law-firm.png", { cache: "force-cache" });
+            if (response.ok) blob = await response.blob();
+          } catch {
+            // Keep the fictional intake available if the screenshot cannot load.
           }
+          const asset = { ...exampleLawFirmProspectDemoProfile.screenshot, blob };
+          registration = { profile: exampleLawFirmProspectDemoProfile, asset };
         } else if (!sampleOnly && profileId === walkerLawProspectDemoProfile.id) {
           const response = await fetch(
             "/prospect-demos/walker-law/walker-law-consultation-reference.png",
@@ -118,6 +136,7 @@ export function ProspectDemoClient({ profileId, embedded = false, sampleOnly = f
           reportEmbeddedHeight={false}
           initialDescription={context.scenario.description}
           onDemoStateChange={receiveView}
+          demoContinuation={{ onUseSampleContact: () => setContactUsed(true), reply, onShowReview: context.showReview }}
           consentCaptureEnabled={false}
         />
       </div>
@@ -129,9 +148,9 @@ export function ProspectDemoClient({ profileId, embedded = false, sampleOnly = f
         {sampleOnly && <p className="mt-3 w-full" data-ui-copy="supporting">Example Law Firm is fictional. The website and inquiries are for demonstration only.</p>}
       </div>
     ),
-    renderReview: () => <DemoOperatorPanel view={view} contained />,
-    onRestart: () => setView(EMPTY_VIEW),
-  }), [receiveView, sampleOnly, view]);
+    renderReview: () => <DemoOperatorPanel view={view} contained continuation={{ contactUsed, replyOpen, onOpenReply: () => setReplyOpen(true), draft, onDraftChange: setDraft, reply, onShowReply: showReply }} />,
+    onSessionReset: resetContinuation,
+  }), [receiveView, sampleOnly, view, contactUsed, replyOpen, draft, reply, showReply, resetContinuation]);
 
   if (availability !== "ready") {
     return (

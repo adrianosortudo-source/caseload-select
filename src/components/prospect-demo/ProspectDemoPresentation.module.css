@@ -101,3 +101,144 @@
 .caseload [data-ui-component-content="demo-ai-status"] p[role="status"] { font: 600 15px/1.5 var(--font-oxanium),sans-serif; }
 
 .caseload[data-demo-embedded="true"] { min-height: 0; }
+
+.toolbarControls {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr));
+  align-items: end;
+  gap: 12px;
+  width: 100%;
+}
+
+.viewGroup,
+.modeGroup {
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.groupLegend {
+  width: 100%;
+  padding: 0;
+  color: #0D1520;
+  font: 600 14px/1.5 "DM Sans Variable", sans-serif;
+}
+
+.viewButtons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  width: 100%;
+}
+
+.choiceButton,
+.startOver {
+  min-height: 44px;
+  border: 1px solid #1E2F58;
+  border-radius: 0;
+  padding: 8px 14px;
+  color: #1E2F58;
+  font: 600 15px/1.4 "DM Sans Variable", sans-serif;
+  cursor: pointer;
+}
+
+.choiceButton {
+  background: #FFFFFF;
+}
+
+.choiceButton:hover {
+  background: #F4F3EF;
+}
+
+.choiceButton:focus-visible,
+.startOver:focus-visible {
+  outline: 2px solid #1E2F58;
+  outline-offset: 2px;
+}
+
+.activeChoice,
+.choiceButton.activeChoice:hover {
+  border-color: #1E2F58;
+  background: #1E2F58;
+  color: #FFFFFF;
+}
+
+.startOver {
+  justify-self: start;
+  background: transparent;
+}
+
+.modeOptions {
+  display: grid;
+  gap: 8px;
+  width: 100%;
+}
+
+.modeStatus,
+.demoNote {
+  width: 100%;
+  margin: 0;
+  color: #0D1520;
+  font: 400 15px/1.5 "DM Sans Variable", sans-serif;
+}
+
+.demoOptions {
+  width: 100%;
+  border-top: 1px solid #C4B49A;
+  padding-top: 8px;
+}
+
+.demoOptions summary {
+  width: 100%;
+  color: #1E2F58;
+  font: 600 15px/1.5 "DM Sans Variable", sans-serif;
+  cursor: pointer;
+}
+
+.demoOptions summary:focus-visible {
+  outline: 2px solid #1E2F58;
+  outline-offset: 3px;
+}
+
+.demoNote {
+  margin-block: 8px;
+}
+
+.caseload > header .groupLegend,
+.caseload > header .modeStatus,
+.caseload > header .demoNote {
+  color: #FFFFFF;
+}
+
+.caseload > header .choiceButton[aria-pressed="true"],
+.caseload > header .choiceButton[aria-pressed="true"]:hover {
+  border-color: #C4B49A;
+  background: #C4B49A;
+  color: #0D1520;
+}
+
+.caseload > header .startOver {
+  border-color: #C4B49A;
+  background: transparent;
+  color: #FFFFFF;
+}
+
+.caseload > header .startOver:hover {
+  background: #C4B49A;
+  color: #0D1520;
+}
+
+.caseload > header .demoOptions {
+  border-color: #C4B49A;
+}
+.caseload > header .choiceButton:focus-visible,
+.caseload > header .startOver:focus-visible,
+.caseload > header .demoOptions summary:focus-visible {
+  outline-color: #C4B49A;
+}
+
+.caseload > header .demoOptions summary {
+  color: #FFFFFF;
+}
