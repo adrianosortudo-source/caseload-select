@@ -13,6 +13,7 @@ import {
   type ProspectDemoRegistration,
 } from "@/components/prospect-demo/ProspectDemoPresentation";
 import { exampleLawFirmProspectDemoProfile } from "@/lib/prospect-demo-profiles/example-law-firm";
+import { geneColmanProspectDemoProfile } from "@/lib/prospect-demo-profiles/gene-colman";
 import { walkerLawProspectDemoProfile } from "@/lib/prospect-demo-profiles/walker-law";
 import {
   ensureProspectDemoProfile,
@@ -92,6 +93,11 @@ export function ProspectDemoClient({ profileId, embedded = false, sampleOnly = f
           }
           const asset = { ...exampleLawFirmProspectDemoProfile.screenshot, blob };
           registration = { profile: exampleLawFirmProspectDemoProfile, asset };
+        } else if (sampleOnly && profileId === geneColmanProspectDemoProfile.id) {
+          const response = await fetch("/prospect-demos/gene-colman/gene-colman.webp", { cache: "force-cache" });
+          if (!response.ok) throw new Error("Website screenshot unavailable");
+          const blob = await response.blob();
+          registration = { profile: geneColmanProspectDemoProfile, asset: { ...geneColmanProspectDemoProfile.screenshot, blob } };
         } else if (!sampleOnly && profileId === walkerLawProspectDemoProfile.id) {
           const response = await fetch(
             "/prospect-demos/walker-law/walker-law-consultation-reference.png",
@@ -147,12 +153,12 @@ export function ProspectDemoClient({ profileId, embedded = false, sampleOnly = f
         <p role="status" className="w-full" data-ui-copy="supporting">{demoExtractionLabel(view)}</p>
         <p className="mt-3 w-full" data-ui-copy="body">Live AI can send the fictional description to Google Gemini.</p>
         <p className="mt-3 w-full" data-ui-copy="body">Guided samples run in your browser. Use fictional examples only. Keep client and confidential details out.</p>
-        {sampleOnly && <p className="mt-3 w-full" data-ui-copy="supporting">Example Law Firm is fictional. The website and inquiries are for demonstration only.</p>}
+        {sampleOnly && <p className="mt-3 w-full" data-ui-copy="supporting">{profileId === geneColmanProspectDemoProfile.id ? "This preview uses a screenshot of the firm's website. Inquiries and replies are fictional." : "Example Law Firm is fictional. The website and inquiries are for demonstration only."}</p>}
       </div>
     ),
     renderReview: () => <DemoOperatorPanel view={view} contained continuation={{ contactUsed, replyOpen, onOpenReply: () => setReplyOpen(true), draft, onDraftChange: setDraft, reply, onShowReply: showReply }} />,
     onSessionReset: resetContinuation,
-  }), [receiveView, sampleOnly, view, contactUsed, replyOpen, draft, reply, showReply, resetContinuation]);
+  }), [receiveView, sampleOnly, profileId, view, contactUsed, replyOpen, draft, reply, showReply, resetContinuation]);
 
   if (availability !== "ready") {
     return (

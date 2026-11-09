@@ -275,7 +275,7 @@ export function ProspectDemoPresentation({
           <div className="w-full">
             {appearance === "caseload" ? !embedded && <a href="https://caseloadselect.ca/" className={styles.brand}><Image src="/brand/logos/lockup-horizontal-dark-transparent.png" alt="CaseLoad Select" width={210} height={48} priority /></a> : <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#90734B]">CaseLoad Select prospect preview</p>}
             <h1 className="mt-1 w-full text-pretty text-[17px] font-extrabold leading-snug tracking-[-0.02em] sm:text-2xl" data-ui-copy="heading">{appearance === "caseload" ? "Try the SCREEN" : `${profile.firmName} intake preview`}</h1>
-            {appearance === "caseload" && <p className={styles.introduction} data-ui-copy="body">Preview SCREEN on a sample website. Follow a fictional inquiry through confirmed facts, a lawyer brief and a simulated reply.</p>}
+            {appearance === "caseload" && <p className={styles.introduction} data-ui-copy="body">{profile.id === "gene-colman" ? "Preview SCREEN on your website." : "Preview SCREEN on a sample website."} Follow a fictional inquiry through confirmed facts, a lawyer brief and a simulated reply.</p>}
           </div>
           {sessionAdapter.renderStatus?.(session)}
           <div className={styles.toolbarControls}>

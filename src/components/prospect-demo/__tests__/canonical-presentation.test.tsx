@@ -4,6 +4,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { useState } from "react";
 import { ProspectDemoPresentation } from "../ProspectDemoPresentation";
 import { ProspectDemoClient } from "../ProspectDemoClient";
+import { geneColmanProspectDemoProfile } from "@/lib/prospect-demo-profiles/gene-colman";
 import { exampleLawFirmProspectDemoProfile } from "@/lib/prospect-demo-profiles/example-law-firm";
 import { walkerLawProspectDemoProfile as profile } from "@/lib/prospect-demo-profiles/walker-law";
 import * as store from "@/lib/prospect-demo/store";
@@ -74,6 +75,22 @@ describe("canonical prospect presentation", () => {
     expect((screen.getByLabelText("Prospect") as HTMLSelectElement).options).toHaveLength(2);
     fireEvent.change(screen.getByLabelText("Prospect"), { target: { value: secondProfile.id } });
     expect(onSessionReset.mock.calls.at(-1)?.[1]).toBe("profile");
+  });
+
+  it("opens Gene's shipped website with blank live family entry and no browser library", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce({ ok: true, blob: async () => new Blob(["image"], { type: "image/webp" }) } as Response);
+    render(<ProspectDemoClient profileId="gene-colman" sampleOnly />);
+    await waitFor(() => expect(screen.getByLabelText("Fictional inquiry").getAttribute("data-runtime")).toBe("demo-live-ai"));
+    expect((screen.getByLabelText("Fictional inquiry") as HTMLTextAreaElement).value).toBe("");
+    expect(screen.getByText(/Preview SCREEN on your website/)).toBeTruthy();
+    expect(screen.getByText(/screenshot of the firm's website/)).toBeTruthy();
+    expect(fetch).toHaveBeenCalledWith("/prospect-demos/gene-colman/gene-colman.webp", { cache: "force-cache" });
+    expect(geneColmanProspectDemoProfile.practiceAreas).toEqual(["family"]);
+    expect(geneColmanProspectDemoProfile.screenshot).toMatchObject({ width: 1986, height: 16000, mimeType: "image/webp" });
+    expect(store.ensureProspectDemoProfile).not.toHaveBeenCalled();
+    expect(store.readProspectDemoProfile).not.toHaveBeenCalled();
+    expect(store.listProspectDemoProfiles).not.toHaveBeenCalled();
+    expect(store.readProspectDemoAsset).not.toHaveBeenCalled();
   });
 
   it("opens free entry and family-law samples without touching the private profile library", async () => {
