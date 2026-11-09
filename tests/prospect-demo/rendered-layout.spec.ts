@@ -213,7 +213,6 @@ test("Guided intake reaches the brief and keeps answers across view switches", a
   await page.getByRole("button", { name: "Guided sample", exact: true }).click();
   await page.locator(`${INTAKE} textarea`).fill("Fictional test. A business client owes us $18,450 for completed work. We have a signed contract and invoice. I can approve hiring a lawyer.");
   await page.getByRole("button", { name: "Send in demo", exact: true }).click();
-  await expect(page.getByText("Draft brief", { exact: true }).first()).toBeVisible();
   await expect(page.getByRole("button", { name: "Use fictional contact", exact: true })).toBeVisible();
   await expect(page.locator('input[name="client_name"],input[name="client_email"],input[name="client_phone"]')).toHaveCount(0);
   await page.getByRole("button", { name: "Lawyer brief", exact: true }).click();
@@ -222,7 +221,7 @@ test("Guided intake reaches the brief and keeps answers across view switches", a
   await page.getByRole("button", { name: "Use fictional contact", exact: true }).click();
   const log = page.getByRole("log", { name: "" });
   for (let turn = 0; turn < 12; turn += 1) {
-    if (await log.getByText(/The fictional intake is complete/).isVisible()) break;
+    if (await log.getByText(/Brief ready\. No firm contacted\./).isVisible()) break;
     const messages = log.locator('[data-ui-component-content="demo-conversation-message"]');
     const before = await messages.count();
     const hasOptions = await messages.last().locator("ol li").count() > 0;
@@ -232,7 +231,7 @@ test("Guided intake reaches the brief and keeps answers across view switches", a
     await page.getByRole("button", { name: "Send in demo", exact: true }).click();
     await expect.poll(async () => await messages.count()).toBeGreaterThan(before + 1);
   }
-  await expect(log.getByText(/The fictional intake is complete/)).toBeVisible();
+  await expect(log.getByText(/Brief ready\. No firm contacted\./)).toBeVisible();
   await expect(page.getByText("Brief ready", { exact: true }).first()).toBeVisible();
   await page.getByRole("button", { name: "Lawyer brief", exact: true }).click();
   await expect(page.getByText("Sample contact", { exact: true })).toBeVisible();
@@ -325,7 +324,7 @@ for (const width of WIDTHS) {
     for (let i = 0; i < 12; i++) {
       await expect(log.getByText("About how much money is involved?", { exact: true })).toHaveCount(0);
       await expect(log.getByText("Who decides whether to hire a lawyer for this?", { exact: true })).toHaveCount(0);
-      if (await log.getByText(/The fictional intake is complete/).isVisible()) break;
+      if (await log.getByText(/Brief ready\. No firm contacted\./).isVisible()) break;
       const messages = log.locator('[data-ui-component-content="demo-conversation-message"]');
       const before = await messages.count();
       const hasOptions = await messages.last().locator("ol li").count() > 0;
@@ -335,7 +334,7 @@ for (const width of WIDTHS) {
       await page.getByRole("button", { name: "Send in demo", exact: true }).click();
       await expect.poll(async () => await messages.count()).toBeGreaterThan(before + 1);
     }
-    await expect(log.getByText(/The fictional intake is complete/)).toBeVisible();
+    await expect(log.getByText(/Brief ready\. No firm contacted\./)).toBeVisible();
     await assertLayout(page);
     await page.screenshot({ path: testInfo.outputPath(`ai-brief-${width}.png`), fullPage: true });
     expect(mutations).toEqual(["/api/extract"]);

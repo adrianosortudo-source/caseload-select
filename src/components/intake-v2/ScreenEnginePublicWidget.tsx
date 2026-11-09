@@ -425,7 +425,7 @@ export function ScreenEnginePublicWidget({
     } else if (stage === "questions" && next?.type === "clarify") {
       message = { id: `clarify:${clarifyAttempts}`, role: "assistant", text: "Could you share a little more about what is happening?" };
     } else if (stage === "done") {
-      message = { id: "complete", role: "assistant", text: "The fictional intake is complete and the demonstration brief is ready. No firm was contacted." };
+      message = { id: "complete", role: "assistant", text: "Brief ready. No firm contacted." };
     }
     if (message) setConversation((items) => items.some((item) => item.id === message!.id) ? items : [...items, message!]);
   }, [metaWorkflow, isReading, pendingDemoReview, state, stage, demoContinuation?.contactUsed, next, currentItem, clarifyAttempts]);

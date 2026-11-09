@@ -72,7 +72,7 @@ describe("Meta family conversation", () => {
       send(question.options?.length ? "1" : "No court date is scheduled.");
       await waitFor(() => expect(views.at(-1)?.stage === "done" || views.at(-1)?.currentQuestion?.id !== question.id).toBe(true));
     }
-    await screen.findByText(/fictional intake is complete/);
+    await screen.findByText(/Brief ready\. No firm contacted\./);
     expect(asked).toEqual(expect.arrayContaining(["family_existing_order", "family_timing", "family_jurisdiction", "hiring_timeline", "other_counsel", "decision_authority"]));
     expect(vi.mocked(fetch)).toHaveBeenCalledTimes(1);
     expect(screen.getByText(inquiry)).toBeTruthy();
@@ -86,7 +86,7 @@ describe("Meta family conversation", () => {
       send(question.options?.length ? "1" : "No court date is scheduled.");
       await waitFor(() => expect(views.at(-1)?.stage === "done" || views.at(-1)?.currentQuestion?.id !== question.id).toBe(true));
     }
-    await screen.findByText(/fictional intake is complete/);
+    await screen.findByText(/Brief ready\. No firm contacted\./);
     const reply = "Thank you for sharing.\nWe can discuss next steps.";
     rerender(<Harness views={views} reply={reply} />);
     const receipt = await screen.findByText((_, element) => element?.textContent === reply && element.tagName === "P");
