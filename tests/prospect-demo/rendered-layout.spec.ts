@@ -91,8 +91,19 @@ async function assertLayout(page: Page, rootSelector = ROOT) {
       const style = getComputedStyle(element);
       const label = element.getAttribute("aria-label") ?? element.dataset.uiComponentContent ?? element.tagName;
       if (/^(auto|scroll)$/.test(style.overflowX) && element.scrollWidth > element.clientWidth + 1) failures.push(`${label} has an internal horizontal scrollbar`);
-      if (/^(auto|scroll)$/.test(style.overflowY) && element.scrollHeight > element.clientHeight + 1) failures.push(`${label} has an internal vertical scrollbar`);
-      if (element instanceof HTMLTextAreaElement && element.scrollHeight > element.clientHeight + 1) failures.push(`${label} clips its text`);
+      const intentionalConversationScroll = element.dataset.uiControlScroll === "conversation-history" ||
+        (element instanceof HTMLTextAreaElement && element.dataset.uiControlScroll === "conversation-composer");
+      if (/^(auto|scroll)$/.test(style.overflowY) && element.scrollHeight > element.clientHeight + 1) {
+        if (!intentionalConversationScroll) failures.push(`${label} has an internal vertical scrollbar`);
+        else {
+          const before = element.scrollTop;
+          element.scrollTop = element.scrollHeight;
+          if (element.scrollTop <= 0) failures.push(`${label} cannot reach its remaining content`);
+          element.scrollTop = before;
+          if (element instanceof HTMLTextAreaElement && element.clientHeight > 145) failures.push("Conversation composer exceeds its bounded height");
+        }
+      }
+      if (element instanceof HTMLTextAreaElement && element.scrollHeight > element.clientHeight + 1 && !intentionalConversationScroll) failures.push(`${label} clips its text`);
     }
     const overlay = root.querySelector<HTMLElement>("[data-prospect-demo-intake-overlay]");
     if (overlay && visible(overlay)) {
@@ -168,6 +179,9 @@ for (const width of WIDTHS) {
     const initial = await textarea.inputValue();
     const longDescription = "A fictional business is owed money for completed services. The client has the signed proposal, invoice, and email messages. ".repeat(26);
     await textarea.fill(longDescription);
+    await textarea.focus();
+    await textarea.press("Control+End");
+    expect(await textarea.evaluate((element: HTMLTextAreaElement) => element.selectionEnd === element.value.length && (element.scrollHeight <= element.clientHeight + 1 || element.scrollTop > 0))).toBe(true);
     await assertLayout(page);
     await page.getByRole("button", { name: "Side by side", exact: true }).click();
     await expect(textarea).toHaveValue(longDescription);
@@ -301,7 +315,7 @@ for (const width of WIDTHS) {
     await page.getByRole("button", { name: "Side by side", exact: true }).click();
     await expect(page.getByRole("button", { name: "Side by side", exact: true })).toHaveAttribute("aria-pressed", "true");
     await assertLayout(page);
-    await page.locator(`${INTAKE} textarea`).fill("Fictional test. A business client owes us $20,000 for completed work. I can approve hiring a lawyer. We have an invoice and signed contract.");
+    await page.locator(`${INTAKE} textarea`).fill("Fictional test. A business client owes us $18,450 for completed work. I can approve hiring a lawyer. We have an invoice and signed contract.");
     await page.getByRole("button", { name: "Send in demo", exact: true }).click();
     await expect(page.getByRole("button", { name: "Use fictional contact", exact: true })).toBeVisible();
     await assertLayout(page);

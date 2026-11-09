@@ -23,6 +23,18 @@ describe("literal demo conversation grounding", () => {
     expect(result.slots.family_existing_order).toBeFalsy();
     expect(result.slots.family_children).toBeFalsy();
   });
+  it("grounds a stated age-qualified son but not a negated child claim", () => {
+    const text = "My former spouse and I have a nine-year-old son. I need help enforcing our parenting time.";
+    const initial = prepareFamilyDemoState(initialiseState(text), ["family"]);
+    const inferred = mergeLlmResults(initial, { family_children: "Yes", family_help_sought: "Parenting or decision-making" });
+    const result = groundDemoConversationFacts(inferred, text);
+    expect(result.slot_meta.family_children).toMatchObject({ source: "explicit", evidence: text });
+    expect(result.slot_meta.family_help_sought.source).toBe("explicit");
+    const negative = "I need a family lawyer. We do not have a nine-year-old son.";
+    const other = prepareFamilyDemoState(initialiseState(negative), ["family"]);
+    const guessed = mergeLlmResults(other, { family_children: "Yes" });
+    expect(groundDemoConversationFacts(guessed, negative).slot_meta.family_children.source).toBe("llm_inferred");
+  });
   it("does not turn a stated lack of parenting need into a parenting request", () => {
     const text = "I need a family lawyer. This is not about parenting or custody.";
     const state = prepareFamilyDemoState(initialiseState(text), ["family"]);
@@ -44,6 +56,33 @@ describe("literal demo conversation grounding", () => {
     const result = groundDemoConversationFacts(inferred, text);
     expect(result.slots.family_help_sought).toBe("Separation or divorce");
     expect(result.slot_meta.family_help_sought.source).toBe("llm_inferred");
+  });
+  it("grounds only a single unambiguous literal amount matching the model's existing range", () => {
+    function amount(text: string, value: string) {
+      const state = initialiseState(text);
+      return groundDemoConversationFacts(mergeLlmResults(state, { amount_at_stake: value }), text);
+    }
+    const valid = amount("A business client owes $18,450 on an unpaid invoice.", "$5,000–$25,000");
+    expect(valid.slot_meta.amount_at_stake).toMatchObject({ source: "explicit", evidence: "A business client owes $18,450 on an unpaid invoice." });
+    for (const text of ["A client owes $5,000 on an unpaid invoice.", "A client owes $25,000 on an unpaid invoice.", "A client owes $100,000 on an unpaid invoice.", "A client owes $18,450 or $22,000 on an unpaid invoice.", "A client owes between $18,450 and 22,000 on an unpaid invoice.", "A client owes about $18,450 on an unpaid invoice."]) {
+      expect(amount(text, "$5,000–$25,000").slot_meta.amount_at_stake?.source).not.toBe("explicit");
+    }
+    expect(amount("A client owes $18,450 on an unpaid invoice.", "$25,000–$100,000").slot_meta.amount_at_stake.source).toBe("llm_inferred");
+  });
+  it("grounds the specific scheduled conference, not the order or incident date", () => {
+    const text = "My former spouse and I have a nine-year-old son. I need help enforcing our parenting time. A court order was made March 15, 2025. An incident happened October 30, 2026. A case conference is scheduled for December 12, 2026.";
+    const state = prepareFamilyDemoState(initialiseState(text), ["family"]);
+    const inferred = mergeLlmResults(state, { family_children: "Yes", family_help_sought: "Parenting or decision-making", family_timing: "A case conference is scheduled for December 12, 2026." });
+    const result = groundDemoConversationFacts(inferred, text);
+    expect(result.slots.family_timing).toBe("A case conference is scheduled for December 12, 2026");
+    expect(result.slot_meta.family_timing.source).toBe("explicit");
+    expect(result.questionHistory).toEqual(state.questionHistory);
+  });
+  it("does not turn alternative conference dates into a confirmed date", () => {
+    const text = "I need a family lawyer. The court hearing may be December 12, 2026 or January 5, 2027.";
+    const state = prepareFamilyDemoState(initialiseState(text), ["family"]);
+    const inferred = mergeLlmResults(state, { family_timing: "December 12, 2026" });
+    expect(groundDemoConversationFacts(inferred, text).slot_meta.family_timing.source).toBe("llm_inferred");
   });
   it("grounds Toronto, Ontario without inventing an order the person wants to obtain", () => {
     const text = "I live in Toronto, Ontario. I need a family lawyer to help get a court order.";

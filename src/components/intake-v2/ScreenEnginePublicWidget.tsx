@@ -318,7 +318,7 @@ export function ScreenEnginePublicWidget({
   const conversationBusy = useRef(false);
   const [conversationVersion, setConversationVersion] = useState(0);
   const [conversation, setConversation] = useState<DemoConversationMessage[]>([
-    { id: "welcome", role: "assistant", text: "Tell us about your fictional situation in your own words. We will ask a few follow-up questions." },
+    { id: "welcome", role: "assistant", text: "Tell us what happened." },
   ]);
   useEffect(() => () => { extractionRun.current += 1; }, []);
   // Clarify state (DR-071, 2026-06-11). When the engine cannot classify
@@ -421,7 +421,7 @@ export function ScreenEnginePublicWidget({
     } else if (stage === "contact" && !demoContinuation?.contactUsed) {
       message = { id: "contact", role: "assistant", text: "First, we need a name and a way to reach the person. Use the fictional sample contact to continue. You can reply with the number of an option or answer in your own words." };
     } else if (stage === "questions" && demoContinuation?.contactUsed && next?.type === "continue" && currentItem) {
-      message = { id: `question:${state.questionHistory.length}:${currentItem.id}`, role: "assistant", text: currentItem.question, options: currentItem.options?.map((option) => option.label) };
+      message = { id: `question:${state.questionHistory.length}:${currentItem.id}`, role: "assistant", text: currentItem.id === "proof_of_performance" ? "Do you have proof of delivery?" : currentItem.question, options: currentItem.options?.map((option) => option.label) };
     } else if (stage === "questions" && next?.type === "clarify") {
       message = { id: `clarify:${clarifyAttempts}`, role: "assistant", text: "Could you share a little more about what is happening?" };
     } else if (stage === "done") {

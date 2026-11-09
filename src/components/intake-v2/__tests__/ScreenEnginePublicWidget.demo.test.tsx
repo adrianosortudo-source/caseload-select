@@ -140,7 +140,7 @@ it("reviews AI facts once, preserves missing questions, and supports correcting 
   render(<ScreenEnginePublicWidget firmId="fictional" firmName="Fictional firm" runtime="demo-live-ai" layout="contained" initialDescription="A client owes us $18,450 for completed work. I can approve hiring a lawyer." onDemoStateChange={(view) => views.push(view)} />);
   fireEvent.click(screen.getByRole("button", { name: "Continue matter review" }));
   await screen.findByRole("heading", { name: "Review the facts" });
-  expect(views.at(-1)?.state?.slot_meta.amount_at_stake.source).toBe("llm_inferred");
+  await waitFor(() => expect(views.at(-1)?.state?.slot_meta.amount_at_stake?.source).toBe("llm_inferred"));
   expect(views.at(-1)?.currentQuestion).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "Edit my description" }));
   expect(screen.getByDisplayValue(/18,450/)).toBeTruthy();

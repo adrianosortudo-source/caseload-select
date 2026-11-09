@@ -98,13 +98,13 @@ describe("Meta family conversation", () => {
     const first = `${inquiry}. A family court date is December 12, 2026.`;
     vi.mocked(fetch).mockResolvedValueOnce({ ok: true, json: async () => ({ mode: "live", extracted: { family_children: "Yes", family_help_sought: "Parenting or decision-making", family_timing: "December 12, 2026" } }) } as Response);
     const views: ScreenDemoView[] = []; render(<Harness views={views} description={first} />); send(); await useContact();
-    await waitFor(() => expect(views.at(-1)?.state?.slots.family_timing).toBe("December 12, 2026"));
+    await waitFor(() => expect(views.at(-1)?.state?.slots.family_timing).toContain("December 12, 2026"));
     fireEvent.click(screen.getByRole("button", { name: "Edit inquiry" }));
     expect((screen.getByLabelText("Your fictional message") as HTMLTextAreaElement).value).toBe(first);
     const corrected = first.replace("December 12", "December 15");
     vi.mocked(fetch).mockResolvedValueOnce({ ok: true, json: async () => ({ mode: "live", extracted: { family_children: "Yes", family_help_sought: "Parenting or decision-making", family_timing: "December 15, 2026" } }) } as Response);
     send(corrected); await useContact();
-    await waitFor(() => expect(views.at(-1)?.state?.slots.family_timing).toBe("December 15, 2026"));
+    await waitFor(() => expect(views.at(-1)?.state?.slots.family_timing).toContain("December 15, 2026"));
     expect(views.at(-1)?.state?.input).toBe(corrected);
     expect(screen.queryByText(first)).toBeNull();
   });

@@ -150,7 +150,7 @@ export function ProspectDemoClient({ profileId, embedded = false, sampleOnly = f
     ),
     renderStatus: () => (
       <div data-ui-component-content="demo-ai-status">
-        <p role="status" className="w-full" data-ui-copy="supporting">{demoExtractionLabel(view)}</p>
+        <p role="status" className="w-full" data-ui-copy="supporting">{view.runtime === "demo-live-ai" && view.extraction.status === "live" ? "Live AI read your message. Continue the conversation." : demoExtractionLabel(view)}</p>
         <p className="mt-3 w-full" data-ui-copy="body">Live AI can send the fictional description to Google Gemini.</p>
         <p className="mt-3 w-full" data-ui-copy="body">Guided samples run in your browser. Use fictional examples only. Keep client and confidential details out.</p>
         {sampleOnly && <p className="mt-3 w-full" data-ui-copy="supporting">{profileId === geneColmanProspectDemoProfile.id ? "This preview uses a screenshot of the firm's website. Inquiries and replies are fictional." : "Example Law Firm is fictional. The website and inquiries are for demonstration only."}</p>}

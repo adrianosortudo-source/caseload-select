@@ -3,7 +3,6 @@
   flex-direction: column;
   width: 100%;
   min-width: 0;
-  max-height: min(76dvh, 740px);
   border: 1px solid #1E2F58;
   background: #FFFFFF;
   color: #0D1520;
@@ -19,6 +18,7 @@
   width: 100%;
   min-width: 0;
   min-height: 0;
+  max-height: min(62dvh, 560px);
   padding: 14px;
   overflow-x: hidden;
   overflow-y: auto;
@@ -181,7 +181,9 @@
   background: #FFFFFF;
   color: #0D1520;
   font: 400 16px/1.5 "DM Sans Variable", "DM Sans", sans-serif;
-  resize: vertical;
+  resize: none;
+  overflow-x: hidden;
+  overflow-y: hidden;
   overflow-wrap: anywhere;
 }
 
@@ -209,11 +211,8 @@
 }
 
 @media (max-width: 639px) {
-  .conversation {
-    max-height: min(72dvh, 640px);
-  }
-
   .history {
+    max-height: min(54dvh, 460px);
     gap: 10px;
     padding: 10px;
   }
