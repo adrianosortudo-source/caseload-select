@@ -23,7 +23,7 @@ describe("Meta family demo free-text regression", () => {
     fireEvent.click(screen.getByRole("button", { name: "Continue matter review" }));
     await screen.findByRole("heading", { name: "Review the facts" });
     expect(JSON.parse(vi.mocked(fetch).mock.calls[0][1]!.body as string).matter_type).toBe("family_general");
-    expect(views.at(-1)?.extraction.status).toBe("live");
+    await waitFor(() => expect(views.at(-1)?.extraction.status).toBe("live"));
     fireEvent.click(screen.getByRole("button", { name: "Confirm details and continue" }));
     await screen.findByRole("button", { name: "Use sample contact" });
     expect(screen.queryByRole("heading", { name: "Demo complete" })).toBeNull();

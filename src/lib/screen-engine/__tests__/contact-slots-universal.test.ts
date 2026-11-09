@@ -48,6 +48,7 @@ const ALL_MATTER_TYPES: readonly MatterType[] = [
   "probate",
   "estate_dispute",
   "estates_general",
+  "family_general",
   "out_of_scope",
   "unknown",
 ];

@@ -44,7 +44,7 @@ export function DemoOperatorPanel({ view, continuation }: { view: ScreenDemoView
           </section>}
           {isFamily ? <section className={styles.brief} data-demo-family-brief data-ui-component-content="family-law-brief">
             <h3 data-ui-copy="heading">Family-law inquiry</h3>
-            <p data-ui-copy="body">The brief records the person's stated circumstances and outstanding questions for a lawyer to review.</p>
+            <p data-ui-copy="body">The brief records the person&apos;s stated circumstances and outstanding questions for a lawyer to review.</p>
             <h3 data-ui-copy="heading">Captured facts</h3>
             <dl>{familyFacts.map((fact) => <div key={fact.id} data-ui-component-content="family-brief-fact"><dt>{fact.label}</dt><dd className="m-0 w-full" data-ui-copy="body">{fact.value}</dd><p className={styles.calibration} data-ui-copy="supporting">{fact.source === "inferred" ? "Interpretation to confirm" : fact.source === "confirmed" ? "Confirmed by the person" : "Provided in the inquiry"}</p></div>)}</dl>
             {familyFacts.length === 0 && <p data-ui-copy="body">The inquiry needs further clarification. No facts have been assumed.</p>}

@@ -797,6 +797,11 @@ function buildBestNextQuestion(state: EngineState): string {
 // SLOT_REGISTRY must have an entry here, or the lawyer brief leaks the raw
 // snake_case id via the `SLOT_LABELS[id] ?? id` fallback.
 export const SLOT_LABELS: Record<string, string> = {
+  family_help_sought: 'Help sought',
+  family_children: 'Children involved',
+  family_existing_order: 'Existing agreement or order',
+  family_timing: 'Upcoming court date or deadline',
+  family_jurisdiction: 'Location',
   corporate_help_category: 'Business help category',
   corporate_dispute_problem_type: 'Problem type',
   corporate_internal_problem_type: 'Problem type',
