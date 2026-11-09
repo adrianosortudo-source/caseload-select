@@ -22,8 +22,9 @@ function proposals(state: EngineState): Record<string, string> {
     if (value && state.slot_meta[id]?.source === "llm_inferred") proposed[id] = value;
   }
   if (!state.slots.decision_authority && state.slot_meta.decision_authority?.source !== "answered" &&
-      !/\b(?:partner|board|co-owner|joint|together)\b/i.test(state.input) &&
-      /\bI (?:(?:am the owner and )?can approve hiring a lawyer|alone (?:decide|can decide) (?:whether|to) hire a lawyer|make the (?:final )?decision (?:about hiring|to hire) a lawyer)\b/i.test(state.input)) {
+      !/\b(?:partner|board|co-owner|joint|together|cannot|can\'t|never|might|may|maybe|unsure|uncertain|if|whether)\b/i.test(state.input) &&
+      !/\b(?:not|never|don\'t|doesn\'t|doubt)\b[^.!?;\n]*\bI (?:am the owner and )?can (?:approve hiring|decide to hire) a lawyer\b/i.test(state.input) &&
+      /\bI (?:(?:am the owner and )?can (?:approve hiring|decide to hire) a lawyer|alone (?:decide|can decide) (?:whether|to) hire a lawyer|make the (?:final )?decision (?:about hiring|to hire) a lawyer)\b/i.test(state.input)) {
     proposed.decision_authority = "Just me";
   }
   if (state.matter_type === "unpaid_invoice" && !state.slots.desired_outcome_unpaid_invoice &&

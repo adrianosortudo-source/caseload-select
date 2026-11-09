@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { startDemoState } from "../screen-demo";
+import { answerDemoState, startDemoState } from "../screen-demo";
 import { mergeLlmResults } from "../screen-engine/llm/extractor";
 import { isUserAnswered, selectNextSlot } from "../screen-engine/selector";
 import { confirmDemoFacts, demoReviewFacts } from "../screen-demo-confirmation";
@@ -52,6 +52,9 @@ it.each([
   "I own a business and cannot approve hiring a lawyer. A client owes an invoice.",
   "I can approve hiring a lawyer but my partner must agree. A client owes an invoice.",
   "I do not want a demand letter. A client owes an invoice.",
+  "I may decide to hire a lawyer if my partner agrees. A client owes an invoice.",
+  "I am the owner and cannot decide to hire a lawyer. A client owes an invoice.",
+  "I do not think I am the owner and can decide to hire a lawyer. A client owes an invoice.",
 ])("does not overstate negated or joint readiness: %s", (input) => {
   const state = startDemoState(input);
   expect(demoReviewFacts(state).some((fact) => fact.id === "decision_authority" || fact.id === "desired_outcome_unpaid_invoice")).toBe(false);
@@ -64,11 +67,18 @@ describe("delivery documentation in demo readback", () => {
     const state = mergeLlmResults(startDemoState(input), extracted);
     const fact = demoReviewFacts(state).find((item) => item.id === "proof_of_performance");
     expect(fact).toMatchObject({ label: "Proof of delivery", value: "Yes", source: "inferred" });
+    expect(demoReviewFacts(state).find((item) => item.id === "decision_authority")).toMatchObject({ value: "Just me", source: "inferred" });
     expect(isUserAnswered(state, "proof_of_performance")).toBe(false);
     const confirmed = confirmDemoFacts(state);
     expect(isUserAnswered(confirmed, "proof_of_performance")).toBe(true);
     expect(selectNextSlot(confirmed)?.id).not.toBe("proof_of_performance");
     expect(confirmed.questionHistory).toEqual(state.questionHistory);
+    expect(selectNextSlot(confirmed)?.id).toBe("hiring_timeline");
+    const afterTiming = answerDemoState(confirmed, "hiring_timeline", "Now (this week)");
+    expect(selectNextSlot(afterTiming)?.id).toBe("other_counsel");
+    const afterCounsel = answerDemoState(afterTiming, "other_counsel", "No, you are the first");
+    expect(selectNextSlot(afterCounsel)?.id).not.toBe("decision_authority");
+    expect(afterCounsel.questionHistory.length).toBeLessThanOrEqual(8);
   });
   it.each([
     "A client has not paid an invoice. We delivered the project.",
