@@ -75,7 +75,7 @@ export default async function WebsiteDesignCheckPage({ searchParams }: PageProps
               ["Forms & Conversion Flow", "Field count, label persistence, and required-field clarity on the intake form that decides whether a visitor finishes."],
               ["Mobile & Responsive", "Tap target size, horizontal overflow, and menu labeling at the width most visitors actually use."],
               ["Performance", "Core Web Vitals from a real page load, plus image format and logo delivery."],
-              ["Authority & Positioning", "Signals related to the page’s stated focus, supporting proof, and wording that may need review."],
+              ["Authority & Positioning", "Signals related to the pageâ€™s stated focus, supporting proof, and wording that may need review."],
             ].map(([name, description]) => (
               <article className="dc-cat-preview" key={name} data-ui-component-content="category-description">
                 <h3 className="dc-cat-preview-name" data-ui-copy="heading">{name}</h3>
