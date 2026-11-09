@@ -185,3 +185,5 @@
 @media (max-width: 639px) { .continuation { padding: 20px 16px; } }
 
 .humanBoundary { text-wrap: pretty; }
+
+.widget [data-ui-component-content="demo-complete"] > p[data-ui-copy="body"] { text-wrap: pretty; }
