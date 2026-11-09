@@ -7,9 +7,9 @@ import { DemoOperatorPanel } from "../DemoOperatorPanel";
 
 class Observer { observe() {} unobserve() {} disconnect() {} }
 const inquiry = "Fictional test. I need help with my divorce. My former partner is keeping me away from our children.";
-function Harness({ views }: { views: ScreenDemoView[] }) {
+function Harness({ views, description = inquiry }: { views: ScreenDemoView[]; description?: string }) {
   const [contactUsed, setContactUsed] = useState(false);
-  return <ScreenEnginePublicWidget firmId="fictional-family" firmName="Example Law Firm" runtime="demo-live-ai" configuredPracticeAreas={["family"]} layout="contained" initialDescription={inquiry} onDemoStateChange={(view) => views.push(view)} demoContinuation={{ workflow: "meta", contactUsed, onUseSampleContact: () => setContactUsed(true), reply: null }} />;
+  return <ScreenEnginePublicWidget firmId="fictional-family" firmName="Example Law Firm" runtime="demo-live-ai" configuredPracticeAreas={["family"]} layout="contained" initialDescription={description} onDemoStateChange={(view) => views.push(view)} demoContinuation={{ workflow: "meta", contactUsed, onUseSampleContact: () => setContactUsed(true), reply: null }} />;
 }
 beforeEach(() => {
   vi.stubGlobal("ResizeObserver", Observer);
@@ -63,7 +63,7 @@ describe("Meta family demo free-text regression", () => {
 
   it("retains an exact court date from free text and allows correction before follow-ups", async () => {
     vi.mocked(fetch).mockResolvedValueOnce({ ok: true, json: async () => ({ mode: "live", extracted: { family_help_sought: "Parenting or decision-making", family_children: "Yes", family_timing: "A case conference is scheduled for December 12, 2026." } }) } as Response);
-    const views: ScreenDemoView[] = []; render(<Harness views={views} />);
+    const views: ScreenDemoView[] = []; render(<Harness views={views} description={`${inquiry} A case conference is scheduled for December 12, 2026.`} />);
     fireEvent.click(screen.getByRole("button", { name: "Continue matter review" }));
     await screen.findByText("A case conference is scheduled for December 12, 2026.");
     fireEvent.click(screen.getByRole("button", { name: "Edit court date or deadline" }));
@@ -78,7 +78,7 @@ describe("Meta family demo free-text regression", () => {
 
   it("maps a natural readiness reply through the original Meta answer mapper", async () => {
     vi.mocked(fetch).mockResolvedValueOnce({ ok: true, json: async () => ({ mode: "live", extracted: { family_help_sought: "Parenting or decision-making", family_children: "Yes", family_existing_order: "Neither", family_timing: "No court date is scheduled.", family_jurisdiction: "Ontario" } }) } as Response);
-    const views: ScreenDemoView[] = []; render(<Harness views={views} />);
+    const views: ScreenDemoView[] = []; render(<Harness views={views} description={`${inquiry} There is no court order and no written agreement. No court date is scheduled. We live in Ontario.`} />);
     fireEvent.click(screen.getByRole("button", { name: "Continue matter review" }));
     fireEvent.click(await screen.findByRole("button", { name: "Confirm details and continue" }));
     fireEvent.click(await screen.findByRole("button", { name: "Use sample contact" }));
