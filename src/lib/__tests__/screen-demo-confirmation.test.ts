@@ -56,3 +56,38 @@ it.each([
   const state = startDemoState(input);
   expect(demoReviewFacts(state).some((fact) => fact.id === "decision_authority" || fact.id === "desired_outcome_unpaid_invoice")).toBe(false);
 });
+
+
+describe("delivery documentation in demo readback", () => {
+  const input = "I run a small design studio in Ontario. We completed and delivered a website project. The client has not paid our $18,450 invoice, overdue by 60 days. The signed contract, invoice and emails confirming delivery are ready. I am the owner and can decide to hire a lawyer. I want a demand letter.";
+  it("proposes explicit available evidence for confirmation without repeating it", () => {
+    const state = mergeLlmResults(startDemoState(input), extracted);
+    const fact = demoReviewFacts(state).find((item) => item.id === "proof_of_performance");
+    expect(fact).toMatchObject({ label: "Proof of delivery", value: "Yes", source: "inferred" });
+    expect(isUserAnswered(state, "proof_of_performance")).toBe(false);
+    const confirmed = confirmDemoFacts(state);
+    expect(isUserAnswered(confirmed, "proof_of_performance")).toBe(true);
+    expect(selectNextSlot(confirmed)?.id).not.toBe("proof_of_performance");
+    expect(confirmed.questionHistory).toEqual(state.questionHistory);
+  });
+  it.each([
+    "A client has not paid an invoice. We delivered the project.",
+    "A client has not paid an invoice. I do not have emails confirming delivery.",
+    "A client has not paid an invoice. I might have emails confirming delivery.",
+    "A client has not paid an invoice. The customer has emails confirming delivery.",
+    "A client has not paid an invoice. I do not think emails confirming delivery are ready.",
+    "A client has not paid an invoice. I have emails confirming delivery but they are unavailable.",
+  ])("does not propose absent, negative, uncertain or third-party evidence: %s", (input) => {
+    expect(demoReviewFacts(startDemoState(input)).some((item) => item.id === "proof_of_performance")).toBe(false);
+  });
+  it("preserves a correction or a choice to leave evidence unanswered", () => {
+    const state = mergeLlmResults(startDemoState(input), extracted);
+    const corrected = confirmDemoFacts(state, { proof_of_performance: "No" });
+    expect(corrected.slots.proof_of_performance).toBe("No");
+    expect(demoReviewFacts(corrected).some((item) => item.id === "proof_of_performance")).toBe(false);
+    const blank = confirmDemoFacts(state, { proof_of_performance: "" });
+    expect(blank.slots.proof_of_performance).toBeNull();
+    expect(demoReviewFacts(blank).some((item) => item.id === "proof_of_performance")).toBe(false);
+    expect(blank.questionHistory).toEqual(state.questionHistory);
+  });
+});
