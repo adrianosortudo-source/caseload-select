@@ -101,3 +101,9 @@ describe("delivery documentation in demo readback", () => {
     expect(blank.questionHistory).toEqual(state.questionHistory);
   });
 });
+
+
+it("keeps the existing explicit sole-decision phrasing with unrelated nonpayment", () => {
+  const state = startDemoState("A client has not paid an invoice. I alone decide whether to hire a lawyer.");
+  expect(demoReviewFacts(state).find((item) => item.id === "decision_authority")).toMatchObject({ value: "Just me", source: "inferred" });
+});
