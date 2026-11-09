@@ -1,8 +1,11 @@
+import fs from "node:fs";
+import path from "node:path";
 import type { DesignCheckResult } from "../../src/components/website-design-check/WebsiteDesignCheckReport";
 
 // Synthetic, test-only data. Intercepted in the browser; never sent to a service.
 export const fixture: DesignCheckResult = {
   domain: "synthetic-fixture.example",
+  visualReview: { version: 1, status: "complete", reasonCodes: [], captures: ["desktop", "mobile"].map(id => ({ id: id as "desktop" | "mobile", available: true, mimeType: "image/png" as const, base64: fs.readFileSync(path.join(process.cwd(), "tests/website-design-check/fixtures", `${id}.png`)).toString("base64"), width: id === "desktop" ? 1280 : 375, height: 900, totalHeight: null })), viewportReviews: ["desktop", "mobile"].map(id => ({ captureId: id as "desktop" | "mobile", pageKind: "homepage" as const, areas: { hierarchy: "assessed" as const, typography_readability: "assessed" as const, colour_contrast: "assessed" as const, spacing_alignment: "assessed" as const, mobile_contact: "assessed" as const }, areaReasons: {} })), findings: [{ id: "visual-1", captureId: "desktop", area: "hierarchy", section: "Hero", element: "Heading", observation: "The heading overlaps the button.", consequence: "The button may be difficult to find.", change: "Move the button below the heading so both remain visible.", priority: "high", limitation: "Only the captured view was assessed." }], strengths: [] },
   checkedAt: "2026-11-08T12:00:00.000Z",
   score: 40, uncappedScore: 76, letterGrade: "F",
   attainable: { score: 76, letterGrade: "B" },

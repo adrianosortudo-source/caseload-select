@@ -52,6 +52,7 @@ export default function WebsiteDesignCheckTool() {
     try {
       const res = await fetch("/api/tools/website-design-check", {
         method: "POST",
+        cache: "no-store",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ domain: trimmed }),
       });

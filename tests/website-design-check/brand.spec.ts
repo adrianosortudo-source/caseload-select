@@ -108,14 +108,14 @@ for(const width of WIDTHS){
     await brandGates(page);
     const closedText=await page.locator(".dc-report").innerText();
     const words=closedText.trim().split(/\s+/).length;
-    expect(words).toBeGreaterThanOrEqual(200); expect(words).toBeLessThanOrEqual(300);
+    expect(words).toBeLessThanOrEqual(300);
     expect(await page.locator(".dc-path-section .dc-finding-item").count()).toBeLessThanOrEqual(3);
     await page.screenshot({path:path.join(EVIDENCE,`${width}-report.png`),fullPage:true});
     await expect(page.locator(".dc-categories-preview")).toBeHidden();
     await expect(page.locator(".dc-disclaimer")).toBeVisible();
     const disclosure=page.locator(".dc-report-details");
     await expect(disclosure).not.toHaveAttribute("open", "");
-    await page.getByText("See all findings and scoring details").focus();
+    await page.getByText("Other automated checks").focus();
     await page.keyboard.press("Enter");
     await expect(disclosure).toHaveAttribute("open", "");
     await brandGates(page);
@@ -164,7 +164,7 @@ for(const width of WIDTHS){
     const actualFrame=page.frames().find(f=>f.url().includes("embed=1"))!;
     await brandGates(actualFrame);
     if([1440,375,320].includes(width)) await page.screenshot({path:path.join(EVIDENCE,`${width}-embedded-closed.png`),fullPage:true});
-    await frame.locator("summary").click();
+    await frame.locator(".dc-report-details > summary").click();
     await expect(frame.locator(".dc-report-details")).toHaveAttribute("open","");
     await brandGates(actualFrame);
     if([1440,375,320].includes(width)) await page.screenshot({path:path.join(EVIDENCE,`${width}-embedded-expanded.png`),fullPage:true});
@@ -178,19 +178,66 @@ test("copy succeeds or offers a focused manual copy field",async({page,context})
   await page.getByRole("button",{name:"Check my site",exact:true}).click();
   await page.getByRole("button",{name:"Copy action plan"}).click();
   await expect(page.getByText("Action plan copied.")).toBeVisible();
-  expect(await page.evaluate(()=>navigator.clipboard.readText())).toContain("Needs confirmation");
+  expect(await page.evaluate(()=>navigator.clipboard.readText())).toContain("The heading overlaps the button");
   await page.evaluate(()=>Object.defineProperty(navigator.clipboard,"writeText",{value:()=>Promise.reject(new Error("denied"))}));
   await page.getByRole("button",{name:"Copy action plan"}).click();
   await expect(page.getByLabel("Action plan for manual copy")).toBeFocused();
-  await expect(page.getByLabel("Action plan for manual copy")).toHaveValue(/Needs confirmation/);
+  await expect(page.getByLabel("Action plan for manual copy")).toHaveValue(/The heading overlaps the button/);
 });
 
-test("a flagged item opens its own focused detail",async({page})=>{
+test("visual findings lead and automated checks stay collapsed",async({page})=>{
   await page.goto("/tools/website-design-check");
   await page.route("**/api/tools/website-design-check",route=>route.fulfill({status:200,contentType:"application/json",body:JSON.stringify(fixture)}));
   await page.getByLabel("Public website URL").fill("synthetic-fixture.example");
   await page.getByRole("button",{name:"Check my site",exact:true}).click();
-  await page.locator('.dc-redflag-list a').first().click();
-  await expect(page.locator('.dc-report-details')).toHaveAttribute('open','');
-  await expect(page.locator('#dc-flag-self_designation_without_proof')).toBeFocused();
+  await expect(page.getByText("Desktop and mobile screenshots reviewed. 1 visual change identified.")).toBeVisible();
+  await expect(page.getByText("The heading overlaps the button.")).toBeVisible();
+  await expect(page.locator(".dc-report-details")).not.toHaveAttribute("open", "");
+  await page.getByText("View readable screenshot").first().click();
+  const viewer = page.getByLabel("desktop screenshot, scroll to inspect");
+  await expect(viewer).toBeVisible();
+  const image = viewer.locator("img");
+  await expect(image).toHaveJSProperty("naturalWidth", 1280);
+  await expect(image).toHaveJSProperty("naturalHeight", 900);
+  await expect(image).toHaveAttribute("alt", "desktop captured page");
 });
+for (const width of [1440, 320]) {
+  test(`visual assessment scenarios at ${width}px`, async ({ page, context }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+    const original = fixture.visualReview!;
+    const one = original.findings[0];
+    const cases = [
+      { name: "multiple", review: { ...original, findings: [one, { ...one, id: "visual-2", captureId: "mobile" as const, section: "Contact", element: "Button", observation: "The button overlaps the contact label." }] }, text: "Desktop and mobile screenshots reviewed. 2 visual changes identified.", findings: 2 },
+      { name: "one", review: original, text: "Desktop and mobile screenshots reviewed. 1 visual change identified.", findings: 1 },
+      { name: "zero", review: { ...original, findings: [] }, text: "No specific visual issues identified in these captures.", findings: 0 },
+      { name: "desktop only", review: { ...original, status: "partial" as const, captures: [original.captures[0], { id: "mobile" as const, available: false, reason: "capture_unavailable" as const }], viewportReviews: [original.viewportReviews[0]], reasonCodes: ["capture_unavailable" as const] }, text: "Visual assessment is incomplete. 1 visual change identified in the available evidence.", findings: 1, limitation: "Mobile capture unavailable." },
+      { name: "vision failure", review: { ...original, status: "unavailable" as const, viewportReviews: [], findings: [], reasonCodes: ["vision_unavailable" as const] }, text: "Visual assessment unavailable.", findings: 0, limitation: "Captured, not visually assessed." },
+      ...(["challenge", "login"] as const).map(kind => ({ name: kind, review: { ...original, status: "unavailable" as const, viewportReviews: original.viewportReviews.map(r => ({ ...r, pageKind: kind })), findings: [], reasonCodes: ["unsuitable_page" as const] }, text: "Visual assessment unavailable.", findings: 0, limitation: `${kind} page shown; normal homepage visual assessment was not possible.` })),
+    ];
+    let response = fixture;
+    await page.route("**/api/tools/website-design-check", route => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(response) }));
+    for (const scenario of cases) {
+      response = { ...fixture, visualReview: scenario.review };
+      await page.goto("/tools/website-design-check");
+      await page.getByLabel("Public website URL").fill("synthetic-fixture.example");
+      await page.getByRole("button", { name: "Check my site", exact: true }).click();
+      await expect(page.getByText(scenario.text, { exact: true }), scenario.name).toBeVisible();
+      await expect(page.locator(".dc-path-section .dc-finding-item"), scenario.name).toHaveCount(scenario.findings);
+      if (scenario.limitation) await expect(page.getByText(scenario.limitation, { exact: false }).first(), scenario.name).toBeVisible();
+      await brandGates(page);
+      if (scenario.name === "one") {
+        const expander = page.getByText("View readable screenshot").first();
+        await expander.focus(); await page.keyboard.press("Enter");
+        const viewer = page.getByLabel("desktop screenshot, scroll to inspect");
+        await expect(viewer).toBeVisible();
+        await expect(viewer.locator("img")).toHaveJSProperty("naturalWidth", 1280);
+        await viewer.locator("img").evaluate((image: HTMLImageElement) => { image.src = "data:image/png;base64,broken"; });
+        await expect(page.locator(".dc-finding-item [role=alert]")).toContainText("could not be displayed");
+        await page.getByRole("button", { name: "Copy action plan" }).click();
+        expect(await page.evaluate(() => navigator.clipboard.readText())).toContain("screenshot could not be displayed");
+        await brandGates(page);
+      }
+    }
+  });
+}

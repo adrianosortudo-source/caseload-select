@@ -150,3 +150,14 @@
   .dc-page .dc-main { padding-inline: 12px; }
   .dc-input-card, .dc-page .dc-report-details { padding-inline: 16px; }
 }
+
+.dc-visual-captures, .dc-capture { display: grid; grid-template-columns: minmax(0, 1fr); min-width: 0; gap: 12px; }
+.dc-capture { padding: 20px; border: 1px solid var(--navy); }
+.dc-capture-preview { height: 240px; overflow: hidden; }
+.dc-capture-preview img { display: block; width: 100%; height: auto; }
+.dc-capture-scroll { max-height: 70vh; max-width: 100%; overflow: auto; border: 1px solid var(--navy); }
+.dc-capture-scroll img { display: block; max-width: none; height: auto; }
+
+/* Natural screenshot dimensions scroll inside their structural viewer. */
+.dc-page .dc-report-header > p, .dc-page .dc-capture > p { text-wrap: wrap; }
+@media (max-width: 340px) { .dc-report-header { padding: 8px; } }

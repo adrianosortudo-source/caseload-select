@@ -7,13 +7,13 @@ import WebsiteDesignCheckTool from "@/components/website-design-check/WebsiteDes
 export const metadata: Metadata = {
   title: "Free Website Design & Conversion Check · CaseLoad Select",
   description:
-    "See how your law firm's website scores on typography, contrast, forms, mobile usability, and authority signals, plus a ranked list of specific fixes. Free, no account required.",
+    "Review desktop and mobile screenshots of your law firm's homepage, with visual observations and automated checks. Free, no account required.",
   alternates: {
     canonical: "https://caseloadselect.ca/tools/website-design-check",
   },
   openGraph: {
     title: "Free Website Design & Conversion Check · CaseLoad Select",
-    description: "See how your law firm's website scores on design and conversion craft, plus a ranked list of specific fixes. Free, no account required.",
+    description: "Review desktop and mobile screenshots of your law firm's homepage, with visual observations and automated checks. Free, no account required.",
     type: "website",
     locale: "en_CA",
   },
@@ -51,9 +51,8 @@ export default async function WebsiteDesignCheckPage({ searchParams }: PageProps
           <header className="dc-hero" data-ui-component-content="checker-introduction">
             <h1 className="dc-hero-title" data-ui-copy="heading">Website Design &amp; Conversion Check</h1>
             <p className="dc-hero-sub" data-ui-copy="body">
-              A visitor decides whether your firm looks credible within seconds, before reading a word. This tool loads your
-              homepage in a real browser at mobile and desktop widths, then measures typography, contrast, spacing, forms, and
-              authority signals against a fixed rubric, the same craft standards a design review would apply by hand.
+              This tool captures your homepage at desktop and mobile widths and reviews the visible design. It also runs
+              automated checks on typography, contrast, spacing, forms, and authority signals against a fixed rubric.
             </p>
             <ul className="dc-hero-facts" aria-label="About this check">
               <li><span>60+</span> signals checked</li>
@@ -76,7 +75,7 @@ export default async function WebsiteDesignCheckPage({ searchParams }: PageProps
               ["Forms & Conversion Flow", "Field count, label persistence, and required-field clarity on the intake form that decides whether a visitor finishes."],
               ["Mobile & Responsive", "Tap target size, horizontal overflow, and menu labeling at the width most visitors actually use."],
               ["Performance", "Core Web Vitals from a real page load, plus image format and logo delivery."],
-              ["Authority & Positioning", "Whether the page states a clear focus and backs its claims with verifiable proof, or leans on unbacked language a regulator would flag."],
+              ["Authority & Positioning", "Signals related to the page�s stated focus, supporting proof, and wording that may need review."],
             ].map(([name, description]) => (
               <article className="dc-cat-preview" key={name} data-ui-component-content="category-description">
                 <h3 className="dc-cat-preview-name" data-ui-copy="heading">{name}</h3>
@@ -88,8 +87,8 @@ export default async function WebsiteDesignCheckPage({ searchParams }: PageProps
         <aside className="dc-disclaimer" data-ui-component-content="checker-disclosure">
           <p data-ui-copy="supporting">
             <strong>Free diagnostic tool.</strong> This report checks publicly visible signals on your homepage in a single
-            page render. It does not access analytics or any private data, and design judgment items are scored by a
-            language model against a fixed rubric rather than a human reviewer. Built by CaseLoad Select.
+            page render. It does not access analytics or private data. Visual observations and some rubric judgments use a
+            language model, and are not a human review. Built by CaseLoad Select.
           </p>
         </aside>
       </main>
