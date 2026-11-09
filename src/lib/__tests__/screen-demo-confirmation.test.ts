@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { startDemoState } from "../screen-demo";
+import { answerDemoState, startDemoState } from "../screen-demo";
 import { mergeLlmResults } from "../screen-engine/llm/extractor";
 import { isUserAnswered, selectNextSlot } from "../screen-engine/selector";
 import { confirmDemoFacts, demoReviewFacts } from "../screen-demo-confirmation";
@@ -52,7 +52,58 @@ it.each([
   "I own a business and cannot approve hiring a lawyer. A client owes an invoice.",
   "I can approve hiring a lawyer but my partner must agree. A client owes an invoice.",
   "I do not want a demand letter. A client owes an invoice.",
+  "I may decide to hire a lawyer if my partner agrees. A client owes an invoice.",
+  "I am the owner and cannot decide to hire a lawyer. A client owes an invoice.",
+  "I do not think I am the owner and can decide to hire a lawyer. A client owes an invoice.",
 ])("does not overstate negated or joint readiness: %s", (input) => {
   const state = startDemoState(input);
   expect(demoReviewFacts(state).some((fact) => fact.id === "decision_authority" || fact.id === "desired_outcome_unpaid_invoice")).toBe(false);
+});
+
+
+describe("delivery documentation in demo readback", () => {
+  const input = "I run a small design studio in Ontario. We completed and delivered a website project. The client has not paid our $18,450 invoice, overdue by 60 days. The signed contract, invoice and emails confirming delivery are ready. I am the owner and can decide to hire a lawyer. I want a demand letter.";
+  it("proposes explicit available evidence for confirmation without repeating it", () => {
+    const state = mergeLlmResults(startDemoState(input), extracted);
+    const fact = demoReviewFacts(state).find((item) => item.id === "proof_of_performance");
+    expect(fact).toMatchObject({ label: "Proof of delivery", value: "Yes", source: "inferred" });
+    expect(demoReviewFacts(state).find((item) => item.id === "decision_authority")).toMatchObject({ value: "Just me", source: "inferred" });
+    expect(isUserAnswered(state, "proof_of_performance")).toBe(false);
+    const confirmed = confirmDemoFacts(state);
+    expect(isUserAnswered(confirmed, "proof_of_performance")).toBe(true);
+    expect(selectNextSlot(confirmed)?.id).not.toBe("proof_of_performance");
+    expect(confirmed.questionHistory).toEqual(state.questionHistory);
+    expect(selectNextSlot(confirmed)?.id).toBe("hiring_timeline");
+    const afterTiming = answerDemoState(confirmed, "hiring_timeline", "Now (this week)");
+    expect(selectNextSlot(afterTiming)?.id).toBe("other_counsel");
+    const afterCounsel = answerDemoState(afterTiming, "other_counsel", "No, you are the first");
+    expect(selectNextSlot(afterCounsel)?.id).not.toBe("decision_authority");
+    expect(afterCounsel.questionHistory.length).toBeLessThanOrEqual(8);
+  });
+  it.each([
+    "A client has not paid an invoice. We delivered the project.",
+    "A client has not paid an invoice. I do not have emails confirming delivery.",
+    "A client has not paid an invoice. I might have emails confirming delivery.",
+    "A client has not paid an invoice. The customer has emails confirming delivery.",
+    "A client has not paid an invoice. I do not think emails confirming delivery are ready.",
+    "A client has not paid an invoice. I have emails confirming delivery but they are unavailable.",
+  ])("does not propose absent, negative, uncertain or third-party evidence: %s", (input) => {
+    expect(demoReviewFacts(startDemoState(input)).some((item) => item.id === "proof_of_performance")).toBe(false);
+  });
+  it("preserves a correction or a choice to leave evidence unanswered", () => {
+    const state = mergeLlmResults(startDemoState(input), extracted);
+    const corrected = confirmDemoFacts(state, { proof_of_performance: "No" });
+    expect(corrected.slots.proof_of_performance).toBe("No");
+    expect(demoReviewFacts(corrected).some((item) => item.id === "proof_of_performance")).toBe(false);
+    const blank = confirmDemoFacts(state, { proof_of_performance: "" });
+    expect(blank.slots.proof_of_performance).toBeNull();
+    expect(demoReviewFacts(blank).some((item) => item.id === "proof_of_performance")).toBe(false);
+    expect(blank.questionHistory).toEqual(state.questionHistory);
+  });
+});
+
+
+it("keeps the existing explicit sole-decision phrasing with unrelated nonpayment", () => {
+  const state = startDemoState("A client has not paid an invoice. I alone decide whether to hire a lawyer.");
+  expect(demoReviewFacts(state).find((item) => item.id === "decision_authority")).toMatchObject({ value: "Just me", source: "inferred" });
 });

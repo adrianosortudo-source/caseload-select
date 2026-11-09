@@ -10,7 +10,7 @@ export interface DemoReviewFact {
 const LABELS: Record<string, string> = {
   amount_at_stake: "Amount involved", decision_authority: "Hiring decision",
   hiring_timeline: "Hiring timeline", dispute_reason: "Reason for non-payment",
-  desired_outcome_unpaid_invoice: "Requested next step", delivery_proof: "Proof of delivery",
+  desired_outcome_unpaid_invoice: "Requested next step", proof_of_performance: "Proof of delivery",
   invoice_status: "Invoice status", days_overdue: "Time overdue", agreement_proof: "Agreement",
   other_counsel: "Other legal help",
 };
@@ -21,15 +21,29 @@ function proposals(state: EngineState): Record<string, string> {
   for (const [id, value] of Object.entries(state.slots)) {
     if (value && state.slot_meta[id]?.source === "llm_inferred") proposed[id] = value;
   }
+  const explicitAuthority = state.input.split(/[.!?;\n]+/).some((sentence) =>
+    !/\b(?:not|never|cannot|can't|don't|doesn't|doubt|might|may|maybe|unsure|uncertain|if)\b/i.test(sentence) &&
+    /\bI (?:(?:am the owner and )?can (?:approve hiring|decide to hire) a lawyer|alone (?:decide|can decide) (?:whether(?: to)?|to) hire a lawyer|make the (?:final )?decision (?:about hiring|to hire) a lawyer)\b/i.test(sentence),
+  );
   if (!state.slots.decision_authority && state.slot_meta.decision_authority?.source !== "answered" &&
-      !/\b(?:partner|board|co-owner|joint|together)\b/i.test(state.input) &&
-      /\bI (?:(?:am the owner and )?can approve hiring a lawyer|alone (?:decide|can decide) (?:whether|to) hire a lawyer|make the (?:final )?decision (?:about hiring|to hire) a lawyer)\b/i.test(state.input)) {
+      !/\b(?:partner|board|co-owner|joint|together)\b/i.test(state.input) && explicitAuthority) {
     proposed.decision_authority = "Just me";
   }
   if (state.matter_type === "unpaid_invoice" && !state.slots.desired_outcome_unpaid_invoice &&
       state.slot_meta.desired_outcome_unpaid_invoice?.source !== "answered" &&
       /\bI (?:want|would like)(?: advice about| help (?:with|sending)| to send)? (?:a )?demand letter\b/i.test(state.input)) {
     proposed.desired_outcome_unpaid_invoice = "Send demand letter";
+  }
+  // Only propose explicitly available delivery documentation; the client must confirm it.
+  if (state.matter_type === "unpaid_invoice" && !state.slots.proof_of_performance &&
+      !state.slot_meta.proof_of_performance && !state.slot_evidence.proof_of_performance) {
+    const sentences = state.input.split(/[.!?;\n]+/);
+    const availableEvidence = sentences.some((sentence) => {
+      if (/\b(?:no|not|never|without|cannot|can't|dont|don't|doesn't|didn't|wouldn't|might|may|maybe|unsure|uncertain|unavailable|missing|lost|destroyed|not sure|no longer|if|whether|client|customer|they|their|opponent|other side)\b/i.test(sentence)) return false;
+      return /\b(?:i|we) (?:have|possess) (?:the |our |some )?(?:emails?|records?|documents?) (?:confirming|showing|proving) (?:the )?delivery\b/i.test(sentence) ||
+        /\b(?:emails?|records?|documents?) (?:confirming|showing|proving) (?:the )?delivery (?:are|is) (?:ready|available|in hand)\b/i.test(sentence);
+    });
+    if (availableEvidence) proposed.proof_of_performance = "Yes";
   }
   return proposed;
 }
