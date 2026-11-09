@@ -145,8 +145,7 @@ export function ProspectDemoClient({ profileId, embedded = false, sampleOnly = f
       <div data-ui-component-content="demo-ai-status">
         <p role="status" className="w-full" data-ui-copy="supporting">{demoExtractionLabel(view)}</p>
         <p className="mt-3 w-full" data-ui-copy="body">Live AI can send the fictional description to Google Gemini.</p>
-        <p className="mt-3 w-full" data-ui-copy="body">Guided samples run in your browser.</p>
-        <p className="mt-3 w-full" data-ui-copy="body">Use fictional examples only. Keep client and confidential details out.</p>
+        <p className="mt-3 w-full" data-ui-copy="body">Guided samples run in your browser. Use fictional examples only. Keep client and confidential details out.</p>
         {sampleOnly && <p className="mt-3 w-full" data-ui-copy="supporting">Example Law Firm is fictional. The website and inquiries are for demonstration only.</p>}
       </div>
     ),
