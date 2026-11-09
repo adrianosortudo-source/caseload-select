@@ -176,7 +176,7 @@ export function getExtractableSlots(matterType: MatterType): ExtractionSlot[] {
   // canonical list.
   if (matterType === 'unknown') {
     const slots = SLOT_REGISTRY.filter(
-      (s) => s.tier === 'core' || s.question_group === 'routing',
+      (s) => (s.tier === 'core' || s.question_group === 'routing') && !(s.applies_to.length === 1 && s.applies_to[0] === 'family_general'),
     );
     const result: ExtractionSlot[] = [...prefix, matterTypeClassifierSlot()];
     for (const slot of slots) {

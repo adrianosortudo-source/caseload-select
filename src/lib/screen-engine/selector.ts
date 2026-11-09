@@ -615,6 +615,7 @@ function scoreSlot(slot: SlotDefinition, currentGap: DecisionGap): number {
 //      below the unanswered default).
 
 const MATTER_SPECIFIC_SLOT_ORDER: Record<string, readonly string[]> = {
+  family_general: ['family_help_sought', 'family_children', 'family_existing_order', 'family_timing', 'family_jurisdiction', 'hiring_timeline', 'other_counsel', 'decision_authority'],
   // BUSINESS SETUP ADVISORY (DR-121). Order: routing/subtrack, then the
   // urgency inputs, then the readiness triple (DR-083 precedent), then
   // the remaining core-tier value/complexity drivers, then the two

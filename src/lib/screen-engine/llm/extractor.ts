@@ -33,6 +33,8 @@ export interface LlmExtractionResponse {
   extracted: Record<string, string | null>;
   mode: 'live' | 'disabled' | 'error';
   reason?: string;
+  mapped_answer?: { slotId: string; value: string };
+  mapping_mode?: 'live' | 'disabled' | 'error';
   tokens?: { prompt?: number; completion?: number };
 }
 
@@ -41,6 +43,7 @@ const REQUEST_TIMEOUT_MS = 12_000;
 export async function llmExtract(
   description: string,
   state: EngineState,
+  followUp?: { pendingSlotId: string; reply: string },
 ): Promise<LlmExtractionResponse> {
   try {
     const controller = new AbortController();
@@ -53,6 +56,7 @@ export async function llmExtract(
         description,
         matter_type: state.matter_type,
         already_extracted: state.slots,
+        ...(followUp ? { pending_slot_id: followUp.pendingSlotId, reply: followUp.reply } : {}),
       }),
       signal: controller.signal,
     });
@@ -66,6 +70,8 @@ export async function llmExtract(
       extracted: data.extracted ?? {},
       mode: data.mode ?? 'live',
       reason: data.reason,
+      mapped_answer: data.mapped_answer,
+      mapping_mode: data.mapping_mode,
       tokens: data.tokens,
     };
   } catch (err) {
@@ -208,6 +214,23 @@ export interface MergeLlmOptions {
   allowGeneralPromotion?: boolean;
 }
 
+/** Family negatives must be supported by the person's words, not omission. */
+export function familyNegativeIsGrounded(slotId: string, value: string, input: string): boolean {
+  if (slotId === 'family_children' && value.trim().toLowerCase() === 'no') {
+    return /\b(?:no (?:children|kids)|(?:do not|don't|dont|have not|haven't|havent) have (?:any )?(?:children|kids)|childless)\b/i.test(input);
+  }
+  if (slotId === 'family_existing_order' && value.trim().toLowerCase() === 'neither') {
+    const neither = /\bneither\s+(?:a(?:n)?\s+)?(?:(?:court|parenting)\s+)?order(?:s)?\s+nor\s+(?:a(?:n)?\s+)?(?:written\s+)?(?:(?:parenting|separation)\s+)?agreement(?:s)?\b/i.test(input)
+      || /\bno\s+(?:(?:court|parenting)\s+)?orders?\s+(?:or|and)\s+(?:written\s+)?(?:(?:parenting|separation)\s+)?agreements?\b/i.test(input)
+      || /\bneither\s+(?:an?\s+)?(?:agreement|order)\s+nor\s+(?:an?\s+)?(?:agreement|order)\b/i.test(input)
+      || /\bno\s+(?:written\s+)?(?:(?:parenting|separation)\s+)?agreements?\s+(?:or|and)\s+(?:(?:court|parenting)\s+)?orders?\b/i.test(input);
+    const negOrder = /\b(?:no|without)\s+(?:existing\s+)?(?:(?:court|parenting)\s+)?orders?\b/i.test(input);
+    const negAgreement = /\b(?:no|without)\s+(?:existing\s+)?(?:written\s+)?(?:(?:parenting|separation)\s+)?agreements?\b/i.test(input);
+    return neither || (negOrder && negAgreement);
+  }
+  return true;
+}
+
 export function mergeLlmResults(
   state: EngineState,
   extracted: Record<string, string | null>,
@@ -317,6 +340,7 @@ export function mergeLlmResults(
     if (slotId === LEAD_INTENT_FIELD) continue;
 
     if (value === null || value === '' || value === undefined) continue;
+    if (state.matter_type === 'family_general' && !familyNegativeIsGrounded(slotId, value, state.input)) continue;
     // Drop non-answer literals — except when BOTH (a) the lead's own
     // text shows uncertainty AND (b) the slot's own option set
     // explicitly includes this value. The two-gate check (Codex

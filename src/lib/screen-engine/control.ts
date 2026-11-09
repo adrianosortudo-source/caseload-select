@@ -982,6 +982,11 @@ function shouldPresentInsight(
 // ─── Main control ─────────────────────────────────────────────────────────
 
 export function getNextStep(state: EngineState): NextStep {
+  // Explicitly configured family demonstrations ask unresolved factual slots before completion.
+  if (state.matter_type === 'family_general') {
+    const next = selectNextSlot(state);
+    return next ? { type: 'continue', slot: next } : { type: 'present_insight', bridgeText: 'The demonstration brief is ready for review.' };
+  }
   const bandResult = computeBand(state);
   const completeness = computeCoreCompleteness(state);
   const gap = getDecisionGap(state);

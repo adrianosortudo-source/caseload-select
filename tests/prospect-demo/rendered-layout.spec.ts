@@ -49,6 +49,12 @@ async function openDemo(page: Page) {
   await expect(page.locator(`${INTAKE} textarea`)).toBeVisible();
   await assertStandaloneChrome(page);
   await settle(page);
+  await expect(page.getByRole("group", { name: "View", exact: true })).toBeVisible();
+  await expect(page.getByText("AI mode: Live AI", { exact: true })).toBeVisible();
+  await expect(page.getByText("Changing a sample or mode resets this demo.", { exact: true })).toBeVisible();
+  const demoOptions = page.getByText("Demo options", { exact: true });
+  await expect(demoOptions).toBeVisible();
+  expect(await demoOptions.evaluate((summary) => (summary.parentElement as HTMLDetailsElement).open)).toBe(false);
 }
 
 async function openAdminBuilder(page: Page) {
@@ -85,8 +91,19 @@ async function assertLayout(page: Page, rootSelector = ROOT) {
       const style = getComputedStyle(element);
       const label = element.getAttribute("aria-label") ?? element.dataset.uiComponentContent ?? element.tagName;
       if (/^(auto|scroll)$/.test(style.overflowX) && element.scrollWidth > element.clientWidth + 1) failures.push(`${label} has an internal horizontal scrollbar`);
-      if (/^(auto|scroll)$/.test(style.overflowY) && element.scrollHeight > element.clientHeight + 1) failures.push(`${label} has an internal vertical scrollbar`);
-      if (element instanceof HTMLTextAreaElement && element.scrollHeight > element.clientHeight + 1) failures.push(`${label} clips its text`);
+      const intentionalConversationScroll = element.dataset.uiControlScroll === "conversation-history" ||
+        (element instanceof HTMLTextAreaElement && element.dataset.uiControlScroll === "conversation-composer");
+      if (/^(auto|scroll)$/.test(style.overflowY) && element.scrollHeight > element.clientHeight + 1) {
+        if (!intentionalConversationScroll) failures.push(`${label} has an internal vertical scrollbar`);
+        else {
+          const before = element.scrollTop;
+          element.scrollTop = element.scrollHeight;
+          if (element.scrollTop <= 0) failures.push(`${label} cannot reach its remaining content`);
+          element.scrollTop = before;
+          if (element instanceof HTMLTextAreaElement && element.clientHeight > 145) failures.push("Conversation composer exceeds its bounded height");
+        }
+      }
+      if (element instanceof HTMLTextAreaElement && element.scrollHeight > element.clientHeight + 1 && !intentionalConversationScroll) failures.push(`${label} clips its text`);
     }
     const overlay = root.querySelector<HTMLElement>("[data-prospect-demo-intake-overlay]");
     if (overlay && visible(overlay)) {
@@ -162,17 +179,20 @@ for (const width of WIDTHS) {
     const initial = await textarea.inputValue();
     const longDescription = "A fictional business is owed money for completed services. The client has the signed proposal, invoice, and email messages. ".repeat(26);
     await textarea.fill(longDescription);
+    await textarea.focus();
+    await textarea.press("Control+End");
+    expect(await textarea.evaluate((element: HTMLTextAreaElement) => element.selectionEnd === element.value.length && (element.scrollHeight <= element.clientHeight + 1 || element.scrollTop > 0))).toBe(true);
     await assertLayout(page);
-    await page.getByRole("button", { name: "Split view", exact: true }).click();
+    await page.getByRole("button", { name: "Side by side", exact: true }).click();
     await expect(textarea).toHaveValue(longDescription);
     await assertImages(page);
     await assertLayout(page);
     await textarea.fill(initial);
     await assertLayout(page);
     await page.screenshot({ path: testInfo.outputPath(`split-${width}.png`), fullPage: true });
-    await page.getByRole("button", { name: "Lawyer view", exact: true }).click();
+    await page.getByRole("button", { name: "Lawyer brief", exact: true }).click();
     await assertLayout(page);
-    await page.getByRole("button", { name: "Website", exact: true }).click();
+    await page.getByRole("button", { name: "Website preview", exact: true }).click();
     await expect(textarea).toHaveValue(initial);
     expect(errors).toEqual([]);
     expect(mutations).toEqual([]);
@@ -188,36 +208,55 @@ test("Guided intake reaches the brief and keeps answers across view switches", a
   page.on("request", (request) => { if (!["GET", "HEAD"].includes(request.method())) mutations.push(`${request.method()} ${request.url()}`); });
   await page.setViewportSize({ width: 1440, height: 900 });
   await openDemo(page);
-  await page.getByRole("button", { name: "Split view", exact: true }).click();
+  await page.getByRole("button", { name: "Side by side", exact: true }).click();
+  await page.getByText("Demo options", { exact: true }).click();
   await page.getByRole("button", { name: "Guided sample", exact: true }).click();
-  await page.getByRole("button", { name: "Continue matter review", exact: true }).click();
-  await expect(page.getByText("Draft brief", { exact: true }).first()).toBeVisible();
-  const readback = page.getByRole("button", { name: "Confirm details and continue" });
-  if (await readback.isVisible()) await readback.click();
-  for (let count = 0; count < 12; count += 1) {
-    const contact = page.getByRole("button", { name: "See the contact step", exact: true });
-    if (await contact.isVisible()) { await contact.click(); break; }
-    if (await page.getByRole("button", { name: "Finish demonstration", exact: true }).isVisible()) break;
-    const skip = page.getByRole("button", { name: "Skip this question", exact: true });
-    await expect(skip).toBeVisible();
-    await skip.click();
-    await settle(page);
-  }
-  await expect(page.getByRole("heading", { name: "Contact details" })).toBeVisible();
+  await page.locator(`${INTAKE} textarea`).fill("Fictional test. A business client owes us $18,450 for completed work. We have a signed contract and invoice. I can approve hiring a lawyer.");
+  await page.getByRole("button", { name: "Send in demo", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Use fictional contact", exact: true })).toBeVisible();
   await expect(page.locator('input[name="client_name"],input[name="client_email"],input[name="client_phone"]')).toHaveCount(0);
-  await page.getByRole("button", { name: "Lawyer view", exact: true }).click();
-  await page.getByRole("button", { name: "Split view", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Contact details" })).toBeVisible();
-  await page.getByRole("button", { name: "Finish demonstration", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Demo complete" })).toBeVisible();
+  await page.getByRole("button", { name: "Lawyer brief", exact: true }).click();
+  await page.getByRole("button", { name: "Side by side", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Use fictional contact", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Use fictional contact", exact: true }).click();
+  const log = page.getByRole("log", { name: "" });
+  for (let turn = 0; turn < 12; turn += 1) {
+    if (await log.getByText(/Brief ready\. No firm contacted\./).isVisible()) break;
+    const messages = log.locator('[data-ui-component-content="demo-conversation-message"]');
+    const before = await messages.count();
+    const hasOptions = await messages.last().locator("ol li").count() > 0;
+    const composer = page.getByLabel("Your fictional message");
+    await expect(composer).toBeEnabled();
+    await composer.fill(hasOptions ? "1" : "Not sure");
+    await page.getByRole("button", { name: "Send in demo", exact: true }).click();
+    await expect.poll(async () => await messages.count()).toBeGreaterThan(before + 1);
+  }
+  await expect(log.getByText(/Brief ready\. No firm contacted\./)).toBeVisible();
   await expect(page.getByText("Brief ready", { exact: true }).first()).toBeVisible();
+  await page.getByRole("button", { name: "Lawyer brief", exact: true }).click();
+  await expect(page.getByText("Sample contact", { exact: true })).toBeVisible();
+  await expect(page.getByText("Fictional details", { exact: true })).toBeVisible();
+  await expect(page.getByText("alex.morgan@example.com", { exact: true })).toBeVisible();
+  await page.getByText("Original inquiry", { exact: true }).click();
+  await expect(page.locator('[data-ui-component-content="demo-original-inquiry"]')).toContainText(/invoice/i);
+  await page.getByRole("button", { name: "Preview a reply", exact: true }).click();
+  await expect(page.getByLabel("Simulated lawyer reply", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Show reply in demo", exact: true }).click();
+  const report = page.locator("[data-demo-report]");
+  await expect(report.getByText("Shown in this demo", { exact: true })).toBeVisible();
+  await expect(report.locator('[role="status"]').filter({ hasText: "Shown in this demo" })).toContainText(/thank you/i);
+  const simulatedReply = await page.getByLabel("Simulated lawyer reply", { exact: true }).inputValue();
+  await page.getByRole("button", { name: "Website preview", exact: true }).click();
+  const receipt = page.locator('[data-ui-component-content="demo-conversation-message"]').filter({ hasText: simulatedReply });
+  await expect(receipt).toBeVisible();
+  await expect(receipt).toContainText(simulatedReply);
+  await page.getByRole("button", { name: "Side by side", exact: true }).click();
   await assertImages(page);
   await assertLayout(page);
-  await page.screenshot({ path: testInfo.outputPath("completed-brief.png"), fullPage: true });
+  await page.screenshot({ path: testInfo.outputPath("completed-brief-contact-reply.png"), fullPage: true });
   expect(errors).toEqual([]);
   expect(mutations).toEqual([]);
 });
-
 test("Exported prospect package imports, persists, and reloads under the real image policy", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await openAdminBuilder(page);
@@ -268,28 +307,34 @@ for (const width of WIDTHS) {
     await page.route("**/api/extract", async (route) => route.fulfill({ json: { mode: "live", extracted: { amount_at_stake: "$5,000–$25,000", dispute_reason: "No clear reason" } } }));
     await page.setViewportSize({ width, height: 1000 });
     await openDemo(page);
+    await page.getByText("Demo options", { exact: true }).click();
     await expect(page.getByRole("button", { name: "Live AI", exact: true })).toHaveAttribute("aria-pressed", "true");
-    await expect(page.getByRole("button", { name: "Website", exact: true })).toHaveAttribute("aria-pressed", "true");
+    await expect(page.getByRole("button", { name: "Website preview", exact: true })).toHaveAttribute("aria-pressed", "true");
     await assertLayout(page);
-    await page.getByRole("button", { name: "Split view", exact: true }).click();
-    await expect(page.getByRole("button", { name: "Split view", exact: true })).toHaveAttribute("aria-pressed", "true");
+    await page.getByRole("button", { name: "Side by side", exact: true }).click();
+    await expect(page.getByRole("button", { name: "Side by side", exact: true })).toHaveAttribute("aria-pressed", "true");
     await assertLayout(page);
     await page.locator(`${INTAKE} textarea`).fill("Fictional test. A business client owes us $18,450 for completed work. I can approve hiring a lawyer. We have an invoice and signed contract.");
-    await page.getByRole("button", { name: "Continue matter review", exact: true }).click();
-    await expect(page.getByRole("heading", { name: "Review the facts" })).toBeVisible();
-    await expect(page.getByText("Live AI read the description. Review and confirm the facts.", { exact: true })).toBeVisible();
-    await expect(page.getByText("Just me", { exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "Send in demo", exact: true }).click();
+    await expect(page.getByRole("button", { name: "Use fictional contact", exact: true })).toBeVisible();
     await assertLayout(page);
     await page.screenshot({ path: testInfo.outputPath(`ai-readback-${width}.png`), fullPage: true });
-    await page.getByRole("button", { name: "Confirm details and continue" }).click();
-    for (let i = 0; i < 10; i++) {
-      await expect(page.getByRole("heading", { name: "About how much money is involved?" })).toHaveCount(0);
-      await expect(page.getByRole("heading", { name: "Who decides whether to hire a lawyer for this?" })).toHaveCount(0);
-      const skip = page.getByRole("button", { name: "Skip this question" });
-      if (!(await skip.isVisible())) break;
-      await skip.click();
+    await page.getByRole("button", { name: "Use fictional contact", exact: true }).click();
+    const log = page.getByRole("log", { name: "" });
+    for (let i = 0; i < 12; i++) {
+      await expect(log.getByText("About how much money is involved?", { exact: true })).toHaveCount(0);
+      await expect(log.getByText("Who decides whether to hire a lawyer for this?", { exact: true })).toHaveCount(0);
+      if (await log.getByText(/Brief ready\. No firm contacted\./).isVisible()) break;
+      const messages = log.locator('[data-ui-component-content="demo-conversation-message"]');
+      const before = await messages.count();
+      const hasOptions = await messages.last().locator("ol li").count() > 0;
+      const composer = page.getByLabel("Your fictional message");
+      await expect(composer).toBeEnabled();
+      await composer.fill(hasOptions ? "1" : "Not sure");
+      await page.getByRole("button", { name: "Send in demo", exact: true }).click();
+      await expect.poll(async () => await messages.count()).toBeGreaterThan(before + 1);
     }
-    await expect(page.getByRole("button", { name: "See the contact step" })).toBeVisible();
+    await expect(log.getByText(/Brief ready\. No firm contacted\./)).toBeVisible();
     await assertLayout(page);
     await page.screenshot({ path: testInfo.outputPath(`ai-brief-${width}.png`), fullPage: true });
     expect(mutations).toEqual(["/api/extract"]);
