@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ipFromRequest } from "@/lib/rate-limit";
 import { validateOutboundUrl } from "@/lib/ssrf";
+import { normalizeWebsiteUrl } from "@/lib/positioning-check/website-url";
 import { isSiteCapture } from "@/lib/positioning-check/capture";
 import { applyRenderedFallback, type RenderedText } from "@/lib/positioning-check/fallback";
 import { collectSite } from "@/lib/positioning-check/collector";
@@ -11,7 +12,7 @@ import type { Evidence, PositioningErrorCode, ScreenshotCoverage } from "@/lib/p
 export const runtime="nodejs";
 export const maxDuration=120;
 const failure=(code:PositioningErrorCode,message:string,status:number,retryable:boolean)=>NextResponse.json({status:"error",code,message,retryable},{status});
-function normalized(raw:string):URL { const url=new URL(/^https?:\/\//i.test(raw)?raw:`https://${raw}`); if(url.protocol!=="https:"||url.username||url.password||!validateOutboundUrl(url,{allowedSchemes:["https:"]}).ok)throw new Error("invalid_url"); url.hash=""; return url; }
+function normalized(raw:string):URL { const url=normalizeWebsiteUrl(raw); if(!validateOutboundUrl(url,{allowedSchemes:["https:"]}).ok)throw new Error("invalid_url"); return url; }
 async function render(url:URL,deadline:number):Promise<{images:ImageInput[];screenshots:ScreenshotCoverage[];evidence:Evidence[];renderedText:RenderedText|null}> {
   const service=process.env.RENDER_SERVICE_URL,token=process.env.RENDER_SERVICE_TOKEN; if(!service||!token)throw new Error("renderer_unavailable");
   const controller=new AbortController(), timer=setTimeout(()=>controller.abort(),Math.max(1,deadline-Date.now()));
@@ -40,7 +41,7 @@ export async function POST(req:NextRequest){
   const reservation=await reserveAnalysis(ipFromRequest(req));if(reservation.status==="unavailable")return failure("provider_unavailable","The tool is temporarily unavailable. Please try again later.",503,true);if(reservation.status!=="ok")return failure("rate_limited",reservation.reason==="daily"?"The daily review capacity has been reached. Please try again later.":reservation.reason==="active"?"A review is already in progress from this network. Please try again shortly.":"This network has reached its hourly review limit. Shared offices may share a limit. Please try again later.",429,true);
   try {
     const [site,visual]=await Promise.all([collectSite(url.href,start+40000),render(url,start+40000).catch((err:unknown)=>{const e=(err && typeof err==="object"?err:{}) as {name?:unknown;cause?:{code?:unknown}};const code=typeof e.cause?.code==="string" && /^[A-Z0-9_]{1,32}$/.test(e.cause.code)?e.cause.code:"none";console.warn("[positioning-render]",JSON.stringify({runtime:process.version,errorClass:e.name==="TypeError"||e.name==="AbortError"?e.name:"Error",code}));return null;})]);
-    applyRenderedFallback(site,visual?.renderedText??null); const primary=site.pages[0]; if(!primary||primary.retainedChars<150)return failure("blocked_or_unreadable","We could not read enough of the submitted page to assess it. Please check the address and try again.",422,true);
+    applyRenderedFallback(site,visual?.renderedText??null); const primary=site.pages[0]; if(!primary||primary.retainedChars<150)return failure("blocked_or_unreadable","We could not read enough public content at this secure address. Check that the website opens using https:// and try again.",422,true);
     const screenshots=visual?.screenshots??(["desktop","mobile"] as const).map(viewport=>({id:`screenshot-${viewport}`,viewport,state:"unavailable" as const,analyzed:false,clippedFromPx:null}));
     if(!visual||screenshots.some(s=>!s.analyzed))site.limitations.push("Some or all page images could not be assessed.");
     if(screenshots.some(s=>s.state==="clipped"))site.limitations.push("At least one screenshot covers only the top portion of the page.");
