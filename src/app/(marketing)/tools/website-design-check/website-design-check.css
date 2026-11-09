@@ -163,3 +163,13 @@
 @media (max-width: 340px) { .dc-report-header { padding: 8px; } }
 
 .dc-page .dc-capture > p[role="alert"] { text-wrap: pretty; }
+
+/* Targeted wrapping for the full-width report rows. */
+.dc-page .dc-report-header > p, .dc-page .dc-capture > p, .dc-page .dc-detail-unchecked dd { text-wrap: pretty; }
+.dc-page [data-ui-component-content="visual-strengths"] ul { padding: 0; list-style: none; }
+@media (min-width: 341px) and (max-width: 400px) {
+  .dc-page .dc-capture { padding-inline: 8px; }
+  .dc-page [data-ui-component-content="capture-limitation"] p { text-wrap: pretty; }
+  .dc-page [data-ui-component-content="visual-strength"] p,
+  .dc-page [data-finding-label="Naked self-designation claims"] p:first-of-type { text-wrap: pretty; }
+}

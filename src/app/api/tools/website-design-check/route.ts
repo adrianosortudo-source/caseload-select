@@ -1,4 +1,4 @@
-import { prepareCapture, buildVisualReview, removeCapture } from "@/lib/design-check/visual-evidence";
+import { prepareCapture, buildVisualReview, removeCapture, enforceVisualEvidence } from "@/lib/design-check/visual-evidence";
 import { NextRequest, NextResponse } from "next/server";
 import {
   fetchRenderResult,
@@ -101,7 +101,7 @@ export async function POST(request: NextRequest) {
     if (!desktopCapture) {
       let rawVisual: unknown;
       if (mobileCapture && captures[1].available) { try { rawVisual = (await judgeScreenshot(mobileCapture.screenshotPng, [], captures)).visual; } catch { /* Explicit unavailable visual review below. */ } }
-      const visualReview = buildVisualReview(captures, rawVisual);
+      const visualReview = enforceVisualEvidence(buildVisualReview(captures, rawVisual), { ...(desktopCapture ? { desktop: desktopCapture.domSnapshot } : {}), ...(mobileCapture ? { mobile: mobileCapture.domSnapshot } : {}) });
       const payload = { domain, checkedAt: new Date().toISOString(), visualReview, legacyUnavailable: true };
       for (const c of [...visualReview.captures].sort((a,b) => (b.base64?.length ?? 0) - (a.base64?.length ?? 0))) { if (Buffer.byteLength(JSON.stringify(payload)) <= 3 * 1024 * 1024) break; if (c.available) removeCapture(visualReview, c.id); }
       if (Buffer.byteLength(JSON.stringify(payload)) > 3 * 1024 * 1024) return NextResponse.json({ error: "The report was too large to return." }, { status: 502, headers: { "Cache-Control": "no-store" } });
@@ -165,7 +165,7 @@ export async function POST(request: NextRequest) {
 
     const track1Report = buildTrack1Report([...desktopDimensions, ...(mobileDimension ? [mobileDimension] : [])], authorityResult, generalJudgments, desktopCapture.domSnapshot.darkPatterns);
 
-    const visualReview = buildVisualReview(captures, rawVisual);
+    const visualReview = enforceVisualEvidence(buildVisualReview(captures, rawVisual), { ...(desktopCapture ? { desktop: desktopCapture.domSnapshot } : {}), ...(mobileCapture ? { mobile: mobileCapture.domSnapshot } : {}) });
     const payload = {
         domain,
         visualReview,

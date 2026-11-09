@@ -217,7 +217,7 @@ export const ordinaryMappings = [
     "Form field count",
     "Form asks for many fields",
     "The detected form exceeds the checker’s field-count guidance.",
-    "Ask your firm owner which fields are essential for the immediate next action, then defer others where appropriate.",
+    "Ask the firm owner which fields are essential for the next action and defer the rest when appropriate.",
     "Firm owner",
     "none"
   ],

@@ -80,3 +80,9 @@ Use the approved utility-surface typography and geometry: Manrope headings, DM S
 ## Screenshot viewer geometry
 
 In `WebsiteDesignCheckReport.tsx` and its route stylesheet, `.dc-capture-preview` provides a labeled top-of-image preview. `.dc-capture-scroll` is a structural image viewer limited to 70vh with native scrolling at the captured image dimensions. This restriction applies only to image inspection; report prose uses its full component content width.
+
+## Evidence acceptance learned from the live sample
+
+Tentative conditions in the observation field do not qualify as action-list defects; possible consequences remain explicitly inferential. Link, icon and field counts alone do not establish a visual problem. Text-contrast findings require an exact, unique text-sample match with a checkable failing measurement from the existing scorer. A passing, transparent-background, missing or unmatched sample cannot corroborate that claim. Unverified colour claims are omitted and the affected colour-contrast coverage is disclosed as unavailable. No scoring formula or extra model pass is introduced.
+
+Capture limits use separate full-width rows. `.dc-capture-areas` is a compact category-coverage record, with no prose width cap. Clipboard output names each viewport before its coverage and limitation rows.

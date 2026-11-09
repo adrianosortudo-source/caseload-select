@@ -178,7 +178,10 @@ test("copy succeeds or offers a focused manual copy field",async({page,context})
   await page.getByRole("button",{name:"Check my site",exact:true}).click();
   await page.getByRole("button",{name:"Copy action plan"}).click();
   await expect(page.getByText("Action plan copied.")).toBeVisible();
-  expect(await page.evaluate(()=>navigator.clipboard.readText())).toContain("The heading overlaps the button");
+  const copiedPlan = await page.evaluate(()=>navigator.clipboard.readText());
+  expect(copiedPlan).toContain("The heading overlaps the button");
+  expect(copiedPlan).toContain("desktop screenshot:");
+  expect(copiedPlan).not.toContain("base64");
   await page.evaluate(()=>Object.defineProperty(navigator.clipboard,"writeText",{value:()=>Promise.reject(new Error("denied"))}));
   await page.getByRole("button",{name:"Copy action plan"}).click();
   await expect(page.getByLabel("Action plan for manual copy")).toBeFocused();

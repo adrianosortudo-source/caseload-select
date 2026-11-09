@@ -1,3 +1,6 @@
+import { parseCssColor } from "./wcag-contrast";
+import { scoreColorContrast } from "./dimensions/color-contrast";
+import type { DomSnapshot } from "./render-types";
 import sharp from 'sharp';
 import type { DecodedRenderCapture } from './render-client';
 import { VISUAL_AREAS, type VisualCapture, type VisualReview, type ViewportReview, type VisualFinding, type VisualStrength } from './visual-review-types';
@@ -38,7 +41,7 @@ export function buildVisualReview(captures: VisualCapture[], raw?: unknown): Vis
  return refreshVisualStatus(out);
 }
 export function refreshVisualStatus(out: VisualReview): VisualReview {
- out.reasonCodes = out.reasonCodes.filter(x => x === 'vision_unavailable' || x === 'invalid_visual_response');
+ out.reasonCodes = out.reasonCodes.filter(x => x === 'vision_unavailable' || x === 'invalid_visual_response' || x === 'contrast_unverified' || x === 'uncertain_observation');
  if (out.captures.some(c => !c.available)) out.reasonCodes.push('capture_unavailable');
  if (out.captures.some(c => c.reason === 'payload_limit')) out.reasonCodes.push('payload_limit');
  if (out.captures.some(c => c.totalHeight)) out.reasonCodes.push('capture_clipped');
@@ -50,4 +53,43 @@ export function refreshVisualStatus(out: VisualReview): VisualReview {
 export function removeCapture(review: VisualReview, id: 'desktop' | 'mobile'): void {
  review.captures = review.captures.map(c => c.id === id ? { id, available: false, reason: 'payload_limit' } : c);
  review.viewportReviews = review.viewportReviews.filter(r => r.captureId !== id); review.findings = review.findings.filter(f => f.captureId !== id); review.strengths = review.strengths.filter(s => s.captureId !== id); refreshVisualStatus(review);
+}
+
+/** Keep tentative suggestions and uncorroborated text-contrast claims out of the action list. */
+export function enforceVisualEvidence(review: VisualReview, snapshots: Partial<Record<'desktop' | 'mobile', DomSnapshot>>): VisualReview {
+ const unverifiedContrast = new Set<'desktop' | 'mobile'>();
+ const contrastClaim = (item: VisualFinding | VisualStrength) => item.area === 'colour_contrast' || (/\bcontrast\b/i.test(item.observation) && /\b(?:colou?r|background|shade|luminance)\b/i.test(item.observation));
+ const contrastConfirmed = (item: VisualFinding | VisualStrength, expected: 'fail' | 'pass') => {
+  const snapshot = snapshots[item.captureId];
+  if (!snapshot || !item.visibleText) return false;
+  const normalize = (text: string) => text.trim().replace(/\s+/g, ' ').toLowerCase();
+  const matches = [...(snapshot.headingSamples ?? []), ...(snapshot.bodyTextSample ?? [])].filter(s => normalize(s.text) === normalize(item.visibleText!));
+  if (matches.length !== 1) return false;
+  if (parseCssColor(matches[0].color)?.a !== 1 || parseCssColor(matches[0].backgroundColor)?.a !== 1) return false;
+  const measured = scoreColorContrast({ ...snapshot, headingSamples: [], bodyTextSample: matches });
+  return measured.maxScore > 0 && measured.items.some(i => i.scored !== false && i.status === expected);
+ };
+ review.findings = review.findings.filter(f => {
+  const observation = f.visibleText ? f.observation.replaceAll(f.visibleText, '') : f.observation;
+  if (/\b(?:may|might|could|possibly|potentially)\b/i.test(observation)) {
+   if (!review.reasonCodes.includes('uncertain_observation')) review.reasonCodes.push('uncertain_observation');
+   return false;
+  }
+  if (contrastClaim(f) && !contrastConfirmed(f, 'fail')) { unverifiedContrast.add(f.captureId); return false; }
+  return true;
+ });
+ review.strengths = review.strengths.filter(s => {
+  if (contrastClaim(s) && !contrastConfirmed(s, 'pass')) { unverifiedContrast.add(s.captureId); return false; }
+  return true;
+ });
+ if (unverifiedContrast.size) {
+  review.reasonCodes.push('contrast_unverified');
+  review.findings = review.findings.filter(f => !contrastClaim(f) || !unverifiedContrast.has(f.captureId));
+  review.strengths = review.strengths.filter(s => !contrastClaim(s) || !unverifiedContrast.has(s.captureId));
+  for (const viewport of review.viewportReviews) if (unverifiedContrast.has(viewport.captureId)) {
+   viewport.areas.colour_contrast = 'not_assessable';
+   viewport.areaReasons.colour_contrast = 'Text contrast could not be confirmed for the named element from usable measurements.';
+  }
+ }
+ return refreshVisualStatus(review);
 }
