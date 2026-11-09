@@ -197,6 +197,7 @@ test("Guided intake reaches the brief and keeps answers across view switches", a
   await page.getByRole("button", { name: "Side by side", exact: true }).click();
   await page.getByText("Demo options", { exact: true }).click();
   await page.getByRole("button", { name: "Guided sample", exact: true }).click();
+  await page.locator(`${INTAKE} textarea`).fill("Fictional test. A business client owes us $18,450 for completed work. We have a signed contract and invoice. I can approve hiring a lawyer.");
   await page.getByRole("button", { name: "Continue matter review", exact: true }).click();
   await expect(page.getByText("Draft brief", { exact: true }).first()).toBeVisible();
   const readback = page.getByRole("button", { name: "Confirm details and continue" });
@@ -216,6 +217,14 @@ test("Guided intake reaches the brief and keeps answers across view switches", a
   await page.getByRole("button", { name: "Side by side", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Contact details" })).toBeVisible();
   await page.getByRole("button", { name: "Use sample contact", exact: true }).click();
+  // The restored Meta flow captures contact before substantive discovery.
+  for (let turn = 0; turn < 12; turn += 1) {
+    if (await page.getByRole("heading", { name: "Demo complete", exact: true }).isVisible()) break;
+    const finish = page.getByRole("button", { name: "Finish demonstration", exact: true });
+    if (await finish.isVisible()) { await finish.click(); break; }
+    const skip = page.getByRole("button", { name: "Skip this question", exact: true });
+    await expect(skip).toBeVisible(); await skip.click(); await settle(page);
+  }
   await expect(page.getByRole("heading", { name: "Demo complete" })).toBeVisible();
   await expect(page.getByText("Brief ready", { exact: true }).first()).toBeVisible();
   await page.getByRole("button", { name: "Lawyer brief", exact: true }).click();

@@ -95,6 +95,14 @@ function scenarios(value: unknown): ProspectDemoScenario[] {
   });
 }
 
+function configuredPractices(value: unknown): NonNullable<ProspectDemoProfile["practiceAreas"]> {
+  const allowed = new Set(["corporate", "real_estate", "family", "immigration", "employment", "criminal", "personal_injury", "estates", "unknown"]);
+  if (!Array.isArray(value) || value.length > allowed.size || value.some((area) => typeof area !== "string" || !allowed.has(area))) {
+    throw new ProspectDemoPackageError("practiceAreas must contain supported practice-area names.");
+  }
+  return [...new Set(value)] as NonNullable<ProspectDemoProfile["practiceAreas"]>;
+}
+
 export function validateProfile(value: unknown): ProspectDemoProfile {
   if (!isRecord(value)) throw new ProspectDemoPackageError("profile must be an object.");
   if (value.formatVersion !== PROSPECT_DEMO_FORMAT_VERSION) {
@@ -139,6 +147,7 @@ export function validateProfile(value: unknown): ProspectDemoProfile {
       text: color(value.theme.text, "theme.text"),
       buttonText: color(value.theme.buttonText, "theme.buttonText"),
     },
+    ...(value.practiceAreas === undefined ? {} : { practiceAreas: configuredPractices(value.practiceAreas) }),
     scenarios: scenarios(value.scenarios),
     defaultView,
     defaultMode: defaultMode as ProspectDemoProfile["defaultMode"],

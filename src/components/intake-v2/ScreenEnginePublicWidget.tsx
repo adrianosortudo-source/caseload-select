@@ -30,6 +30,10 @@ import { getWebAttribution } from "@/lib/screen-engine/persist";
 import type { EngineState, LawyerReport, MatterType, SlotDefinition } from "@/lib/screen-engine/types";
 import { answerDemoState, buildDemoReport, startDemoState } from "@/lib/screen-demo";
 import { DemoFactReview } from "./DemoFactReview";
+import { prepareFamilyDemoState } from "@/lib/screen-demo-family";
+import { applyPendingSlotReply } from "@/lib/pending-slot-reply";
+import { meetsDiscoveryFloor } from "@/lib/discovery-floor";
+import { selectNextSlot } from "@/lib/screen-engine/selector";
 import { confirmDemoFacts, demoCapturedFacts, demoReviewFacts } from "@/lib/screen-demo-confirmation";
 
 export type ScreenWidgetStage = "kickoff" | "questions" | "contact" | "done";
@@ -144,7 +148,8 @@ export interface ScreenEnginePublicWidgetProps {
   /** Read-only state bridge for the separate sales presentation panel. */
   onDemoStateChange?: (view: ScreenDemoView) => void;
   /** Optional, browser-only continuation for the prospect presentation. */
-  demoContinuation?: { onUseSampleContact: () => void; reply: string | null; onShowReview?: () => void };
+  demoContinuation?: { workflow?: "meta"; contactUsed?: boolean; onUseSampleContact: () => void; reply: string | null; onShowReview?: () => void };
+  configuredPracticeAreas?: readonly import("@/lib/screen-engine/types").PracticeArea[];
   /** Optional fictional opening used by the presentation toolbar. */
   initialDescription?: string;
 }
@@ -290,15 +295,19 @@ export function ScreenEnginePublicWidget({
   onDemoStateChange,
   demoContinuation,
   initialDescription = "",
+  configuredPracticeAreas = [],
 }: ScreenEnginePublicWidgetProps) {
   const policy = SCREEN_WIDGET_EXECUTION_POLICY[runtime];
   const isDemo = policy.isGuidedDemo;
+  const metaWorkflow = isDemo && demoContinuation?.workflow === "meta";
   const [stage, setStage] = useState<Stage>("kickoff");
   const [pendingDemoReview, setPendingDemoReview] = useState(false);
   const [description, setDescription] = useState(initialDescription);
   const [state, setState] = useState<EngineState | null>(null);
   const [history, setHistory] = useState<EngineState[]>([]);
   const [isReading, setIsReading] = useState(false);
+  const [readingAnswer, setReadingAnswer] = useState(false);
+  const [answerFeedback, setAnswerFeedback] = useState<string | null>(null);
   const [persistStatus, setPersistStatus] = useState<string | null>(null);
   const persistedRef = useRef(false);
   const extractionRun = useRef(0);
@@ -319,7 +328,24 @@ export function ScreenEnginePublicWidget({
     status: "not-requested",
   });
 
-  const next = useMemo(() => state ? getNextStep(state) : null, [state]);
+  const next = useMemo(() => {
+    if (!state) return null;
+    const step = getNextStep(state);
+    // Same user-grounded discovery floor enforced by the Meta processor.
+    if (metaWorkflow && (step.type === "stop" || step.type === "present_insight") &&
+        !meetsDiscoveryFloor(state) && state.questionHistory.length < WEB_DISCOVERY_HARD_CAP) {
+      const slot = selectNextSlot(state);
+      if (slot) return { type: "continue" as const, slot };
+    }
+    return step;
+  }, [state, metaWorkflow]);
+
+  useEffect(() => {
+    if (!metaWorkflow || !state || isReading || pendingDemoReview || stage !== "questions" ||
+        state.matter_type === "out_of_scope" || next?.type === "clarify") return;
+    if (!demoContinuation?.contactUsed) setStage("contact");
+    else if (next?.type === "capture_contact" || next?.type === "stop") setStage("done");
+  }, [metaWorkflow, state, isReading, pendingDemoReview, stage, next?.type, demoContinuation?.contactUsed]);
 
   // Drop-off checkpoint (qualification audit F2/F6/item 5, 2026-07-02).
   // Fires a best-effort, fire-and-forget POST after every turn advance
@@ -407,10 +433,12 @@ export function ScreenEnginePublicWidget({
     const text = rawText.trim();
     if (text.length < 10) return;
     setPendingDemoReview(false);
+    setAnswerFeedback(null);
+    setReadingAnswer(false);
     const run = ++extractionRun.current;
 
     if (policy.usesFixtureEngine) {
-      const fixtureState = startDemoState(text);
+      const fixtureState = prepareFamilyDemoState(startDemoState(text), configuredPracticeAreas);
       setState(fixtureState);
       setPendingDemoReview(demoCapturedFacts(fixtureState).length > 0);
       setStage("questions");
@@ -420,6 +448,7 @@ export function ScreenEnginePublicWidget({
     }
 
     let nextState = initialiseState(text);
+    if (isDemo) nextState = prepareFamilyDemoState(nextState, configuredPracticeAreas);
     nextState = runEvidencePass(text, nextState);
     nextState = scoreState(nextState);
     setState(nextState);
@@ -496,13 +525,57 @@ export function ScreenEnginePublicWidget({
     setState(scoreState(nextState));
   }
 
-  function answer(slotId: string, rawValue: string | string[]) {
-    if (!state) return;
+  async function answer(slotId: string, rawValue: string | string[]) {
+    if (!state || isReading) return;
     const value = Array.isArray(rawValue) ? rawValue.join(", ") : rawValue;
-    setHistory((items) => [...items, state]);
-    mutate(policy.usesFixtureEngine
-      ? answerDemoState(state, slotId, value)
-      : applyAnswer(state, slotId, value));
+    setAnswerFeedback(null);
+    if (!metaWorkflow || !value.startsWith("other:")) {
+      setHistory((items) => [...items, state]);
+      mutate(policy.usesFixtureEngine ? answerDemoState(state, slotId, value) : applyAnswer(state, slotId, value));
+      return;
+    }
+    const text = value.slice("other:".length).trim();
+    if (!text) return;
+    const asked = next?.slot;
+    if (!asked || asked.id !== slotId) return;
+    const matched = applyPendingSlotReply(text, { ...state, pendingAskedSlotId: slotId });
+    if (matched.slot_meta[slotId]?.source === "answered" && matched.slots[slotId] !== state.slots[slotId]) {
+      setHistory((items) => [...items, state]); mutate(matched); return;
+    }
+    if (asked.input_type === "free_text") {
+      setHistory((items) => [...items, state]); mutate(applyAnswer(state, slotId, text)); return;
+    }
+    if (!policy.allowsExtraction) {
+      setAnswerFeedback("Please choose the closest option, or switch to Live AI to answer in your own words."); return;
+    }
+    const run = ++extractionRun.current;
+    setReadingAnswer(true); setIsReading(true); setExtraction({ status: "reading" });
+    try {
+      const context = `${state.input}\n\nFollow-up question: ${asked.question}\nThe person's answer: ${text}`;
+      const result = await llmExtract(context, state);
+      if (run !== extractionRun.current) return;
+      if (result.mode !== "live") {
+        setExtraction({ status: "fallback", reason: result.reason });
+        setAnswerFeedback("AI could not read this answer. Please choose an option or try your answer again."); return;
+      }
+      let updated = mergeLlmResults(state, result.extracted);
+      const captured = demoReviewFacts(updated).some((fact) => state.slots[fact.id] !== fact.value);
+      if (!captured) {
+        setExtraction({ status: "live" });
+        setAnswerFeedback("That answer did not resolve this question. Choose the closest option or add a little more detail."); return;
+      }
+      if (updated.slots[slotId] && updated.slots[slotId] !== state.slots[slotId]) {
+        updated = { ...updated, pendingAskedSlotId: null, questionHistory: [...state.questionHistory, slotId] };
+      }
+      setHistory((items) => [...items, state]); mutate(updated);
+      setPendingDemoReview(true); setExtraction({ status: "live" });
+    } catch {
+      if (run !== extractionRun.current) return;
+      setExtraction({ status: "fallback", reason: "The answer could not be read." });
+      setAnswerFeedback("Please choose an option or try your answer again.");
+    } finally {
+      if (run === extractionRun.current) setIsReading(false);
+    }
   }
 
   function back() {
@@ -706,7 +779,7 @@ export function ScreenEnginePublicWidget({
   if (isDemo && isReading) {
     return <Shell totalScreens={1} currentScreen={0} roundLabel="Reading" onBack={back} backLabel={backLabel} layout={layout} reportHeight={reportEmbeddedHeight} footer={demoReviewFooter}>
       <section aria-busy="true" role="status" className="flex flex-col gap-4 py-8" data-ui-component-content="demo-reading">
-        <h2 className="w-full text-2xl font-extrabold" data-ui-copy="heading" style={{ fontFamily: fontDisplay }}>Reading your description</h2>
+        <h2 className="w-full text-2xl font-extrabold" data-ui-copy="heading" style={{ fontFamily: fontDisplay }}>{readingAnswer ? "Reading your answer" : "Reading your description"}</h2>
         <p className="w-full" data-ui-copy="body">The AI is identifying details for you to review. No intake is being submitted.</p>
       </section>
     </Shell>;
@@ -723,7 +796,17 @@ export function ScreenEnginePublicWidget({
     );
   }
 
-  if (stage === "done" || next?.type === "stop") {
+  if (isDemo && state.matter_type === "out_of_scope") {
+    return <Shell totalScreens={1} currentScreen={0} roundLabel="Practice area" onBack={back} backLabel={backLabel} layout={layout} reportHeight={reportEmbeddedHeight}>
+      <section className="flex flex-col gap-4" data-ui-component-content="demo-practice-scope">
+        <h2 className="w-full text-2xl font-extrabold" data-ui-copy="heading">This area is not configured in this demo.</h2>
+        <p className="w-full" data-ui-copy="body">Your description was identified as {state.practice_area.replace(/_/g, " ")}. This sample firm has no intake flow configured for that area. You can edit the description or start another example. No firm was contacted.</p>
+        <button type="button" className="min-h-[48px] border border-[#1E2F58] px-5 py-3" onClick={back}>Edit your inquiry</button>
+      </section>
+    </Shell>;
+  }
+
+  if (stage === "done" || (next?.type === "stop" && (!metaWorkflow || demoContinuation?.contactUsed))) {
     if (next?.type === "stop" && policy.allowsPersistence) void persist(state);
     // "Professional Corporation" is the formal LSO legal-entity suffix
     // on the firm's registered name; strip it for the user-facing
@@ -788,7 +871,9 @@ export function ScreenEnginePublicWidget({
   }
 
   if (next?.type === "present_insight") {
-    const summary = buildLeadSummary(state, i18n);
+    const summary = state.matter_type === "family_general"
+      ? { intro: "Review the facts you shared before finishing this fictional intake.", points: demoCapturedFacts(state).filter((fact) => fact.source !== "inferred").map((fact) => `${fact.label}: ${fact.value}`) }
+      : buildLeadSummary(state, i18n);
     return (
       <Shell
         totalScreens={3}
@@ -833,13 +918,13 @@ export function ScreenEnginePublicWidget({
             onClick={() => {
               const nextState = startContactCapture(markInsightShown(state));
               mutate(nextState);
-              setStage("contact");
+              setStage(metaWorkflow && demoContinuation?.contactUsed ? "done" : "contact");
             }}
             className="min-h-[52px] rounded-full bg-[var(--cls-accent,#1E2F58)] px-8 text-[15px] font-semibold text-[var(--cls-accent-text,#FFFFFF)]"
             style={{ fontFamily: fontBody }}
           >
             {isDemo
-              ? "See the contact step"
+              ? metaWorkflow && demoContinuation?.contactUsed ? "Finish demonstration" : "See the contact step"
               : ws("insight_cta", "Share my contact details so the firm can reply")}
           </button>
         </div>
@@ -855,7 +940,7 @@ export function ScreenEnginePublicWidget({
           {demoContinuation ? <>
             <p className="w-full" data-ui-copy="body">Sample contact. Fictional details used only in this demo.</p>
             <dl className="w-full" data-ui-component-content="demo-contact-status"><dt>Name</dt><dd className="m-0">Alex Morgan</dd><dt>Email</dt><dd className="m-0">alex.morgan@example.com</dd></dl>
-            <button type="button" className="min-h-[48px] bg-[#1E2F58] px-5 py-3 text-white" onClick={() => { demoContinuation.onUseSampleContact(); setHistory((items) => [...items, state]); setStage("done"); }}>Use sample contact</button>
+            <button type="button" className="min-h-[48px] bg-[#1E2F58] px-5 py-3 text-white" onClick={() => { demoContinuation.onUseSampleContact(); setHistory((items) => [...items, state]); setStage(metaWorkflow ? "questions" : "done"); }}>Use sample contact</button>
           </> : <>
             <p className="w-full" data-ui-copy="body">A real intake asks for:</p>
             <ul className="w-full" data-ui-component-content="demo-contact-fields"><li data-ui-copy="body">Name.</li><li data-ui-copy="body">Email address or phone number.</li></ul>
@@ -1042,10 +1127,17 @@ export function ScreenEnginePublicWidget({
       value: opt.value,
       label: ws(opt.labelKey, CLARIFY_CHIP_FALLBACK_LABELS[opt.labelKey] ?? opt.labelKey),
     }));
+    if (isDemo && configuredPracticeAreas.includes("family")) {
+      clarifyOptions.push({ value: "family_general", label: "Family law" });
+    }
 
     function handleClarifySelect(picked: string | string[]) {
       const value = Array.isArray(picked) ? picked[0] : picked;
       if (!value) return;
+      if (isDemo && value === "family_general" && configuredPracticeAreas.includes("family")) {
+        const augmented = `${description}\n\nPractice area selected by the person: family law.`;
+        setDescription(augmented); void runStart(augmented); return;
+      }
       if (value.startsWith("other:")) {
         const text = value.slice("other:".length).trim();
         if (text.length === 0) return;
@@ -1137,6 +1229,7 @@ export function ScreenEnginePublicWidget({
       skipLabel={skipLabel}
       layout={layout} reportHeight={reportEmbeddedHeight} footer={demoReviewFooter}
     >
+      {answerFeedback && <p role="status" className="mb-4 w-full" data-ui-copy="body">{answerFeedback}</p>}
       {isPureFreeText ? (
         <FreeTextAnswerCard
           contained={layout === "contained"}

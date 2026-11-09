@@ -16,7 +16,7 @@ const EMPTY: ScreenDemoView = { stage: "kickoff", state: null, currentQuestion: 
 export function demoExtractionLabel(view: ScreenDemoView): string {
   if (view.runtime === "demo") return "Guided sample. AI is not being called.";
   switch (view.extraction.status) {
-    case "not-needed": return "AI extraction was not needed. The guided engine is handling this inquiry.";
+    case "not-needed": return view.state?.matter_type === "out_of_scope" ? "This practice area is not configured in the demo. AI analysis was not run." : "No applicable extraction fields were available. More context is needed.";
     case "reading": return "AI is reading the fictional description.";
     case "live": return "Live AI read the description. Review and confirm the facts.";
     case "fallback": return "AI is unavailable. The demo is continuing with the guided engine.";

@@ -22,6 +22,11 @@ describe("configured family demonstration", () => {
       expect(prepareFamilyDemoState(business, ["family"])).toBe(business);
     }
   });
+  it("recognizes clear family descriptions without forcing unrelated commercial disputes", () => {
+    for (const text of ["My former partner and I separated about a month ago. They have stopped letting me see our son.", "My spouse and I are living separately for now. We have not decided what happens next.", "We have two children and an Ontario parenting order, with a case conference December 12."]) {
+      expect(prepareFamilyDemoState(initialiseState(text), ["family"]).matter_type).toBe("family_general");
+    }
+  });
   it("uses the provider schema, confirms captured facts and asks only unresolved questions", () => {
     const initial = prepareFamilyDemoState(initialiseState(input), ["family"]);
     expect(initial.matter_type).toBe("family_general");

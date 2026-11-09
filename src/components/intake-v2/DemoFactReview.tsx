@@ -22,10 +22,10 @@ export function DemoFactReview({ state, onConfirm, onEditDescription }: {
         <p className={styles.factSource}>{Object.hasOwn(corrections, fact.id) ? "Correction pending confirmation" : fact.source === "inferred" ? "Interpretation to confirm" : fact.source === "confirmed" ? "Previously confirmed" : "Captured from your description"}</p>
         {editing === fact.id ? <div className={styles.correction}>
           <label htmlFor={`review-${fact.id}`}>Correct {fact.label.toLowerCase()}</label>
-          <select id={`review-${fact.id}`} value={corrections[fact.id] ?? fact.value} onChange={(event) => setCorrections((current) => ({ ...current, [fact.id]: event.target.value }))}>
+          {fact.options.length > 0 ? <select id={`review-${fact.id}`} value={corrections[fact.id] ?? fact.value} onChange={(event) => setCorrections((current) => ({ ...current, [fact.id]: event.target.value }))}>
             {fact.options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
             <option value="">Leave unanswered</option>
-          </select>
+          </select> : <input id={`review-${fact.id}`} type="text" maxLength={2000} value={corrections[fact.id] ?? fact.value} onChange={(event) => setCorrections((current) => ({ ...current, [fact.id]: event.target.value }))} />}
           <button type="button" onClick={() => setEditing(null)}>Done editing</button>
         </div> : <button type="button" className={styles.editFact} aria-label={`Edit ${fact.label.toLowerCase()}`} onClick={() => setEditing(fact.id)}>Edit</button>}
       </div>)}

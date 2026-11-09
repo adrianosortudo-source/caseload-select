@@ -9,6 +9,8 @@ export interface DemoReviewFact {
   options: readonly { value: string; label: string }[];
 }
 const LABELS: Record<string, string> = {
+  family_help_sought: "Help requested", family_children: "Children involved", family_existing_order: "Existing order or agreement",
+  family_timing: "Court date or deadline", family_jurisdiction: "Jurisdiction",
   amount_at_stake: "Amount involved", decision_authority: "Hiring decision",
   hiring_timeline: "Hiring timeline", dispute_reason: "Reason for non-payment",
   desired_outcome_unpaid_invoice: "Requested next step", proof_of_performance: "Proof of delivery",
@@ -27,7 +29,7 @@ function proposals(state: EngineState, now: Date): Record<string, string> {
   if (deadline) proposed.severance_deadline = deadline.value;
   const explicitAuthority = state.input.split(/[.!?;\n]+/).some((sentence) =>
     !/\b(?:not|never|cannot|can't|don't|doesn't|doubt|might|may|maybe|unsure|uncertain|if)\b/i.test(sentence) &&
-    /\bI (?:(?:am the owner and )?can (?:approve hiring|decide to hire) a lawyer|alone (?:decide|can decide) (?:whether(?: to)?|to) hire a lawyer|make the (?:final )?decision (?:about hiring|to hire) a lawyer)\b/i.test(sentence),
+    (/\bI (?:(?:am the owner and )?can (?:approve hiring|decide to hire) a lawyer|alone (?:decide|can decide) (?:whether(?: to)?|to) hire a lawyer|make the (?:final )?decision (?:about hiring|to hire) a lawyer)\b/i.test(sentence) || /\bI (?:own|run) [^.!?;\n]{1,100}\band can decide whether to hire a lawyer\b/i.test(sentence)),
   );
   if (!state.slots.decision_authority && state.slot_meta.decision_authority?.source !== "answered" &&
       !/\b(?:partner|board|co-owner|joint|together)\b/i.test(state.input) && explicitAuthority) {
@@ -62,11 +64,11 @@ export function demoCapturedFacts(state: EngineState, now: Date = new Date()): D
     const value = proposed[slot.id] ?? state.slots[slot.id];
     const meta = state.slot_meta[slot.id]?.source;
     if (!value || (!proposed[slot.id] && meta !== "explicit" && meta !== "answered")) return [];
-    if (slot.input_type !== "single_select" || !slot.options?.some((option) => option.value === value)) return [];
+    if (slot.input_type === "single_select" && !slot.options?.some((option) => option.value === value)) return [];
     return [{
       id: slot.id, value, label: slot.id === "severance_deadline" && deadline && value === deadline.value ? `Deadline to respond (${deadline.dateText})` : LABELS[slot.id] ?? slot.id.replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase()),
       source: proposed[slot.id] ? "inferred" as const : meta === "answered" ? "confirmed" as const : "provided" as const,
-      options: slot.options.map(({ value, label }) => ({ value, label })),
+      options: (slot.options ?? []).map(({ value, label }) => ({ value, label })),
     }];
   });
 }
@@ -87,7 +89,7 @@ export function confirmDemoFacts(state: EngineState, corrections: Readonly<Recor
       next = { ...next, slot_evidence, slots: { ...next.slots, [fact.id]: null }, slot_meta: { ...next.slot_meta, [fact.id]: { source: "answered", confidence: 1, evidence: "Client chose to leave this unanswered during demo review" } } };
       continue;
     }
-    if (!fact.options.some((option) => option.value === value)) continue;
+    if (fact.options.length > 0 && !fact.options.some((option) => option.value === value)) continue;
     if (fact.source === "inferred" || value !== fact.value) {
       next = applyAnswer(next, fact.id, value);
       const slot_evidence = { ...next.slot_evidence };

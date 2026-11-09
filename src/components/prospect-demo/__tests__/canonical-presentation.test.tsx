@@ -76,14 +76,15 @@ describe("canonical prospect presentation", () => {
     expect(onSessionReset.mock.calls.at(-1)?.[1]).toBe("profile");
   });
 
-  it("loads the two fixed sample cases without touching the private profile library", async () => {
+  it("opens free entry and family-law samples without touching the private profile library", async () => {
     render(<ProspectDemoClient profileId="example-law-firm" sampleOnly embedded />);
     await waitFor(() => expect(screen.getByLabelText("Fictional inquiry").getAttribute("data-runtime")).toBe("demo-live-ai"));
     expect(screen.queryByRole("img", { name: "CaseLoad Select" })).toBeNull();
     expect(screen.queryByLabelText("Prospect")).toBeNull();
     const sampleCase = screen.getByLabelText("Sample case") as HTMLSelectElement;
-    expect(Array.from(sampleCase.options).map((option) => option.text)).toEqual(["Unpaid invoice", "Employment issue"]);
+    expect(Array.from(sampleCase.options).map((option) => option.text)).toEqual(["Write your own inquiry", "Family law", "Unpaid invoice", "Employment issue"]);
     expect(sampleCase.value).toBe(exampleLawFirmProspectDemoProfile.scenarios[0].id);
+    expect((screen.getByLabelText("Fictional inquiry") as HTMLTextAreaElement).value).toBe("");
     expect(store.ensureProspectDemoProfile).not.toHaveBeenCalled();
     expect(store.readProspectDemoProfile).not.toHaveBeenCalled();
     expect(store.listProspectDemoProfiles).not.toHaveBeenCalled();

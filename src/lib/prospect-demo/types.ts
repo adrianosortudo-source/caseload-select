@@ -51,6 +51,8 @@ export interface ProspectDemoProfile {
   screenshot: ProspectScreenshotReference;
   placement: ScreenshotPlacement;
   theme: ProspectDemoTheme;
+  /** Explicit practice configuration for this fictional demonstration. */
+  practiceAreas?: import("@/lib/screen-engine/types").PracticeArea[];
   scenarios: ProspectDemoScenario[];
   defaultView: ProspectDemoView;
   defaultMode: ProspectDemoMode;
