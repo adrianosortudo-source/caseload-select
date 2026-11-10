@@ -24,7 +24,7 @@ export function groundFamilyConversationFacts(state: EngineState, input: string)
     const hasChildClause = text.split(/[.!?;\n]+/).find((part) =>
       !/\b(?:no|not|never|without|don't|do not|doesn't|does not)\b/i.test(part) &&
       /\b(?:i|we)\s+(?:have|share)\s+[^.!?;\n]{0,45}\b(?:son|daughter|child|children|kids)\b/i.test(part));
-    if (/\b(?:my|our)\s+(?:son|daughter|child|children|kids)\b/i.test(text) || hasChildClause) candidates.family_children = "Yes";
+    if (/\b(?:my|our)\s+(?:(?:[1-9]\d*|one|two|three|four|five|six|seven|eight|nine|ten)\s+)?(?:son|daughter|child|children|kids)\b/i.test(text) || hasChildClause) candidates.family_children = "Yes";
     else if (/\b(?:no (?:children|kids)|(?:do not|don't|dont) have (?:any )?(?:children|kids))\b/i.test(text)) candidates.family_children = "No";
     const parentingClause = text.split(/[.!?;\n]+/).find((part) => /\b(?:parenting|custody|access to (?:my|our) (?:son|daughter|child|children|kids))\b/i.test(part) && !/\b(?:not seeking|do not want|don't want|no need for|not about)\b/i.test(part));
     if (state.slots.family_help_sought === "Parenting or decision-making" && (parentingClause ||
