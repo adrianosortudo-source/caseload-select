@@ -48,12 +48,41 @@ export function groundFamilyConversationFacts(state: EngineState, input: string)
       !/\b(?:not sure|unsure|uncertain|maybe|might|perhaps|whether|if|don't know|do not know)\b/i.test(part) &&
       /\bwe\s+(?:all|both)\s+(?:live|reside|are based)\s+in\s+(?:[a-z][a-z .'-]{0,40},\s*)?ontario\b/i.test(part));
     if (/\b(?:i|we)\s+(?:live|reside|are based)\s+in\s+(?:[a-z][a-z .'-]{0,40},\s*)?ontario\b/i.test(text) || groupResidence) candidates.family_jurisdiction = "Ontario";
+    // Recognize the observed group-residence wording without treating a
+    // negated, uncertain, or conflicting statement as confirmed.
+    const priorAllows = (id: string, value: string) => {
+      const source = state.slot_meta[id]?.source;
+      return !source || source === 'unknown' || source === 'llm_inferred' || state.slots[id] === value;
+    };
+    const clauses = text.split(/[.!?;\n]+/);
+    const englishFamilyResidence = clauses.some((part) =>
+      !/\b(?:no|not|never|unsure|uncertain|maybe|might|perhaps|could|if|whether|don't know|do not know)\b/i.test(part) &&
+      /\bwe and the children live in\s+(?:[a-z][a-z .'-]{0,40},\s*)?ontario\b/i.test(part));
+    if (englishFamilyResidence && priorAllows('family_jurisdiction', 'Ontario')) candidates.family_jurisdiction = 'Ontario';
+
+    // Portuguese support is limited to the observed explicit statements.
+    // Denied access is not a denial that the children exist.
+    const ptUncertain = /(?:talvez|possivelmente|n[aã]o sei se|n[aã]o tenho certeza|tenho d[uú]vidas|se realmente)/i;
+    const ptChildren = clauses.some((part) => !ptUncertain.test(part) &&
+      !/(?:n[aã]o\s+(?:tenho|temos|possuo)|sem)\s+(?:(?:meus|minhas|nossos|nossas)\s+)?(?:(?:dois|duas|um|uma|tr[eê]s|\d+)\s+)?(?:filhos|filhas|filho|filha)\b/i.test(part) &&
+      /\b(?:meus|minhas|nossos|nossas)\s+(?:(?:dois|duas|um|uma|tr[eê]s|\d+)\s+)?(?:filhos|filhas|filho|filha)\b/i.test(part));
+    if (ptChildren && priorAllows('family_children', 'Yes')) candidates.family_children = 'Yes';
+    const ptParentingHelp = clauses.some((part) => !ptUncertain.test(part) &&
+      !/n[aã]o\s+(?:gostaria|quero|preciso|estou\s+buscando)/i.test(part) &&
+      /\bgostaria\s+de\s+ajuda\s+para\s+organizar\s+a\s+conviv[eê]ncia/i.test(part));
+    if (ptParentingHelp && priorAllows('family_help_sought', 'Parenting or decision-making')) candidates.family_help_sought = 'Parenting or decision-making';
+    const ptResidence = clauses.some((part) => !ptUncertain.test(part) && !/n[aã]o\s+moramos|fora\s+de|fora\s+do/i.test(part) &&
+      /\bmoramos\s+em\s+[^.!?;\n]{0,50}ont[aá]rio\b/i.test(part));
+    if (ptResidence && priorAllows('family_jurisdiction', 'Ontario')) candidates.family_jurisdiction = 'Ontario';
     const orderValue = state.slots.family_existing_order;
     if (familyNegativeIsGrounded("family_existing_order", "Neither", text)) candidates.family_existing_order = "Neither";
     const orderSentence = text.split(/[.!?;\n]+/).find((part) =>
       !/\b(?:no|not|never|without|unsure|maybe|if)\b/i.test(part) &&
       /\b(?:(?:i|we) have (?:an? |the |existing )?(?:(?:court|parenting) )?order|there is (?:an? |the |existing )?(?:(?:court|parenting) )?order|(?:a |the )?(?:judge|court) (?:made|issued) (?:an? |the )?order|(?:court|parenting) order (?:is |was )?(?:in place|issued|dated))\b/i.test(part));
-    if (orderSentence && orderValue !== "Both") candidates.family_existing_order = "Court order";
+    const compoundOrder = clauses.some((part) =>
+      !/\b(?:no|not|never|without|unsure|uncertain|maybe|might|perhaps|could|if|whether|don't know|do not know)\b/i.test(part) &&
+      /\b(?:i|we) have (?:a |the |an existing )?parenting court order\b/i.test(part));
+    if ((orderSentence && orderValue !== "Both") || (compoundOrder && orderValue !== 'Both' && priorAllows('family_existing_order', 'Court order'))) candidates.family_existing_order = "Court order";
     const noDateSentence = text.split(/[.!?;\n]+/).map((part) => part.trim()).find((part) =>
       /\bno\s+(?:upcoming\s+)?(?:court\s+)?(?:date|hearing|deadline)\b/i.test(part) &&
       !/\b(?:not sure|unsure|maybe|if|whether|don't know|do not know)\b/i.test(part));
