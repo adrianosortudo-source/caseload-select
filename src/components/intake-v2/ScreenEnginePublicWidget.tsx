@@ -994,9 +994,7 @@ export function ScreenEnginePublicWidget({
   }
 
   if (next?.type === "present_insight") {
-    const summary = state.matter_type === "family_general"
-      ? { intro: "Review the facts you shared before finishing this fictional intake.", points: demoCapturedFacts(state).filter((fact) => fact.source !== "inferred").map((fact) => `${fact.label}: ${fact.value}`) }
-      : buildLeadSummary(state, i18n);
+    const summary = buildLeadSummary(state, i18n);
     return (
       <Shell
         totalScreens={3}

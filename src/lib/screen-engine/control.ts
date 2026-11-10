@@ -141,6 +141,7 @@ function getBridgeText(state: EngineState): string {
 }
 
 function getBridgeTextEn(state: EngineState): string {
+  if (state.matter_type === 'family_general') return familyBridgeText(state, getI18n(state.language));
   if (state.matter_type === 'out_of_scope') {
     const areaLabels: Record<string, string> = {
       family: 'family law',
@@ -190,6 +191,7 @@ function getBridgeTextEn(state: EngineState): string {
 }
 
 export function getBridgeTextI18n(state: EngineState, i18n: I18nBundle): string {
+  if (state.matter_type === 'family_general') return familyBridgeText(state, i18n);
   const bt = i18n.bridge_text ?? {};
   if (state.matter_type === 'out_of_scope') {
     const prefix = bt['out_of_scope_prefix']
@@ -219,9 +221,51 @@ function slot(state: EngineState, id: string): string | null {
  * the English flow.
  */
 export function buildLeadSummary(state: EngineState, i18n: I18nBundle): LeadSummary {
+  if (state.matter_type === 'family_general') return buildFamilyLeadSummary(state, i18n);
   return state.language === 'en'
     ? buildLeadSummaryEn(state)
     : buildLeadSummaryI18n(state, i18n);
+}
+
+const FAMILY_RECAP_FIELDS = [
+  ['family_help_sought', 'Help requested'],
+  ['family_children', 'Children involved'],
+  ['family_existing_order', 'Existing order or agreement'],
+  ['family_timing', 'Court date or deadline'],
+  ['family_jurisdiction', 'Location'],
+  ['hiring_timeline', 'When you want a lawyer'],
+  ['other_counsel', 'Other legal help'],
+  ['decision_authority', 'Hiring decision'],
+] as const;
+
+/** A grounded recap of the inquiry and every supplied family-case answer. */
+function buildFamilyLeadSummary(state: EngineState, i18n: I18nBundle): LeadSummary {
+  const copy = i18n.summary?.family_general ?? {};
+  const labels = i18n.summary_labels ?? {};
+  const points: string[] = [];
+  if (state.input.trim()) points.push(`${labels.family_description || 'Your description'}: ${state.input.trim()}`);
+  for (const [id, label] of FAMILY_RECAP_FIELDS) {
+    const value = state.slots[id]?.trim();
+    if (!value) continue;
+    const meta = state.slot_meta[id];
+    if (meta && ['inferred', 'llm_inferred', 'unknown'].includes(meta.source)) continue;
+    // Keep extra detail in a free-text answer, such as the city or children's ages.
+    // Canonical slot values still drive screening; the recap preserves the person's words.
+    const answer = meta?.source === 'answered' && meta.evidence?.trim()
+      ? meta.evidence.trim()
+      : i18n.slot_options?.[id]?.[value] || value;
+    points.push(`${labels[id] || label}: ${answer}`);
+  }
+  return {
+    intro: copy.intro || 'Family law case recap',
+    points,
+    closing: copy.closing || 'Please check that this recap is accurate.',
+  };
+}
+
+function familyBridgeText(state: EngineState, i18n: I18nBundle): string {
+  const summary = buildFamilyLeadSummary(state, i18n);
+  return [summary.intro, ...summary.points, summary.closing].join('\n');
 }
 
 // ─── English fast path (state.language === 'en') ──────────────────────────
