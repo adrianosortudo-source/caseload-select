@@ -41,7 +41,7 @@ describe('family case recap', () => {
       const step = getNextStep(state);
       expect(step.type).toBe('present_insight');
       expect(step.bridgeText).toContain(inquiry);
-      expect(step.bridgeText).toContain('Existing order or agreement: Neither');
+      expect(step.bridgeText).toContain('no written agreement or court order');
       expect(step.bridgeText).toContain('No upcoming court date');
       expect(step.bridgeText).toContain('Ontario');
     },
@@ -85,6 +85,6 @@ describe('family case recap', () => {
   it('uses the same full recap in the internationalized bridge path', () => {
     const state = completed();
     const text = getBridgeTextI18n(state, getI18n('en'));
-    for (const point of buildLeadSummary(state, getI18n('en')).points) expect(text).toContain(point);
+    for (const paragraph of buildLeadSummary(state, getI18n('en')).paragraphs!) expect(text).toContain(paragraph);
   });
 });

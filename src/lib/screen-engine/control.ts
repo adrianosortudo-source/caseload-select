@@ -14,6 +14,7 @@ import {
 } from './extractor';
 import { deriveAdvisorySpecificTask } from './slotEvidence';
 import { buildClosingMessage } from './closing';
+import { buildFamilyRecapParagraphs, type FamilyRecapFact } from './family-recap';
 
 const INSIGHT_THRESHOLD_COMPLETENESS = 75;
 const BAND_A_COMPLETENESS = 65;
@@ -243,6 +244,7 @@ function buildFamilyLeadSummary(state: EngineState, i18n: I18nBundle): LeadSumma
   const copy = i18n.summary?.family_general ?? {};
   const labels = i18n.summary_labels ?? {};
   const points: string[] = [];
+  const facts: FamilyRecapFact[] = [];
   if (state.input.trim()) points.push(`${labels.family_description || 'Your description'}: ${state.input.trim()}`);
   for (const [id, label] of FAMILY_RECAP_FIELDS) {
     const value = state.slots[id]?.trim();
@@ -255,17 +257,19 @@ function buildFamilyLeadSummary(state: EngineState, i18n: I18nBundle): LeadSumma
       ? meta.evidence.trim()
       : i18n.slot_options?.[id]?.[value] || value;
     points.push(`${labels[id] || label}: ${answer}`);
+    facts.push({ id, value, answer });
   }
   return {
     intro: copy.intro || 'Family law case recap',
     points,
+    paragraphs: buildFamilyRecapParagraphs(state.input, facts, i18n),
     closing: copy.closing || 'Please check that this recap is accurate.',
   };
 }
 
 function familyBridgeText(state: EngineState, i18n: I18nBundle): string {
   const summary = buildFamilyLeadSummary(state, i18n);
-  return [summary.intro, ...summary.points, summary.closing].join('\n');
+  return [summary.intro, ...(summary.paragraphs ?? summary.points), summary.closing].join('\n\n');
 }
 
 // ─── English fast path (state.language === 'en') ──────────────────────────
