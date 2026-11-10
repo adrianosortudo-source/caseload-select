@@ -13,6 +13,7 @@ import {
   type ProspectDemoRegistration,
 } from "@/components/prospect-demo/ProspectDemoPresentation";
 import { exampleLawFirmProspectDemoProfile } from "@/lib/prospect-demo-profiles/example-law-firm";
+import { geneColmanProspectDemoProfile } from "@/lib/prospect-demo-profiles/gene-colman";
 import { walkerLawProspectDemoProfile } from "@/lib/prospect-demo-profiles/walker-law";
 import {
   ensureProspectDemoProfile,
@@ -56,6 +57,21 @@ export function ProspectDemoClient({ profileId, embedded = false, sampleOnly = f
   sampleOnly?: boolean;
 }) {
   const [view, setView] = useState<ScreenDemoView>(EMPTY_VIEW);
+  const [contactUsed, setContactUsed] = useState(false);
+  const [replyOpen, setReplyOpen] = useState(false);
+  const [draft, setDraft] = useState("Thank you for sharing these details. We can discuss the next steps together.");
+  const [reply, setReply] = useState<string | null>(null);
+  const replyShown = useRef(false);
+  const resetContinuation = useCallback(() => {
+    replyShown.current = false;
+    setView(EMPTY_VIEW); setContactUsed(false); setReplyOpen(false);
+    setDraft("Thank you for sharing these details. We can discuss the next steps together."); setReply(null);
+  }, []);
+  const showReply = useCallback(() => {
+    if (replyShown.current || !draft.trim()) return;
+    replyShown.current = true;
+    setReply(draft);
+  }, [draft]);
   const [registrations, setRegistrations] = useState<ProspectDemoRegistration[]>([]);
   const [availability, setAvailability] = useState<"loading" | "ready" | "missing">("loading");
 
@@ -68,12 +84,20 @@ export function ProspectDemoClient({ profileId, embedded = false, sampleOnly = f
       let registration: ProspectDemoRegistration | null = null;
       try {
         if (sampleOnly && profileId === exampleLawFirmProspectDemoProfile.id) {
-          const response = await fetch("/prospect-demos/example-law-firm/example-law-firm.png", { cache: "force-cache" });
-          if (response.ok) {
-            const blob = await response.blob();
-            const asset = { ...exampleLawFirmProspectDemoProfile.screenshot, blob };
-            registration = { profile: exampleLawFirmProspectDemoProfile, asset };
+          let blob = new Blob([], { type: exampleLawFirmProspectDemoProfile.screenshot.mimeType });
+          try {
+            const response = await fetch("/prospect-demos/example-law-firm/example-law-firm.png", { cache: "force-cache" });
+            if (response.ok) blob = await response.blob();
+          } catch {
+            // Keep the fictional intake available if the screenshot cannot load.
           }
+          const asset = { ...exampleLawFirmProspectDemoProfile.screenshot, blob };
+          registration = { profile: exampleLawFirmProspectDemoProfile, asset };
+        } else if (sampleOnly && profileId === geneColmanProspectDemoProfile.id) {
+          const response = await fetch("/prospect-demos/gene-colman/gene-colman.webp", { cache: "force-cache" });
+          if (!response.ok) throw new Error("Website screenshot unavailable");
+          const blob = await response.blob();
+          registration = { profile: geneColmanProspectDemoProfile, asset: { ...geneColmanProspectDemoProfile.screenshot, blob } };
         } else if (!sampleOnly && profileId === walkerLawProspectDemoProfile.id) {
           const response = await fetch(
             "/prospect-demos/walker-law/walker-law-consultation-reference.png",
@@ -116,22 +140,25 @@ export function ProspectDemoClient({ profileId, embedded = false, sampleOnly = f
           runtime={context.mode === "live-ai" ? "demo-live-ai" : "demo"}
           layout="contained"
           reportEmbeddedHeight={false}
-          initialDescription={context.scenario.description}
+          initialDescription={context.scenario.id === "your-inquiry" ? "" : context.scenario.description}
+          configuredPracticeAreas={context.profile.practiceAreas}
           onDemoStateChange={receiveView}
+          demoContinuation={{ workflow: "meta", contactUsed, onUseSampleContact: () => setContactUsed(true), onResetSession: resetContinuation, reply, onShowReview: context.showReview }}
           consentCaptureEnabled={false}
         />
       </div>
     ),
     renderStatus: () => (
       <div data-ui-component-content="demo-ai-status">
-        <p role="status" className="w-full" data-ui-copy="supporting">{demoExtractionLabel(view)}</p>
-        <p className="mt-3 w-full" data-ui-copy="body">Live AI can send the fictional description to Google Gemini. Guided samples run in your browser. Do not enter client or confidential information.</p>
-        {sampleOnly && <p className="mt-3 w-full" data-ui-copy="supporting">Example Law Firm is fictional. The website and inquiries are for demonstration only.</p>}
+        <p role="status" className="w-full" data-ui-copy="supporting">{view.runtime === "demo-live-ai" && view.extraction.status === "live" ? "Live AI read your message." : demoExtractionLabel(view)}</p>
+        <p className="mt-3 w-full" data-ui-copy="body">Live AI can send the fictional description to Google Gemini.</p>
+        <p className="mt-3 w-full" data-ui-copy="body">Guided samples run in your browser. Use fictional examples only. Keep client and confidential details out.</p>
+        {sampleOnly && <p className="mt-3 w-full" data-ui-copy="supporting">{profileId === geneColmanProspectDemoProfile.id ? "This preview uses a screenshot of the firm's website. Inquiries and replies are fictional." : "Example Law Firm is fictional. The website and inquiries are for demonstration only."}</p>}
       </div>
     ),
-    renderReview: () => <DemoOperatorPanel view={view} contained />,
-    onRestart: () => setView(EMPTY_VIEW),
-  }), [receiveView, sampleOnly, view]);
+    renderReview: () => <DemoOperatorPanel view={view} contained continuation={{ contactUsed, replyOpen, onOpenReply: () => setReplyOpen(true), draft, onDraftChange: setDraft, reply, onShowReply: showReply }} />,
+    onSessionReset: resetContinuation,
+  }), [receiveView, sampleOnly, profileId, view, contactUsed, replyOpen, draft, reply, showReply, resetContinuation]);
 
   if (availability !== "ready") {
     return (

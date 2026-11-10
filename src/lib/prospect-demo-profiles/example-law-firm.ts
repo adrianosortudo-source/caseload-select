@@ -9,9 +9,12 @@ export const exampleLawFirmProspectDemoProfile: ProspectDemoProfile = {
   screenshot: { assetId: "example-law-firm-website", width: 2340, height: 1650, mimeType: "image/png" },
   placement: { x: 230 / 2340, y: 625 / 1650, width: 730 / 2340, height: 850 / 1650 },
   theme: { accent: "#B59A6F", surface: "#FAF9F6", text: "#1C2B39", buttonText: "#FFFFFF" },
+  practiceAreas: ["family", "employment", "corporate", "real_estate", "estates"],
   scenarios: [
-    { id: "fictional-unpaid-invoice", label: "Fictional unpaid invoice", description: "A fictional business says an invoice remains unpaid after completed work." },
-    { id: "fictional-employment-dispute", label: "Fictional employment concern", description: "A fictional employee says their role ended and they want to understand their next steps." },
+    { id: "your-inquiry", label: "Write your own inquiry", description: "Write a fictional inquiry in your own words." },
+    { id: "fictional-family", label: "Family law", description: "This is a fictional example. I am separating from my spouse and need help arranging time with our children. We live in Ontario. I do not know what information a lawyer needs." },
+    { id: "fictional-unpaid-invoice", label: "Unpaid invoice", description: "I own a small business and can decide whether to hire a lawyer. A client has not paid a $4,800 invoice for work delivered on March 15, 2026, under a written services agreement. I have the agreement, invoice, and follow-up email." },
+    { id: "fictional-employment-dispute", label: "Employment issue", description: "My employer dismissed me after I worked there for seven years. It offered eight weeks of severance pay in exchange for signing a release. I have not signed. The offer says I must respond by November 20, 2026. I want to understand what else a lawyer needs to review." },
   ],
   defaultView: "website", defaultMode: "guided",
 };

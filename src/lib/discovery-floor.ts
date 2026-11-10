@@ -88,6 +88,7 @@ interface MatterFloor {
 
 /** Per-matter floors for the DRG launch lanes (#170, 2026-06-08). */
 export const MATTER_DISCOVERY_FLOOR: Readonly<Record<string, MatterFloor>> = {
+  family_general: { minCount: 3, candidateSlots: new Set(['family_help_sought', 'family_children', 'family_existing_order', 'family_timing', 'family_jurisdiction']) },
   business_setup_advisory: {
     minCount: 3,
     candidateSlots: new Set([

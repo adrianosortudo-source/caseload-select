@@ -767,6 +767,9 @@ function bandRoutingLane(label: string, state: EngineState, hasRouted: boolean):
 // ─── Main band computation ────────────────────────────────────────────────
 
 export function computeBand(state: EngineState): BandResult {
+  if (state.matter_type === 'family_general') {
+    return { band: 'C', confidence: 0, reasoning: 'Family inquiry for manual review; no suitability score is assigned.', coreCompleteness: state.coreCompleteness };
+  }
   if (state.matter_type === 'unknown') {
     return { band: 'C', confidence: 0, reasoning: 'Matter type not classified.', coreCompleteness: 0 };
   }

@@ -33,31 +33,35 @@ export interface LlmExtractionResponse {
   extracted: Record<string, string | null>;
   mode: 'live' | 'disabled' | 'error';
   reason?: string;
+  mapped_answer?: { slotId: string; value: string };
+  mapping_mode?: 'live' | 'disabled' | 'error';
   tokens?: { prompt?: number; completion?: number };
 }
 
 const REQUEST_TIMEOUT_MS = 12_000;
+// Family classification and pending-answer mapping can share one provider call.
+const FAMILY_REQUEST_TIMEOUT_MS = 45_000;
 
 export async function llmExtract(
   description: string,
   state: EngineState,
+  followUp?: { pendingSlotId: string; reply: string },
 ): Promise<LlmExtractionResponse> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), state.family_enabled === true ? FAMILY_REQUEST_TIMEOUT_MS : REQUEST_TIMEOUT_MS);
   try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-
     const res = await fetch('/api/extract', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         description,
         matter_type: state.matter_type,
+        family_enabled: state.family_enabled === true,
         already_extracted: state.slots,
+        ...(followUp ? { pending_slot_id: followUp.pendingSlotId, reply: followUp.reply } : {}),
       }),
       signal: controller.signal,
     });
-    clearTimeout(timeout);
-
     if (!res.ok) {
       return { extracted: {}, mode: 'error', reason: `HTTP ${res.status}` };
     }
@@ -66,6 +70,8 @@ export async function llmExtract(
       extracted: data.extracted ?? {},
       mode: data.mode ?? 'live',
       reason: data.reason,
+      mapped_answer: data.mapped_answer,
+      mapping_mode: data.mapping_mode,
       tokens: data.tokens,
     };
   } catch (err) {
@@ -74,6 +80,8 @@ export async function llmExtract(
       mode: 'error',
       reason: err instanceof Error ? err.message : String(err),
     };
+  } finally {
+    clearTimeout(timeout);
   }
 }
 
@@ -208,12 +216,32 @@ export interface MergeLlmOptions {
   allowGeneralPromotion?: boolean;
 }
 
+/** Family negatives must be supported by the person's words, not omission. */
+export function familyNegativeIsGrounded(slotId: string, value: string, input: string): boolean {
+  if (slotId === 'family_children' && value.trim().toLowerCase() === 'no') {
+    return /\b(?:no (?:children|kids)|(?:do not|don't|dont|have not|haven't|havent) have (?:any )?(?:children|kids)|childless)\b/i.test(input);
+  }
+  if (slotId === 'family_existing_order' && value.trim().toLowerCase() === 'neither') {
+    const neither = /\bneither\s+(?:a(?:n)?\s+)?(?:(?:court|parenting)\s+)?order(?:s)?\s+nor\s+(?:a(?:n)?\s+)?(?:written\s+)?(?:(?:parenting|separation)\s+)?agreement(?:s)?\b/i.test(input)
+      || /\bno\s+(?:(?:court|parenting)\s+)?orders?\s+(?:or|and)\s+(?:written\s+)?(?:(?:parenting|separation)\s+)?agreements?\b/i.test(input)
+      || /\bneither\s+(?:an?\s+)?(?:agreement|order)\s+nor\s+(?:an?\s+)?(?:agreement|order)\b/i.test(input)
+      || /\bno\s+(?:written\s+)?(?:(?:parenting|separation)\s+)?agreements?\s+(?:or|and)\s+(?:(?:court|parenting)\s+)?orders?\b/i.test(input);
+    const negOrder = /\b(?:no|without)\s+(?:existing\s+)?(?:(?:court|parenting)\s+)?orders?\b/i.test(input);
+    const negAgreement = /\b(?:no|without)\s+(?:existing\s+)?(?:written\s+)?(?:(?:parenting|separation)\s+)?agreements?\b/i.test(input);
+    return neither || (negOrder && negAgreement);
+  }
+  return true;
+}
+
 export function mergeLlmResults(
   state: EngineState,
   extracted: Record<string, string | null>,
   options?: MergeLlmOptions,
 ): EngineState {
   let working: EngineState = state;
+  if ((state.matter_type === 'unknown' || state.matter_type === 'out_of_scope') && extracted.__family_area === 'family') {
+    working = { ...state, practice_area: 'family', matter_type: state.family_enabled === true ? 'family_general' : 'out_of_scope', intent_family: 'unknown', dispute_family: 'unknown', advisory_subtrack: 'unknown', matter_type_provenance: 'llm_inferred' };
+  }
 
   // ── Language field (DR-039) ──────────────────────────────────────────
   // The LLM is authoritative for language detection. The schema's
@@ -267,7 +295,7 @@ export function mergeLlmResults(
   // classifier for non-English input).
   const promotionAllowed =
     state.matter_type === 'unknown' || options?.allowGeneralPromotion === true;
-  if (ROUTING_CATCH_ALL_MATTER_TYPES.has(state.matter_type) && promotionAllowed) {
+  if (extracted.__family_area !== 'family' && ROUTING_CATCH_ALL_MATTER_TYPES.has(state.matter_type) && promotionAllowed) {
     const llmMatter = extracted[MATTER_TYPE_CLASSIFIER_FIELD];
     if (
       llmMatter &&
@@ -287,6 +315,7 @@ export function mergeLlmResults(
       working = {
         ...working,
         ...classification,
+        ...(state.family_only === true ? { matter_type: 'out_of_scope' as const } : {}),
         matter_type_provenance: 'llm_inferred',
       };
     }
@@ -305,7 +334,8 @@ export function mergeLlmResults(
 
   for (const [slotId, value] of Object.entries(extracted)) {
     // Skip the synthetic classifier field — already handled above.
-    if (slotId === MATTER_TYPE_CLASSIFIER_FIELD) continue;
+    if (slotId === MATTER_TYPE_CLASSIFIER_FIELD || slotId === '__family_area') continue;
+    if (slotId.startsWith('family_') && working.matter_type !== 'family_general') continue;
     // Skip the synthetic language-confirm field — already handled above. Not
     // skipping it here would let mergeLlmResults persist a language code
     // (e.g. "fr") as if it were a user's slot answer, leaking detector
@@ -317,6 +347,7 @@ export function mergeLlmResults(
     if (slotId === LEAD_INTENT_FIELD) continue;
 
     if (value === null || value === '' || value === undefined) continue;
+    if (working.matter_type === 'family_general' && !familyNegativeIsGrounded(slotId, value, state.input)) continue;
     // Drop non-answer literals — except when BOTH (a) the lead's own
     // text shows uncertainty AND (b) the slot's own option set
     // explicitly includes this value. The two-gate check (Codex

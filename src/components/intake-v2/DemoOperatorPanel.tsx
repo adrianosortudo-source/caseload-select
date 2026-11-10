@@ -1,6 +1,7 @@
 "use client";
 
 import { demoCapturedFacts } from "@/lib/screen-demo-confirmation";
+import { SLOT_REGISTRY } from "@/lib/screen-engine/slotRegistry";
 import { useMemo } from "react";
 import { WEB_EXPERIENCE_POLICY_VERSION } from "@/lib/screen-engine/control";
 import { DEMO_BRIEF_PROJECTION_VERSION, renderBriefHtmlServer } from "@/lib/screen-brief-html";
@@ -13,10 +14,13 @@ const STAGES: Record<ScreenDemoView["stage"], string> = {
 function percent(value: number) { return `${Math.max(0, Math.min(100, Math.round(value <= 1 ? value * 100 : value)))}%`; }
 function label(value: string) { return value.replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase()); }
 
-export function DemoOperatorPanel({ view }: { view: ScreenDemoView; contained?: boolean }) {
+export function DemoOperatorPanel({ view, continuation }: { view: ScreenDemoView; contained?: boolean; continuation?: { contactUsed: boolean; replyOpen: boolean; onOpenReply: () => void; draft: string; onDraftChange: (value: string) => void; reply: string | null; onShowReply: () => void } }) {
   const { state, report } = view;
+  const isFamily = state?.matter_type === "family_general";
+  const familyFacts = state && isFamily ? demoCapturedFacts(state) : [];
+  const familyGaps = state && isFamily ? SLOT_REGISTRY.filter((slot) => slot.applies_to.includes("family_general") && slot.tier !== "contact" && !state.slots[slot.id]) : [];
   const corrections = state ? demoCapturedFacts(state).filter((fact) => state.slot_meta[fact.id]?.evidence === "Client corrected this fact during demo review") : [];
-  const reportHtml = useMemo(() => report && state ? renderBriefHtmlServer(report, "web", state.language, undefined, state.matter_type, state.practice_area, { presentation: "demo" }) : "", [report, state]);
+  const reportHtml = useMemo(() => report && state && !isFamily ? renderBriefHtmlServer(report, "web", state.language, undefined, state.matter_type, state.practice_area, { presentation: "demo" }) : "", [report, state, isFamily]);
   return (
     <div className={styles.operator} data-demo-report data-engine-policy={WEB_EXPERIENCE_POLICY_VERSION} data-report-projection={DEMO_BRIEF_PROJECTION_VERSION}>
       <header className={styles.paneHeader} data-ui-component-content="demo-operator-header">
@@ -25,17 +29,28 @@ export function DemoOperatorPanel({ view }: { view: ScreenDemoView; contained?: 
       </header>
       <div className={styles.reportContent} data-demo-brief-content data-ui-component-content="demo-report-content">
         {state && view.extraction.status !== "reading" ? <>
-          <dl className={styles.metrics} aria-label="Intake assessment">
+          {isFamily ? <dl className={styles.metrics} aria-label="Intake assessment">
+            <div><dt>Practice area</dt><dd>Family law</dd></div>
+            <div><dt>Review</dt><dd>Lawyer decision required</dd></div>
+          </dl> : <dl className={styles.metrics} aria-label="Intake assessment">
             <div><dt>Matter type</dt><dd>{label(state.matter_type)}</dd></div>
-            <div><dt>Fit band</dt><dd>{state.band ?? "Unassigned"}</dd></div>
+            <div><dt>{isFamily ? "Intake status" : "Fit band"}</dt><dd>{isFamily ? "Family law intake / Firm review required" : state.band ?? "Unassigned"}</dd></div>
             <div><dt>Core facts</dt><dd>{percent(state.coreCompleteness)}</dd></div>
             <div><dt>Confidence</dt><dd>{percent(state.confidence)}</dd></div>
-          </dl>
-          <p className={styles.calibration} data-ui-copy="supporting">Confidence uses the available facts.</p>
+          </dl>}
+          {!isFamily && <p className={styles.calibration} data-ui-copy="supporting">Confidence uses the available facts.</p>}
           {view.currentQuestion && <section className={styles.currentQuestion} data-ui-component-content="demo-current-question">
             <h3>Still to resolve</h3><p data-ui-copy="body">{view.currentQuestion.question}</p>
           </section>}
-          {reportHtml ? <>
+          {isFamily ? <section className={styles.brief} data-demo-family-brief data-ui-component-content="family-law-brief">
+            <h3 data-ui-copy="heading">Family-law inquiry</h3>
+            <p data-ui-copy="body">The brief records the person&apos;s stated circumstances and outstanding questions for a lawyer to review.</p>
+            <h3 data-ui-copy="heading">Captured facts</h3>
+            <dl>{familyFacts.map((fact) => <div key={fact.id} data-ui-component-content="family-brief-fact"><dt>{fact.label}</dt><dd className="m-0 w-full" data-ui-copy="body">{fact.value}</dd><p className={styles.calibration} data-ui-copy="supporting">{fact.source === "inferred" ? "Interpretation to confirm" : fact.source === "confirmed" ? "Confirmed by the person" : "Provided in the inquiry"}</p></div>)}</dl>
+            {familyFacts.length === 0 && <p data-ui-copy="body">The inquiry needs further clarification. No facts have been assumed.</p>}
+            <details className={styles.changes}><summary>Questions for review</summary>{familyGaps.length ? <ul>{familyGaps.map((slot) => <li key={slot.id} data-ui-copy="body">{slot.question}</li>)}</ul> : <p data-ui-copy="body">The configured intake questions have been answered. A lawyer still reviews the facts and next steps.</p>}</details>
+            <details className={styles.changes}><summary>Original inquiry</summary><p data-ui-copy="body">{state.input}</p></details>
+          </section> : reportHtml ? <>
             <div className={styles.brief} dangerouslySetInnerHTML={{ __html: reportHtml }} />
             {corrections.length > 0 && <details className={styles.changes}><summary>Client corrections</summary><dl>{corrections.map((fact) => <div key={fact.id} data-ui-component-content="demo-corrected-fact"><dt>{fact.label}</dt><dd data-ui-copy="supporting">{fact.value}</dd></div>)}</dl><p>These values were corrected and confirmed during review.</p></details>}
             <details className={styles.changes}><summary>Original inquiry</summary><div data-ui-component-content="demo-original-inquiry"><p data-ui-copy="body">{state.input}</p></div></details>
@@ -46,7 +61,19 @@ export function DemoOperatorPanel({ view }: { view: ScreenDemoView; contained?: 
           <p data-ui-copy="body">The brief shows reasons, open questions and preparation for the first call.</p>
         </section>}
       </div>
-      <footer className={styles.paneFooter} data-ui-component-content="demo-operator-footer"><p data-ui-copy="supporting">Demonstration only. No lead, message or follow-up is created.</p></footer>
+      {view.stage === "done" && continuation?.contactUsed && <section className={styles.continuation} data-ui-component-content="demo-continuation">
+        <h3 data-ui-copy="heading">Sample contact</h3><p data-ui-copy="supporting">Fictional details</p>
+        <dl><dt>Name</dt><dd>Alex Morgan</dd><dt>Email</dt><dd>alex.morgan@example.com</dd></dl>
+        <p className={styles.humanBoundary} data-ui-copy="body">The Screen prioritizes attention. The lawyer decides.</p>
+        {!continuation.replyOpen && <button type="button" className={styles.secondary} onClick={continuation.onOpenReply}>Preview a reply</button>}
+        {continuation.replyOpen && <>
+          <label htmlFor="demo-simulated-reply">Simulated lawyer reply</label>
+          <textarea id="demo-simulated-reply" rows={5} maxLength={2000} value={continuation.draft} onChange={(event) => continuation.onDraftChange(event.target.value)} disabled={continuation.reply !== null} />
+          <button type="button" className={styles.primary} disabled={!continuation.draft.trim() || continuation.reply !== null} onClick={continuation.onShowReply}>Show reply in demo</button>
+          {continuation.reply !== null && <div role="status"><p>Shown in this demo</p><p className={styles.replyText}>{continuation.reply}</p></div>}
+        </>}
+      </section>}
+      <footer className={styles.paneFooter} data-ui-component-content="demo-operator-footer"><p data-ui-copy="supporting">Demonstration only. No lead, external message or real follow-up is created.</p></footer>
     </div>
   );
 }

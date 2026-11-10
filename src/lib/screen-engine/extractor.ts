@@ -604,6 +604,11 @@ function detectInScopeArea(input: string): InScopeAreaMatch | null {
   };
   let m: string | null;
   if ((m = hit(ESTATES_SIGNALS))) return { area: 'estates', signal: m };
+  // A pay offer tied to a release from one's employer is employment context,
+  // even when the caller has not said whether employment ended.
+  if (/\bmy employer\b/.test(t) && /\b(?:pay|wages)\b/.test(t) && /\brelease\b/.test(t)) {
+    return { area: 'employment', signal: 'employer pay and release' };
+  }
   if ((m = hit(EMPLOYMENT_SIGNALS))) return { area: 'employment', signal: m };
   return null;
 }

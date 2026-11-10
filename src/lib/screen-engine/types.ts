@@ -58,6 +58,8 @@ export type MatterType =
   | 'probate'
   | 'estate_dispute'
   | 'estates_general'
+  // Explicitly configured demonstration only; default family classification remains out of scope.
+  | 'family_general'
   // Out of scope (detected but not yet supported)
   | 'out_of_scope'
   | 'unknown';
@@ -400,6 +402,9 @@ export type SupportedLanguage = 'en' | 'fr' | 'es' | 'pt' | 'zh' | 'ar';
 
 export interface EngineState {
   input: string;
+  /** Optional profile flag; omitted by existing firms and stored states. */
+  family_enabled?: boolean;
+  family_only?: boolean;
   practice_area: PracticeArea;
   matter_type: MatterType;
   /**
@@ -708,6 +713,8 @@ export interface AxisReasoning {
 }
 
 export interface LawyerReport {
+  /** Intake-only family report: numeric legacy fields are placeholders and must not be rendered. */
+  intake_only?: boolean;
   // Lead metadata
   lead_id: string;
   submitted_at: string;
