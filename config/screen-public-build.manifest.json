@@ -3,7 +3,7 @@
   "canonicalPath": "/tools/screen",
   "assetBase": "/screen-demo-app/",
   "sourceRepository": "adrianosortudo-source/caseload-screen-sandbox",
-  "sourceCommit": "c0df50e7c6e2e2b51c5cf9bd437d2143c85c5d39",
+  "sourceCommit": "a74ee7a1d54c2d77096f0dddf614ec7744a753e9",
   "files": [
     {
       "path": "assets/demo-DW1x6iEr.js",
@@ -14,8 +14,8 @@
       "sha256": "e9f0ed629b75b810b240baf5759b8a0d00544a7451ed3cc610e774b1391d03b5"
     },
     {
-      "path": "assets/main-ZnUggCaC.js",
-      "sha256": "34a73bca6e5c077b8d5760df90d335d5b9cabd72505ae1769d44797624a4a057"
+      "path": "assets/main-BsoDuh5p.js",
+      "sha256": "acd005cfe506c0347798d2ed3dc9bc5bc2e021c91d74fd673fd62a6ff0075512"
     },
     {
       "path": "assets/modulepreload-polyfill-B5Qt9EMX.js",
@@ -59,7 +59,7 @@
     },
     {
       "path": "index.html",
-      "sha256": "bc1345c8f33eb6c19dc8a27fdad036137ddaefd545f5d916399a9e6e66bf2845"
+      "sha256": "16d2c9c4d480ae39bcade60cda040345113caeceda15382878d8b6aad5cc87bd"
     }
   ]
 }
