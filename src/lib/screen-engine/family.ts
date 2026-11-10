@@ -32,6 +32,18 @@ export function groundFamilyConversationFacts(state: EngineState, input: string)
         /\bkeep(?:s|ing)?\s+me\s+away\s+from\s+(?:my|our)\s+(?:son|daughter|child|children|kids)\b/i.test(text))) {
       candidates.family_help_sought = "Parenting or decision-making";
     }
+    // Confirm a proposed help category only when this clause explicitly asks
+    // for that help. Unpaid support is not a negation of the request itself.
+    const helpValue = state.slots.family_help_sought;
+    const explicitRequest = text.split(/[.!?;\n]+/).some((part) => {
+      if (/\b(?:not sure|unsure|uncertain|maybe|might|perhaps|whether|if|considering|don't know|do not know|not seeking|not looking for|do not (?:want|need)|don't (?:want|need)|no need|not interested)\b/i.test(part)) return false;
+      if (!/\b(?:i|we)\s+(?:need|want|seek|am seeking|are seeking|would like|am looking for|are looking for)\b/i.test(part)) return false;
+      if (helpValue === "Child or spousal support") return /\b(?:child|spousal)\s+support\b/i.test(part);
+      if (helpValue === "Separation or divorce") return /\b(?:divorce|separat(?:ion|e|ing))\b/i.test(part) && !/\bseparation\s+agreement\b/i.test(part) && !/\b(?:after|since|following)\s+(?:(?:our|my|the)\s+)?(?:separation|divorce)\b/i.test(part);
+      if (helpValue === "Agreement or court order") return /\b(?:(?:separation|parenting|written|settlement)\s+agreement|court\s+order)\b/i.test(part);
+      return false;
+    });
+    if (explicitRequest && helpValue) candidates.family_help_sought = helpValue;
     if (/\b(?:i|we)\s+(?:live|reside|are based)\s+in\s+(?:[a-z][a-z .'-]{0,40},\s*)?ontario\b/i.test(text)) candidates.family_jurisdiction = "Ontario";
     const orderValue = state.slots.family_existing_order;
     if (familyNegativeIsGrounded("family_existing_order", "Neither", text)) candidates.family_existing_order = "Neither";

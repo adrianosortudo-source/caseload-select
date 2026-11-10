@@ -1594,7 +1594,7 @@ export function buildReport(state: EngineState): LawyerReport {
     const next = familyQuestions[0] ?? '';
     return {
       intake_only: true, lead_id: state.lead_id, submitted_at: state.submitted_at,
-      matter_snapshot: 'Family law intake', lawyer_time_priority: 'Firm review required', band: 'C',
+      matter_snapshot: `Family law intake. Person's original description: ${state.input}`, lawyer_time_priority: 'Firm review required', band: 'C',
       band_reasoning_bullets: [], confidence_calibration: 'Not assessed',
       four_axis: { value: 0, complexity: 0, urgency: 0, readiness: 0, readinessAnswered: false },
       axis_reasoning: { value: blankAxis(), complexity: blankAxis(), urgency: blankAxis(), readiness: blankAxis(), readinessAnswered: false },

@@ -26,6 +26,28 @@ describe('opt-in family intake', () => {
     const report = buildReport(grounded);
     expect(report).toMatchObject({ intake_only: true, lawyer_time_priority: 'Firm review required', fee_estimate: 'Not assessed', risk_flags: [], cross_sell_opportunities: [] });
   });
+  it('grounds explicitly requested family help without treating uncertainty or silence as confirmation', () => {
+    const cases = [
+      ['I need help collecting unpaid child support.', 'Child or spousal support'],
+      ['I want a divorce.', 'Separation or divorce'],
+      ['I need help drafting a separation agreement.', 'Agreement or court order'],
+    ];
+    for (const [text, category] of cases) {
+      const initial = configureFirmPracticeAreas(initialiseState(text), ['family']);
+      const proposed = mergeLlmResults({ ...initial, matter_type: 'family_general', practice_area: 'family' }, { family_help_sought: category });
+      const grounded = groundFamilyConversationFacts(proposed, text);
+      expect(grounded.slot_meta.family_help_sought).toMatchObject({ source: 'explicit', evidence: text });
+      expect(getNextStep(grounded).slot?.id).not.toBe('family_help_sought');
+      expect(buildReport(grounded).matter_snapshot).toContain(`Person's original description: ${text}`);
+    }
+    for (const text of ['Maybe I need help with child support.', 'I do not want help with child support.', 'Child support has not been paid.']) {
+      const initial = configureFirmPracticeAreas(initialiseState(text), ['family']);
+      const proposed = mergeLlmResults({ ...initial, matter_type: 'family_general', practice_area: 'family' }, { family_help_sought: 'Child or spousal support' });
+      const grounded = groundFamilyConversationFacts(proposed, text);
+      expect(grounded.slot_meta.family_help_sought?.source).toBe('llm_inferred');
+      expect(getNextStep(grounded).slot?.id).toBe('family_help_sought');
+    }
+  });
   it('grounds two facts from one follow-up without inventing absence from silence', () => {
     const state = configureFirmPracticeAreas(initialiseState('I need a family lawyer for custody.'), ['family']);
     const updated = groundFamilyConversationFacts(state, 'There is no court order or written agreement. There is no upcoming court date.');
