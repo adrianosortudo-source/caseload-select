@@ -999,7 +999,7 @@
     "amount_at_stake": "About how much money is involved?",
     "invoice_exists": "Do you have an invoice, bill, or statement showing what is owed?",
     "payment_status": "Has any of the amount been paid?",
-    "proof_of_performance": "Do you have anything showing the work, goods, or services were delivered?",
+    "proof_of_performance": "Do you have proof of completed work or delivery?",
     "dispute_reason": "What is the other side saying about why they are not paying?",
     "desired_outcome_unpaid_invoice": "What would be the best outcome for you?",
     "written_terms": "Do you have emails, messages, or another written record of what was agreed?",
@@ -1102,7 +1102,7 @@
     "desired_outcome_estate_dispute": "What outcome are you hoping for?",
     "family_help_sought": "What would you like help with?",
     "family_children": "Are children or parenting arrangements part of this matter?",
-    "family_existing_order": "Do you already have a written agreement or court order about this?",
+    "family_existing_order": "Do you have a written agreement or court order?",
     "family_timing": "Is there an upcoming court date or deadline? If you know the date, please share it.",
     "family_jurisdiction": "Where is this matter located?",
     "corporate_records_available": "Do you have access to the company's financial records or bank accounts?",
@@ -1120,7 +1120,7 @@
     "convo_error_generic": "That did not go through. Your answers are still here. Please try again.",
     "convo_retry": "Try again",
     "convo_recap_heading": "Here is what I understood so far.",
-    "convo_correction_prompt": "Is anything here inaccurate or missing? You can correct it before continuing.",
+    "convo_correction_prompt": "Is this accurate?",
     "convo_contact_heading": "How can the firm contact you?",
     "convo_contact_sub": "Use fictional details in this demo. Nothing is saved, and no firm is contacted.",
     "convo_contact_submit": "Continue",
@@ -1458,6 +1458,38 @@
       "Buying into an existing business": "You’re planning to buy into an existing business.",
       "Selling or closing down a business": "You’re planning to sell or close down a business.",
       "Not sure": "You’re not sure which business path you’ll take."
+    },
+    "poa_urgency": {
+      "Family member health crisis or recent diagnosis": "A family member’s health crisis or recent diagnosis is prompting this.",
+      "The person may no longer be able to sign documents": "The person may no longer be able to sign documents.",
+      "Planning ahead, no immediate trigger": "You’re planning ahead, with no immediate trigger.",
+      "Court application is being prepared": "A court application is being prepared.",
+      "Other": "Something else is prompting this request."
+    },
+    "poa_existing_documents": {
+      "Yes, an older POA exists": "There is an older power of attorney.",
+      "No, nothing exists": "There are no existing power of attorney documents.",
+      "Not sure": "You’re not sure whether any power of attorney documents exist."
+    },
+    "severance_offer_amount": {
+      "Less than 3 months of pay": "The offer is less than three months of pay.",
+      "3 to 6 months of pay": "The offer is 3 to 6 months of pay.",
+      "6 to 12 months of pay": "The offer is 6 to 12 months of pay.",
+      "More than 12 months of pay": "The offer is more than 12 months of pay.",
+      "A lump sum, unclear": "The offer is a lump sum, but its comparison with your tenure is unclear."
+    },
+    "severance_deadline": {
+      "Yes, in the next few days": "You need to respond in the next few days.",
+      "Yes, within the next week": "You need to respond within the next week.",
+      "Yes, within the next month": "You need to respond within the next month.",
+      "No clear deadline": "There is no clear response deadline.",
+      "The deadline has already passed": "The response deadline has already passed."
+    },
+    "desired_outcome_severance_review": {
+      "Negotiate a better package": "You want to negotiate a better package with a lawyer’s help.",
+      "Confirm the offer is fair before signing": "You want to check whether the offer is fair before signing.",
+      "Reject and pursue more": "You want to reject the offer and pursue a higher package.",
+      "Other": "You have another goal for reviewing the severance offer."
     }
   }
 }

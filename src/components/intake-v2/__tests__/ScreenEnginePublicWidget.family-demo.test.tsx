@@ -56,7 +56,7 @@ describe("Meta family conversation", () => {
     expect(views.at(-1)?.state?.slot_meta.family_help_sought.source).toBe("explicit");
     expect(screen.getByText(inquiry)).toBeTruthy();
     expect(screen.queryByText("Review the facts")).toBeNull();
-    expect(screen.getByText(/Do you already have a written agreement or court order about this\?/)).toBeTruthy();
+    expect(screen.getByText("Do you have a written agreement or court order?", { exact: false })).toBeTruthy();
     expect(JSON.parse(vi.mocked(fetch).mock.calls[0][1]!.body as string).matter_type).toBe("family_general");
     expect(vi.mocked(fetch).mock.calls.every(([url, init]) => url === "/api/extract" && !String(init?.body).includes("alex.morgan"))).toBe(true);
   });
@@ -72,8 +72,11 @@ describe("Meta family conversation", () => {
       send(question.options?.length ? "1" : "No court date is scheduled.");
       await waitFor(() => expect(views.at(-1)?.stage === "done" || views.at(-1)?.currentQuestion?.id !== question.id).toBe(true));
     }
-    const completion = await screen.findByText(/Brief ready\./);
+    const completionHeading = await screen.findByText(/Brief ready\./);
+    const completion = completionHeading.closest('[data-message-id="complete"]')!;
+    expect(completion.querySelectorAll('p').length).toBeGreaterThan(2);
     expect(completion.textContent).toContain(inquiry);
+    expect(completion.textContent).toMatch(/court order/i);
     expect(completion.textContent).toContain("Here is what I understood so far.");
     expect(completion.textContent).toMatch(/no firm is contacted/i);
     expect(asked).toEqual(expect.arrayContaining(["family_existing_order", "family_timing", "family_jurisdiction", "hiring_timeline", "other_counsel", "decision_authority"]));
@@ -89,8 +92,11 @@ describe("Meta family conversation", () => {
       send(question.options?.length ? "1" : "No court date is scheduled.");
       await waitFor(() => expect(views.at(-1)?.stage === "done" || views.at(-1)?.currentQuestion?.id !== question.id).toBe(true));
     }
-    const completion = await screen.findByText(/Brief ready\./);
+    const completionHeading = await screen.findByText(/Brief ready\./);
+    const completion = completionHeading.closest('[data-message-id="complete"]')!;
+    expect(completion.querySelectorAll('p').length).toBeGreaterThan(2);
     expect(completion.textContent).toContain(inquiry);
+    expect(completion.textContent).toMatch(/court order/i);
     expect(completion.textContent).toContain("Here is what I understood so far.");
     expect(completion.textContent).toMatch(/no firm is contacted/i);
     const reply = "Thank you for sharing.\nWe can discuss next steps.";

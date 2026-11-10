@@ -242,7 +242,7 @@ function isConversationalPractice(state: EngineState): boolean {
 function buildGroundedLeadSummary(state: EngineState, i18n: I18nBundle, legacy: LeadSummary): LeadSummary {
   const pt = state.language === 'pt';
   const paragraphs: string[] = [];
-  if (state.input.trim()) paragraphs.push(`${pt ? 'Você descreveu a situação assim' : 'You described the situation this way'}: “${state.input.trim()}”`);
+  if (state.input.trim()) paragraphs.push(`${pt ? 'Você nos contou' : 'You told us'}: “${state.input.trim()}”`);
   const facts: string[] = [];
   const readiness: FamilyRecapFact[] = [];
   const opening = state.input.trim();

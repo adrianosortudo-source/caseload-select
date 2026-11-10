@@ -38,7 +38,7 @@
     "amount_at_stake": "Aproximadamente quanto dinheiro está envolvido?",
     "invoice_exists": "Você tem uma fatura, conta ou demonstrativo mostrando o valor devido?",
     "payment_status": "Algum valor já foi pago?",
-    "proof_of_performance": "Você tem como mostrar que o trabalho, os bens ou os serviços foram entregues?",
+    "proof_of_performance": "Você tem prova de que o trabalho foi concluído ou entregue?",
     "dispute_reason": "O que a outra parte está dizendo sobre por que não paga?",
     "desired_outcome_unpaid_invoice": "Qual seria o melhor resultado para você?",
     "written_terms": "Você tem e-mails, mensagens ou outro registro por escrito do que foi combinado?",
@@ -157,7 +157,7 @@
     "notary_document_type": "Que tipo de documento você precisa reconhecer em cartório?",
     "family_help_sought": "Com o que você gostaria de ajuda?",
     "family_children": "Há crianças ou acordos de parentalidade envolvidos neste assunto?",
-    "family_existing_order": "Você já tem um acordo por escrito ou uma ordem judicial sobre este assunto?",
+    "family_existing_order": "Há um acordo por escrito ou uma ordem judicial?",
     "family_timing": "Há uma data de audiência ou prazo próximo? Se souber, informe a data.",
     "family_jurisdiction": "Em que cidade ou região está este assunto?"
   },
@@ -1273,7 +1273,7 @@
     "convo_error_generic": "Não foi possível concluir. Suas respostas continuam aqui. Tente novamente.",
     "convo_retry": "Tentar novamente",
     "convo_recap_heading": "Veja o que entendi até agora.",
-    "convo_correction_prompt": "Há algo incorreto ou faltando? Você pode corrigir antes de continuar.",
+    "convo_correction_prompt": "Está correto?",
     "convo_contact_heading": "Como o escritório pode entrar em contato?",
     "convo_contact_sub": "Use dados fictícios nesta demonstração. Nada é salvo e nenhum escritório será contatado.",
     "convo_contact_submit": "Continuar",
@@ -1611,6 +1611,38 @@
       "Buying into an existing business": "Você planeja comprar participação em um negócio existente.",
       "Selling or closing down a business": "Você planeja vender ou encerrar um negócio.",
       "Not sure": "Você ainda não sabe qual caminho seguirá com o negócio."
+    },
+    "poa_urgency": {
+      "Family member health crisis or recent diagnosis": "Uma crise de saúde de um familiar ou um diagnóstico recente motivou este pedido.",
+      "The person may no longer be able to sign documents": "Talvez a pessoa não consiga mais assinar documentos.",
+      "Planning ahead, no immediate trigger": "Você está se planejando, sem um motivo imediato.",
+      "Court application is being prepared": "Um pedido ao tribunal está sendo preparado.",
+      "Other": "Outro motivo levou a este pedido."
+    },
+    "poa_existing_documents": {
+      "Yes, an older POA exists": "Já existe uma procuração antiga.",
+      "No, nothing exists": "Não existem documentos de procuração.",
+      "Not sure": "Você não tem certeza se existem documentos de procuração."
+    },
+    "severance_offer_amount": {
+      "Less than 3 months of pay": "A oferta equivale a menos de três meses de remuneração.",
+      "3 to 6 months of pay": "A oferta equivale a 3 a 6 meses de remuneração.",
+      "6 to 12 months of pay": "A oferta equivale a 6 a 12 meses de remuneração.",
+      "More than 12 months of pay": "A oferta equivale a mais de 12 meses de remuneração.",
+      "A lump sum, unclear": "A oferta é um valor único, mas a comparação com o tempo de trabalho não está clara."
+    },
+    "severance_deadline": {
+      "Yes, in the next few days": "Você precisa responder nos próximos dias.",
+      "Yes, within the next week": "Você precisa responder dentro da próxima semana.",
+      "Yes, within the next month": "Você precisa responder dentro do próximo mês.",
+      "No clear deadline": "Não há um prazo claro para resposta.",
+      "The deadline has already passed": "O prazo para responder já passou."
+    },
+    "desired_outcome_severance_review": {
+      "Negotiate a better package": "Você quer negociar um pacote melhor com a ajuda de um advogado.",
+      "Confirm the offer is fair before signing": "Você quer confirmar se a oferta é justa antes de assinar.",
+      "Reject and pursue more": "Você quer rejeitar a oferta e buscar um pacote melhor.",
+      "Other": "Você tem outro objetivo para revisar a oferta de indenização."
     }
   }
 }
