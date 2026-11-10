@@ -30,7 +30,10 @@ describe('family case recap', () => {
     expect(summary.intro).toBe('Family law case recap');
     expect(summary.points).toHaveLength(9);
     expect(summary.points[0]).toBe('Your description: ' + inquiry);
-    for (const value of Object.values(answers)) expect(summary.points.some(point => point.endsWith(': ' + value))).toBe(true);
+    for (const [id, value] of Object.entries(answers)) {
+      const display = getI18n('en').slot_options[id]?.[value] || value;
+      expect(summary.points.some(point => point.endsWith(': ' + display))).toBe(true);
+    }
     expect(summary.closing).toMatch(/check.*accurate/i);
   });
 

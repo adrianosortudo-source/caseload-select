@@ -89,8 +89,8 @@ describe('conversational family recap', () => {
     expect(prose).not.toContain('You told us');
   });
 
-  it('keeps existing summaries for other practice areas unchanged', () => {
+  it('adds a grounded recap for another practice area', () => {
     const s = { ...initialiseState('A customer owes my company an unpaid invoice.'), matter_type: 'unpaid_invoice' as const, practice_area: 'corporate' as const };
-    expect(buildLeadSummary(s, getI18n('en')).paragraphs).toBeUndefined();
+    expect(buildLeadSummary(s, getI18n('en')).paragraphs?.join(' ')).toContain(s.input);
   });
 });

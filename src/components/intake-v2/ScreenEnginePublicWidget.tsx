@@ -22,6 +22,7 @@ import {
 } from "@/lib/screen-engine/control";
 import { getI18n, type I18nBundle } from "@/lib/screen-engine/i18n/loader";
 import { getOptionDisplayLabel, getOptionDescription, getQuestionDisplayText } from "@/lib/screen-engine/i18n/display";
+import { getQuestionContext } from "@/lib/screen-conversation-copy";
 import type { SupportedLanguage } from "@/lib/screen-engine/types";
 import { llmExtract, mergeLlmResults } from "@/lib/screen-engine/llm/extractor";
 import { buildReport } from "@/lib/screen-engine/report";
@@ -285,22 +286,6 @@ function FreeTextAnswerCard({
   );
 }
 
-const demoEnglishQuestions: Record<string, string> = {
-    amount_at_stake: "How much money is involved?",
-    invoice_exists: "Any invoice, bill or statement?",
-    payment_status: "Has any of it been paid?",
-    proof_of_performance: "Do you have proof of delivery?",
-    dispute_reason: "What reason did they give?",
-    desired_outcome_unpaid_invoice: "What outcome do you want?",
-    family_help_sought: "What would you like help with?",
-    family_children: "Are children involved?",
-    family_existing_order: "Any agreement or court order?",
-    family_timing: "Upcoming court date or deadline?",
-    family_jurisdiction: "Where is this matter located?",
-    hiring_timeline: "When do you need a lawyer?",
-    other_counsel: "Spoken to a lawyer about this?",
-    decision_authority: "Who decides on hiring a lawyer?",
-  };
 
 
 export function ScreenEnginePublicWidget({
@@ -440,11 +425,12 @@ export function ScreenEnginePublicWidget({
     } else if (stage === "contact" && !demoContinuation?.contactUsed) {
       message = { id: "contact", role: "assistant", text: "First, we need a name and a way to reach the person. Use the fictional sample contact to continue. You can reply with the number of an option or answer in your own words." };
     } else if (stage === "questions" && demoContinuation?.contactUsed && next?.type === "continue" && currentItem) {
-      message = { id: `question:${state.questionHistory.length}:${currentItem.id}`, role: "assistant", text: language === "en" ? demoEnglishQuestions[currentItem.id] ?? currentItem.question : currentItem.question, options: currentItem.options?.map((option) => option.label) };
+      message = { id: `question:${state.questionHistory.length}:${currentItem.id}`, role: "assistant", text: [getQuestionContext(state, next.slot!), currentItem.question].filter(Boolean).join("\n\n"), options: currentItem.options?.map((option) => option.label) };
     } else if (stage === "questions" && next?.type === "clarify") {
       message = { id: `clarify:${clarifyAttempts}`, role: "assistant", text: "Could you share a little more about what is happening?" };
     } else if (stage === "done") {
-      message = { id: "complete", role: "assistant", text: "Brief ready. No firm contacted." };
+      const summary = buildLeadSummary(state, i18n);
+      message = { id: "complete", role: "assistant", text: ["Brief ready.", i18n.widget_strings?.convo_recap_heading || "Here is what we understood.", ...(summary.paragraphs ?? summary.points), i18n.widget_strings?.convo_completion_body || "No firm contacted."].join("\n\n") };
     }
     if (message) setConversation((items) => items.some((item) => item.id === message!.id) ? items : [...items, message!]);
   }, [metaWorkflow, isReading, pendingDemoReview, state, stage, demoContinuation?.contactUsed, next, currentItem, clarifyAttempts, language]);
@@ -1014,7 +1000,15 @@ export function ScreenEnginePublicWidget({
           >
             {summary.intro}
           </p>
-          {summary.points.length > 0 && (
+          {summary.paragraphs?.length ? (
+            <div className="w-full space-y-4 text-left" data-ui-component-content="screen-recap-prose">
+              {summary.paragraphs.map((paragraph, index) => (
+                <p key={`recap-${index}`} className="w-full text-[15px] leading-relaxed text-[color-mix(in_srgb,var(--cls-text,#1E2F58)_70%,transparent)]" style={{ fontFamily: fontBody }} data-ui-copy="body">
+                  {paragraph}
+                </p>
+              ))}
+            </div>
+          ) : summary.points.length > 0 && (
             <ul className="rounded-xl bg-[var(--cls-surface,#FFFFFF)] border border-[color-mix(in_srgb,var(--cls-accent,#1E2F58)_10%,transparent)] p-4 text-left text-[14px] text-[color-mix(in_srgb,var(--cls-text,#1E2F58)_75%,transparent)] space-y-2">
               {summary.points.map((point) => <li key={point}>{point}</li>)}
             </ul>
