@@ -234,7 +234,7 @@ export function buildLeadSummary(state: EngineState, i18n: I18nBundle): LeadSumm
 }
 
 function isConversationalPractice(state: EngineState): boolean {
-  return state.matter_type !== 'out_of_scope' && ['corporate', 'real_estate', 'employment', 'estates'].includes(state.practice_area);
+  return !['out_of_scope', 'notary_services'].includes(state.matter_type) && ['corporate', 'real_estate', 'employment', 'estates'].includes(state.practice_area);
 }
 
 /** Quote only the visitor's own description and confirmed replies. Inferred slots
@@ -273,8 +273,14 @@ function buildGroundedLeadSummary(state: EngineState, i18n: I18nBundle, legacy: 
   // Group sentences for reading without constructing a question/answer list.
   for (let i = 0; i < facts.length; i += 3) paragraphs.push(facts.slice(i, i + 3).join(' '));
   paragraphs.push(...buildFamilyRecapParagraphs('', readiness, i18n));
+  const titles: Record<string, [string, string]> = {
+    corporate: ['Your business inquiry', 'Seu assunto empresarial'],
+    real_estate: ['Your real estate inquiry', 'Seu assunto imobiliário'],
+    employment: ['Your employment inquiry', 'Seu assunto trabalhista'],
+    estates: ['Your wills and estates inquiry', 'Seu assunto de testamento ou espólio'],
+  };
   return {
-    intro: pt ? 'Confira o que você compartilhou' : 'Please check what you shared',
+    intro: titles[state.practice_area][pt ? 1 : 0],
     points: legacy.points,
     paragraphs,
     closing: pt ? 'Você pode corrigir ou acrescentar detalhes.' : 'You can correct or add details.',

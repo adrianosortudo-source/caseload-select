@@ -109,4 +109,16 @@ describe('conversational display', () => {
     expect(recap).toContain('Yes, but I only have a partial copy.');
     expect(recap).not.toContain('You have an invoice.');
   });
+  it('keeps business context in the general-counsel recap heading', () => {
+    let state = initialiseState('I want an on-call lawyer for my business');
+    state = applyAnswer(state, 'gca_engagement_shape', 'Ongoing on-call legal support');
+    expect(buildLeadSummary(state, getI18n('en')).intro.toLowerCase()).toContain('business');
+  });
+  it('keeps the existing notary-specific summary', () => {
+    let state = initialiseState('i need a document notarized');
+    state = applyAnswer(state, 'notary_document_type', 'Travel or consent letter');
+    const summary = buildLeadSummary(state, getI18n('en'));
+    expect(summary.intro.toLowerCase()).toContain('notar');
+    expect(summary.paragraphs).toBeUndefined();
+  });
 });
