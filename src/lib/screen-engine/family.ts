@@ -44,7 +44,10 @@ export function groundFamilyConversationFacts(state: EngineState, input: string)
       return false;
     });
     if (explicitRequest && helpValue) candidates.family_help_sought = helpValue;
-    if (/\b(?:i|we)\s+(?:live|reside|are based)\s+in\s+(?:[a-z][a-z .'-]{0,40},\s*)?ontario\b/i.test(text)) candidates.family_jurisdiction = "Ontario";
+    const groupResidence = text.split(/[.!?;\n]+/).some((part) =>
+      !/\b(?:not sure|unsure|uncertain|maybe|might|perhaps|whether|if|don't know|do not know)\b/i.test(part) &&
+      /\bwe\s+(?:all|both)\s+(?:live|reside|are based)\s+in\s+(?:[a-z][a-z .'-]{0,40},\s*)?ontario\b/i.test(part));
+    if (/\b(?:i|we)\s+(?:live|reside|are based)\s+in\s+(?:[a-z][a-z .'-]{0,40},\s*)?ontario\b/i.test(text) || groupResidence) candidates.family_jurisdiction = "Ontario";
     const orderValue = state.slots.family_existing_order;
     if (familyNegativeIsGrounded("family_existing_order", "Neither", text)) candidates.family_existing_order = "Neither";
     const orderSentence = text.split(/[.!?;\n]+/).find((part) =>
