@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SCREEN | Public demonstration | CaseLoad Select</title>
+  <link rel="icon" type="image/svg+xml" href="/screen-demo-app/favicon.svg" />
+  <link rel="icon" type="image/png" href="/screen-demo-app/favicon.png" />
+  <link rel="preload" href="/screen-demo-app/fonts/Manrope-latin.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="preload" href="/screen-demo-app/fonts/dm-sans-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="preload" href="/screen-demo-app/fonts/Oxanium-latin.woff2" as="font" type="font/woff2" crossorigin />
+
+  <script type="module" crossorigin src="/screen-demo-app/assets/main-BYJ4dbrP.js"></script>
+  <link rel="modulepreload" crossorigin href="/screen-demo-app/assets/modulepreload-polyfill-B5Qt9EMX.js">
+  <link rel="stylesheet" crossorigin href="/screen-demo-app/assets/main-BqxE1x_E.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand-logo" href="https://caseloadselect.ca" target="_blank" rel="noopener" aria-label="CaseLoad Select">
+      <img
+        class="logo-img"
+        src="/screen-demo-app/brand/logos/lockup-horizontal-dark-transparent.png"
+        alt="CaseLoad Select"
+      />
+    </a>
+    <div class="topbar-meta">
+      <span class="topbar-label">Public demo</span>
+      <button id="reset-btn" class="topbar-action">Start over</button>
+    </div>
+  </div>
+</header>
+
+<!-- ─── Sandbox header ─────────────────────────────────────────────────────
+     Single intro line that names the page. Detailed framing for each
+     channel was removed when the layout itself started carrying the
+     comparison (left = active channel, right = lawyer view). -->
+<div class="sandbox-header">
+  <div class="sandbox-header-inner">
+    <p class="sandbox-eyebrow">SCREEN · Public demo</p>
+    <h1 class="sandbox-title">A fictional inquiry, ready for review</h1>
+    <p class="sandbox-lede">
+      Try a fictional inquiry and explore the report it produces. This demonstration does not save a lead or contact a firm.
+    </p>
+    <div class="firm-profile-control">
+      <label for="firm-profile-select">Practice area</label>
+      <select id="firm-profile-select" aria-label="Practice area">
+        <option value="auto" selected>Help me choose</option>
+        <option value="corporate">Business/corporate</option>
+        <option value="real_estate">Real estate</option>
+        <option value="employment">Employment</option>
+        <option value="estates">Wills/estates</option>
+        <option value="family">Family</option>
+      </select>
+      <div id="practice-area-notice" class="practice-area-notice" role="status" aria-live="polite" hidden></div>
+    </div>
+    <p class="demo-ai-disclosure">When you use live AI, your description is sent to Google Gemini. Use fictional details only. This demo saves no lead and contacts no law firm.</p>
+  </div>
+</div>
+
+<div class="channel-tabs">
+  <div class="channel-tabs-inner" role="tablist" aria-label="Input channels">
+    <button class="channel-tab is-active" type="button" role="tab" aria-selected="true" data-channel="widget">
+      <span class="channel-tab-icon" aria-hidden="true">▦</span>
+      <span class="channel-tab-label">Website widget</span>
+    </button>
+    <button class="channel-tab" type="button" role="tab" aria-selected="false" data-channel="whatsapp">
+      <span class="channel-tab-icon" aria-hidden="true">📱</span>
+      <span class="channel-tab-label">WhatsApp</span>
+    </button>
+    <button class="channel-tab" type="button" role="tab" aria-selected="false" data-channel="sms">
+      <span class="channel-tab-icon" aria-hidden="true">✉</span>
+      <span class="channel-tab-label">SMS</span>
+    </button>
+    <button class="channel-tab" type="button" role="tab" aria-selected="false" data-channel="instagram">
+      <span class="channel-tab-icon" aria-hidden="true">📸</span>
+      <span class="channel-tab-label">Instagram DM</span>
+    </button>
+    <button class="channel-tab" type="button" role="tab" aria-selected="false" data-channel="facebook">
+      <span class="channel-tab-icon" aria-hidden="true">f</span>
+      <span class="channel-tab-label">Facebook Messenger</span>
+    </button>
+    <button class="channel-tab" type="button" role="tab" aria-selected="false" data-channel="voice">
+      <span class="channel-tab-icon" aria-hidden="true">☎</span>
+      <span class="channel-tab-label">Voice transcript</span>
+    </button>
+  </div>
+</div>
+
+<main class="sandbox">
+
+  <section class="sandbox-channel" aria-label="Intake view">
+    <p class="sandbox-channel-eyebrow">Intake view</p>
+
+    <!-- Widget channel (default active) -->
+    <div class="channel-panel" data-channel-panel="widget">
+
+      <div class="channel-blurb">
+        <ul>
+          <li>This view represents a website inquiry form.</li>
+          <li>Choose an example or describe a fictional situation, then follow the prompts.</li>
+          <li>The sample report on the right updates as the fictional inquiry develops.</li>
+        </ul>
+      </div>
+
+      <div id="intake-hero" class="hero">
+        <p class="kicker">Website intake</p>
+        <h2 class="hero-title">Your inquiry</h2>
+        <p class="hero-sub">
+          Describe a fictional situation, then answer a few short follow-up questions. Your answers appear in a sample report for review. Nothing is sent to a law firm.
+        </p>
+
+        <textarea
+          id="case-input"
+          rows="6"
+          placeholder="e.g. My business partner won't show me the books and money is being taken out of the company..."
+        ></textarea>
+        <button id="screen-btn" class="cta-primary">Create sample report</button>
+        <p class="hero-foot">Fictional demonstration only. Do not enter client or confidential information.</p>
+
+        <div class="examples">
+          <p class="examples-label">Choose a fictional example</p>
+          <div class="examples-grid">
+            <button class="example-btn" data-text="I'm buying my first home and I need a lawyer to handle the closing">Buying a home</button>
+            <button class="example-btn" data-text="I started freelancing and I need to register for an HST number">Going freelance</button>
+            <button class="example-btn" data-text="My business partner won't show me the books and I think money is being taken out of the company">Partner hiding money</button>
+            <button class="example-btn" data-text="My tenant has stopped paying rent and won't leave">Tenant won't pay</button>
+            <button class="example-btn" data-text="My lender has started a power of sale on my house">Losing the house</button>
+            <button class="example-btn" data-text="I'm a subcontractor and the general contractor still hasn't paid me for the work I finished a few weeks ago">Unpaid contractor</button>
+            <button class="example-btn" data-text="I'm going through a divorce and need a family lawyer">Going through divorce</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="intake-recap" class="recap hidden">
+        <p class="kicker">Your fictional inquiry</p>
+        <blockquote id="recap-text"></blockquote>
+        <button id="edit-btn" class="link-btn">Edit and re-screen</button>
+      </div>
+
+      <div id="active-card" class="card hidden">
+        <div id="question-area"></div>
+        <div id="bridge-area" class="hidden"></div>
+        <div id="done-area" class="hidden"></div>
+      </div>
+
+    </div>
+
+    <!-- WhatsApp channel -->
+    <div class="channel-panel hidden" data-channel-panel="whatsapp">
+      <div class="channel-blurb">
+        <ul>
+          <li>This panel represents a WhatsApp-style conversation.</li>
+          <li>Choose an option or type a reply as the fictional inquiry progresses.</li>
+          <li>Messages stay in this demonstration. Nothing is sent to a firm.</li>
+        </ul>
+      </div>
+      <div id="whatsapp-sim"></div>
+      <div id="whatsapp-examples" class="channel-examples"></div>
+    </div>
+
+    <!-- SMS channel -->
+    <div class="channel-panel hidden" data-channel-panel="sms">
+      <div class="channel-blurb">
+        <ul>
+          <li>This panel represents a text-message intake.</li>
+          <li>Use the fictional prompts and examples to move through the conversation.</li>
+          <li>No real text messages are sent or received.</li>
+        </ul>
+      </div>
+      <div id="sms-sim"></div>
+      <div id="sms-examples" class="channel-examples"></div>
+    </div>
+
+    <!-- Instagram DM channel -->
+    <div class="channel-panel hidden" data-channel-panel="instagram">
+      <div class="channel-blurb">
+        <ul>
+          <li>This panel represents an Instagram direct-message conversation.</li>
+          <li>Try the fictional conversation using its native-style message controls.</li>
+          <li>This demonstration does not connect to an Instagram account.</li>
+        </ul>
+      </div>
+      <div id="instagram-sim"></div>
+      <div id="instagram-examples" class="channel-examples"></div>
+    </div>
+
+    <!-- Facebook Messenger channel -->
+    <div class="channel-panel hidden" data-channel-panel="facebook">
+      <div class="channel-blurb">
+        <ul>
+          <li>This panel represents a Facebook Messenger conversation.</li>
+          <li>Try the fictional conversation using its native-style message controls.</li>
+          <li>This demonstration does not connect to a Facebook account.</li>
+        </ul>
+      </div>
+      <div id="facebook-sim"></div>
+      <div id="facebook-examples" class="channel-examples"></div>
+    </div>
+
+    <!-- Voice channel -->
+    <div class="channel-panel hidden" data-channel-panel="voice">
+      <div class="channel-blurb">
+        <ul>
+          <li>This is a typed transcript simulation. Select a fictional sample transcript to create a sample report.</li>
+          <li>No audio is recorded or played, and no caller details are used.</li>
+          <li>The transcript remains part of this demonstration and is not sent to a firm.</li>
+        </ul>
+      </div>
+      <div id="voice-sim"></div>
+      <div id="voice-examples" class="channel-examples"></div>
+    </div>
+
+  </section>
+
+  <aside class="sandbox-brief" aria-label="Sample report">
+    <div class="sandbox-brief-sticky">
+      <p class="sandbox-brief-eyebrow">Sample report <span class="audience">Fictional inquiry · review only</span> <span id="brief-channel-tag" class="brief-channel-tag">Website intake</span></p>
+      <button id="expand-brief" class="expand-brief" type="button" hidden>Expand full report</button>
+      <div id="brief-mount" class="sandbox-brief-mount"></div>
+      <pre id="debug-pre" hidden aria-hidden="true"></pre>
+    </div>
+  </aside>
+
+</main>
+
+
+</body>
+</html>

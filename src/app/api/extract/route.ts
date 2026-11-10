@@ -16,10 +16,7 @@ interface ExtractRequest {
   reply?: string;
 }
 
-// llmExtractServer slices the description to 4,000 chars before the Gemini
-// call; 4x that bound is abuse, not verbosity. The check runs after
-// req.json() has already parsed the body, so it does not save the parse;
-// it stops oversized text from being proxied to Gemini.
+// Reject oversized descriptions explicitly before forwarding the complete accepted text.
 const MAX_DESCRIPTION_CHARS = 16_000;
 
 export async function POST(req: Request) {
@@ -64,7 +61,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "invalid pending slot or reply" }, { status: 400 });
   }
   const [result, mapped] = await Promise.all([
-    llmExtractServer(description, state),
+    llmExtractServer(description, state, MAX_DESCRIPTION_CHARS),
     slot && reply ? llmMapOptionReply({ questionLabel: slot.question, options: slot.options!, reply, language: "en" }) : Promise.resolve(null),
   ]);
   const value = mapped?.value;

@@ -5,8 +5,7 @@
  * (the browser widget calls it, so it cannot require auth). These tests
  * pin the two gates added by the launch audit:
  *   - 429 with rate-limit headers when the per-IP bucket denies
- *   - 413 when the description exceeds the 16,000-char cap (4x the
- *     4,000-char slice llmExtractServer applies internally)
+ *   - 413 when the description exceeds the 16,000-char cap
  * plus the happy path passing through to the extractor unchanged.
  *
  * Mocks follow the intake-v2 route test pattern: rate-limit and the LLM
@@ -86,6 +85,13 @@ describe("/api/extract rate limiting", () => {
     expect(json.mode).toBe("live");
     expect(json.extracted).toEqual({ incident_date: "last week" });
     expect(mocks.llmExtractServer).toHaveBeenCalledTimes(1);
+  });
+
+  it("passes the complete accepted long description to the provider helper", async () => {
+    const description = "x".repeat(16_000);
+    const res = await POST(makeRequest({ description }));
+    expect(res.status).toBe(200);
+    expect(mocks.llmExtractServer).toHaveBeenCalledWith(description, expect.anything(), 16_000);
   });
 
   it("keeps the empty-description short-circuit (no LLM call, no 4xx)", async () => {

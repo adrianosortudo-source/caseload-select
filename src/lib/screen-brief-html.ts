@@ -958,7 +958,7 @@ export const DEMO_BRIEF_PROJECTION_VERSION = "production-demo-v1";
 
 export interface BriefRenderOptions {
   /** Read-only demo projection: same report body, without a real queue, timer or action rail. */
-  presentation?: 'portal' | 'demo';
+  presentation?: 'portal' | 'demo' | 'view-only';
   /** ISO timestamp of the decision deadline. Drives the live timer attrs on
    *  the cover decision band and the sidebar Queue posture row. */
   decisionDeadlineIso?: string | null;
@@ -1008,7 +1008,18 @@ export function renderBriefHtmlServer(
   practiceArea?: string | null,
   options: BriefRenderOptions = {},
 ): string {
-  const isOOS = report.band == null;
+  // Family reports carry compatibility scoring placeholders. They are never
+  // suitable for display, including in stored portal briefs.
+  if (report.intake_only) {
+    return `<section class="brief-cover"><div class="brief-cover-left"><p class="cover-eyebrow">CaseLoad Select · Lawyer triage</p><h1 class="cover-headline">${withTerminalSquare(humanizeMatterType(matterType))}</h1></div><aside class="brief-decision-band"><span class="decision-priority">Firm review required</span></aside></section>
+      <div class="brief-notice-bar"><p class="brief-notice">Factual intake for independent firm review. No suitability, legal merit or fee estimate is assessed.</p></div>
+      ${options.presentation === 'view-only' ? '<p>Fictional demonstration. No firm was contacted.</p>' : ''}
+      ${napBlock(report.resolved_facts_v2, channel)}
+      <div class="brief-main-grid"><div class="brief-main-left"><section class="brief-group" data-group="routing"><h3 class="brief-group-title">Matter overview</h3>${textBlock(report.matter_snapshot)}</section><section class="brief-group" data-group="facts"><h3 class="brief-group-title">Resolved facts</h3>${clusteredFacts(report.resolved_facts_v2, channel)}</section></div></div>`;
+  }
+  // The engine can carry a compatibility band even for an out-of-scope matter.
+  // Matter classification is authoritative for the unassessed routing view.
+  const isOOS = report.band == null || matterType === 'out_of_scope';
   const {
     decisionDeadlineIso = null,
     subtrack = null,
@@ -1026,7 +1037,9 @@ export function renderBriefHtmlServer(
   const defaultProvenance = defaultProvenancePhraseFor(channel);
 
   // ─── Brief cover (black hero + decision band aside) ─────────────────────
-  const decisionBand = isOOS
+  const decisionBand = options.presentation === 'view-only'
+    ? `<aside class="brief-decision-band"><div class="decision-band-row">${isOOS ? '' : `<span class="band-badge band-${esc(report.band)}">Band ${esc(report.band)}</span>`}<span class="decision-priority">${esc(report.lawyer_time_priority)}</span></div></aside>`
+    : isOOS
     ? `
         <aside class="brief-decision-band">
           <div class="decision-band-row">
@@ -1157,8 +1170,8 @@ export function renderBriefHtmlServer(
 
   const sidebar = `
     <aside class="brief-main-right">
-      ${posturedCard}
-      ${conversationSlot}
+      ${options.presentation === 'view-only' ? '' : posturedCard}
+      ${options.presentation === 'view-only' ? '' : conversationSlot}
       ${watchpointsCard}
       ${questionsCard}
       ${signalsCard}
@@ -1384,8 +1397,9 @@ export function renderBriefHtmlServer(
     noticeStrip,
     languageCalloutHtml(intakeLanguage),
     truthWarningsHtml(report.truth_warnings),
+    options.presentation === 'view-only' ? '<p>Fictional demonstration. No firm was contacted.</p>' : '',
     contactStrip,
-    '<!-- ACTION_RAIL_SLOT -->',
+    options.presentation === 'view-only' ? '' : '<!-- ACTION_RAIL_SLOT -->',
     mainGrid,
   ].join('\n');
 }

@@ -1,0 +1,65 @@
+{
+  "schemaVersion": "screen-public-build-v1",
+  "canonicalPath": "/tools/screen",
+  "assetBase": "/screen-demo-app/",
+  "sourceRepository": "adrianosortudo-source/caseload-screen-sandbox",
+  "sourceCommit": "473b1c53dedf28cc695188c3d2ad64f30a015dbf",
+  "files": [
+    {
+      "path": "assets/demo-DW1x6iEr.js",
+      "sha256": "da2041848e6d86b70b5dcacf164ffd8a6c5c05b757be76aa69320fdde7fdcdb8"
+    },
+    {
+      "path": "assets/main-BYJ4dbrP.js",
+      "sha256": "b6e783883d480953961d2b355478cb8be8331bfe3b72263eccfffeb3dce057e1"
+    },
+    {
+      "path": "assets/main-BqxE1x_E.css",
+      "sha256": "d2f18cdcbececc20b91bf117c17e437513a3cb9cfb042a14d92c05ab7d96b0b4"
+    },
+    {
+      "path": "assets/modulepreload-polyfill-B5Qt9EMX.js",
+      "sha256": "d2a32840421496e872ade591618d2fa5c33797605d1aec04301717e5a90757d0"
+    },
+    {
+      "path": "brand/logos/lockup-horizontal-dark-transparent.png",
+      "sha256": "afe8022f535955fdbbd687d78b4f99fc1cb6685c74a26383f876cda34203a28f"
+    },
+    {
+      "path": "favicon.png",
+      "sha256": "03c176687ab200c83cf40f1773dca0b18298c2304473083bd363927ff3cc3275"
+    },
+    {
+      "path": "favicon.svg",
+      "sha256": "4734635528a9c0945263d6469a441c5e4608bed153e7b3f59421c0a61a3dcb66"
+    },
+    {
+      "path": "fonts/DM-Sans-OFL.txt",
+      "sha256": "6fbd040a29c2037a765dfb9f2561e9965b5c95c6dcb5dce516089d63d5f17af7"
+    },
+    {
+      "path": "fonts/Manrope-OFL.txt",
+      "sha256": "f612090fb72b6dca3e807e66fa0d2b5def163cef86f1a3209b5c897cba5ee4b7"
+    },
+    {
+      "path": "fonts/Manrope-latin.woff2",
+      "sha256": "a30ddcd349703aff7464c34bef3fffdff405ee50c113440d7c8693c02d210972"
+    },
+    {
+      "path": "fonts/Oxanium-OFL.txt",
+      "sha256": "fe17c0f2581d71b4e1ea7e636e7f4877c29223e11bb1dd1a871e8c3f2a86336b"
+    },
+    {
+      "path": "fonts/Oxanium-latin.woff2",
+      "sha256": "3aa555c528430aab19bb2693dc206bab557767d3082dba66400784c9cc90cfbb"
+    },
+    {
+      "path": "fonts/dm-sans-latin-wght-normal.woff2",
+      "sha256": "9fea608a947e67020c33cad9a6fe3d60c54119dfb8cff87768a8117a15ed7543"
+    },
+    {
+      "path": "index.html",
+      "sha256": "61bb6133f10d372c11c3314ce2951795c055a31dfaa18d8cdea36866680d06f6"
+    }
+  ]
+}

@@ -77,6 +77,7 @@ async function sleep(ms: number): Promise<void> {
 export async function llmExtractServer(
   description: string,
   state: EngineState,
+  maxDescriptionLength = MAX_DESCRIPTION_LENGTH,
 ): Promise<LlmExtractionResponse> {
   // GOOGLE_AI_API_KEY first (operator standard, also used by openrouter.ts
   // for the web channel /api/screen). GEMINI_API_KEY accepted as a
@@ -90,7 +91,7 @@ export async function llmExtractServer(
     };
   }
 
-  const trimmed = (description ?? '').slice(0, MAX_DESCRIPTION_LENGTH);
+  const trimmed = (description ?? '').slice(0, maxDescriptionLength);
   if (!trimmed.trim()) {
     return { extracted: {}, mode: 'error', reason: 'empty description' };
   }
