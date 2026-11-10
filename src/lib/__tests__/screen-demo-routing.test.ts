@@ -2,12 +2,26 @@ import { describe, expect, it, vi } from "vitest";
 import config from "../../../next.config";
 import ScreenToolPage from "@/app/tools/screen/page";
 import { ProspectDemoClient } from "@/components/prospect-demo/ProspectDemoClient";
+import GeneColmanScreenPage from "@/app/tools/screen/gene-colman/page";
+import { PublicScreenSandboxFrame } from "@/components/intake-v2/PublicScreenSandboxFrame";
 vi.mock("@/components/prospect-demo/ProspectDemoClient", () => ({ ProspectDemoClient: () => null }));
 describe("current SCREEN entry point and embed boundary", () => {
-  it("uses the canonical prospect presentation as an isolated embeddable public sample", async () => {
-    const page = await ScreenToolPage({ searchParams: Promise.resolve({ embed: "1" }) });
+  it("renders the canonical app-origin demo and passes only permitted settings", async () => {
+    const page = await ScreenToolPage({ searchParams: Promise.resolve({ embed: "1", practice_area: "employment", channel: "sms", profile: "gene" }) });
+    expect(page.type).toBe(PublicScreenSandboxFrame);
+    expect(page.props.query).toBe("embed=1&practice_area=employment&channel=sms&profile=gene");
+    const frame = PublicScreenSandboxFrame(page.props);
+    expect(frame.props.children.type).toBe("iframe");
+    expect(frame.props.children.props.src).toBe("/screen-demo-app/index.html?embed=1&practice_area=employment&channel=sms&profile=gene");
+    const defaults = await ScreenToolPage({ searchParams: Promise.resolve({}) });
+    expect(defaults.props.query).toBe("");
+    const rejected = await ScreenToolPage({ searchParams: Promise.resolve({ embed: "yes", practice_area: "criminal", channel: "gbp", profile: "other" }) });
+    expect(rejected.props.query).toBe("");
+  });
+  it("preserves the Gene family prospect presentation", () => {
+    const page = GeneColmanScreenPage();
     expect(page.type).toBe(ProspectDemoClient);
-    expect(page.props).toEqual({ profileId: "example-law-firm", sampleOnly: true, embedded: true });
+    expect(page.props).toEqual({ profileId: "gene-colman", sampleOnly: true });
   });
   it("routes the existing tools entry to the new demo while preserving old result URLs", async () => {
     const rules = await config.redirects!();
