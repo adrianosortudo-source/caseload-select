@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildVisualReview, removeCapture, enforceVisualEvidence } from '../visual-evidence';
+import { buildVisualReview, removeCapture, enforceVisualEvidence, refreshVisualStatus } from '../visual-evidence';
 import { VISUAL_AREAS, type VisualCapture } from '../visual-review-types';
 const captures: VisualCapture[] = [{ id: 'desktop', available: true, mimeType: 'image/png', base64: 'abc', width: 100, height: 200, totalHeight: null }, { id: 'mobile', available: true, mimeType: 'image/png', base64: 'def', width: 50, height: 200, totalHeight: null }];
 const areas = Object.fromEntries(VISUAL_AREAS.map(a => [a, 'assessed']));
@@ -52,4 +52,39 @@ describe('action-list evidence quality', () => {
   const result = enforceVisualEvidence(buildVisualReview(captures, raw({ visibleText: 'May we help?', observation: 'The button labeled May we help? overlaps the heading.' })), {});
   expect(result.findings).toHaveLength(1);
  });
+});
+
+
+describe('contact emphasis false positives', () => {
+ const contact = { ...finding, captureId: 'mobile', area: 'mobile_contact', section: 'Footer navigation', element: 'Call icon' };
+ const raw = (observation: string, area = 'mobile_contact') => ({ viewportReviews: [review('desktop'), review('mobile')], findings: [{ ...contact, area, observation }], strengths: [] });
+ it.each([
+  "The 'Call' icon in the mobile sticky footer is visually equal to 'Menu', 'About Us', and 'Email' icons.",
+  'The phone action has the same visual weight as the navigation links.',
+  'The contact button lacks prominence beside the links.',
+  'The consultation action does not stand out from its peers.',
+  'The phone button blends in with the navigation.',
+ ])('withholds unverified relative-emphasis claims: %s', observation => {
+  const result = enforceVisualEvidence(buildVisualReview(captures, raw(observation)), {});
+  expect(result.findings).toEqual([]);
+  expect(result.reasonCodes).toContain('contact_prominence_unverified');
+  expect(result.status).toBe('partial');
+  expect(result.viewportReviews[1].areas.mobile_contact).toBe('not_assessable');
+  expect(result.viewportReviews[0].areas.mobile_contact).toBe('assessed');
+  expect(refreshVisualStatus(result).reasonCodes).toContain('contact_prominence_unverified');
+ });
+ it('applies to miscategorised hierarchy findings without discarding unrelated evidence', () => {
+  const input = raw('The Call icon has equal visual emphasis to the other icons.', 'hierarchy');
+  input.findings.push({ ...finding, captureId: 'desktop', area: 'hierarchy' });
+  const result = enforceVisualEvidence(buildVisualReview(captures, input), {});
+  expect(result.findings).toHaveLength(1);
+  expect(result.findings[0].observation).toBe(finding.observation);
+ });
+ it.each(['The chat launcher covers the call button.', 'The call button is clipped at the right edge.'])(
+  'preserves concrete contact-access defects: %s', observation => {
+   const result = enforceVisualEvidence(buildVisualReview(captures, raw(observation)), {});
+   expect(result.findings).toHaveLength(1);
+   expect(result.reasonCodes).not.toContain('contact_prominence_unverified');
+  },
+ );
 });

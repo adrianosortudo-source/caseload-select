@@ -41,7 +41,7 @@ export function buildVisualReview(captures: VisualCapture[], raw?: unknown): Vis
  return refreshVisualStatus(out);
 }
 export function refreshVisualStatus(out: VisualReview): VisualReview {
- out.reasonCodes = out.reasonCodes.filter(x => x === 'vision_unavailable' || x === 'invalid_visual_response' || x === 'contrast_unverified' || x === 'uncertain_observation');
+ out.reasonCodes = out.reasonCodes.filter(x => x === 'vision_unavailable' || x === 'invalid_visual_response' || x === 'contrast_unverified' || x === 'uncertain_observation' || x === 'contact_prominence_unverified');
  if (out.captures.some(c => !c.available)) out.reasonCodes.push('capture_unavailable');
  if (out.captures.some(c => c.reason === 'payload_limit')) out.reasonCodes.push('payload_limit');
  if (out.captures.some(c => c.totalHeight)) out.reasonCodes.push('capture_clipped');
@@ -55,9 +55,21 @@ export function removeCapture(review: VisualReview, id: 'desktop' | 'mobile'): v
  review.viewportReviews = review.viewportReviews.filter(r => r.captureId !== id); review.findings = review.findings.filter(f => f.captureId !== id); review.strengths = review.strengths.filter(s => s.captureId !== id); refreshVisualStatus(review);
 }
 
-/** Keep tentative suggestions and uncorroborated text-contrast claims out of the action list. */
+/** Contact styling is not independently measured by the current renderer.
+ * Do not turn a relative-emphasis opinion into a factual contact defect.
+ * This applies across areas so misclassification cannot bypass the guard.
+ */
+function isUnverifiedContactEmphasis(finding: VisualFinding): boolean {
+ const context = `${finding.section} ${finding.element} ${finding.visibleText ?? ''} ${finding.observation}`;
+ if (finding.area !== 'mobile_contact' && !/\b(?:call|phone|telephone|contact|consultation)\b/i.test(context)) return false;
+ const observation = finding.visibleText ? finding.observation.replaceAll(finding.visibleText, '') : finding.observation;
+ return /\b(?:prominen(?:t|ce)|stand(?:s|ing)? out|visually equal|(?:equal|same|similar|identical|uniform)[ -](?:visual[ -])?(?:weight|emphasis|prominence|size|styling|style)|indistinguishable|undifferentiated|competes? with|blend(?:s|ing)? in)\b/i.test(observation);
+}
+
+/** Keep unsupported contact emphasis, tentative suggestions and unmeasured contrast out of the action list. */
 export function enforceVisualEvidence(review: VisualReview, snapshots: Partial<Record<'desktop' | 'mobile', DomSnapshot>>): VisualReview {
  const unverifiedContrast = new Set<'desktop' | 'mobile'>();
+ const unverifiedContact = new Set<'desktop' | 'mobile'>();
  const contrastClaim = (item: VisualFinding | VisualStrength) => item.area === 'colour_contrast' || (/\bcontrast\b/i.test(item.observation) && /\b(?:colou?r|background|shade|luminance)\b/i.test(item.observation));
  const contrastConfirmed = (item: VisualFinding | VisualStrength, expected: 'fail' | 'pass') => {
   const snapshot = snapshots[item.captureId];
@@ -70,6 +82,7 @@ export function enforceVisualEvidence(review: VisualReview, snapshots: Partial<R
   return measured.maxScore > 0 && measured.items.some(i => i.scored !== false && i.status === expected);
  };
  review.findings = review.findings.filter(f => {
+  if (isUnverifiedContactEmphasis(f)) { unverifiedContact.add(f.captureId); return false; }
   const observation = f.visibleText ? f.observation.replaceAll(f.visibleText, '') : f.observation;
   if (/\b(?:may|might|could|possibly|potentially)\b/i.test(observation)) {
    if (!review.reasonCodes.includes('uncertain_observation')) review.reasonCodes.push('uncertain_observation');
@@ -82,6 +95,15 @@ export function enforceVisualEvidence(review: VisualReview, snapshots: Partial<R
   if (contrastClaim(s) && !contrastConfirmed(s, 'pass')) { unverifiedContrast.add(s.captureId); return false; }
   return true;
  });
+ if (unverifiedContact.size) {
+  if (!review.reasonCodes.includes('contact_prominence_unverified')) review.reasonCodes.push('contact_prominence_unverified');
+  review.findings = review.findings.filter(f => f.area !== 'mobile_contact' || !unverifiedContact.has(f.captureId));
+  review.strengths = review.strengths.filter(s => s.area !== 'mobile_contact' || !unverifiedContact.has(s.captureId));
+  for (const viewport of review.viewportReviews) if (unverifiedContact.has(viewport.captureId)) {
+   viewport.areas.mobile_contact = 'not_assessable';
+   viewport.areaReasons.mobile_contact = 'Contact-action emphasis could not be independently verified from the available evidence.';
+  }
+ }
  if (unverifiedContrast.size) {
   review.reasonCodes.push('contrast_unverified');
   review.findings = review.findings.filter(f => !contrastClaim(f) || !unverifiedContrast.has(f.captureId));

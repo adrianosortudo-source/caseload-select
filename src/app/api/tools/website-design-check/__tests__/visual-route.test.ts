@@ -37,6 +37,19 @@ describe("visual report API boundary", () => {
   const sent = m.general.mock.calls[0][2]; expect(sent).toEqual(body.visualReview.captures);
   expect(JSON.stringify(body)).not.toContain("DO_NOT_EXPOSE"); expect(JSON.stringify(body)).not.toContain("domSnapshot");
  });
+ it("withholds an unsupported equal-weight call claim before returning the report", async () => {
+  m.general.mockResolvedValue({ judgments: [], visual: { ...visual, findings: [
+   { ...visual.findings[0], captureId: "mobile", area: "mobile_contact", section: "Footer navigation", element: "Call icon", observation: "The 'Call' icon in the mobile sticky footer is visually equal to 'Menu', 'About Us', and 'Email' icons." },
+   visual.findings[0],
+  ] } });
+  const response = await POST(request()); const body = await response.json();
+  expect(response.status).toBe(200);
+  expect(body.visualReview.findings).toHaveLength(1);
+  expect(body.visualReview.findings[0].observation).toBe(visual.findings[0].observation);
+  expect(body.visualReview.reasonCodes).toContain("contact_prominence_unverified");
+  expect(body.visualReview.viewportReviews[1].areaReasons.mobile_contact).toContain("could not be independently verified");
+  expect(m.general).toHaveBeenCalledTimes(1); expect(m.authority).toHaveBeenCalledTimes(1);
+ });
  it("removes the larger image and its dependent finding before exceeding the JSON budget", async () => {
   const base: VisualCapture = { id: "desktop", available: true, mimeType: "image/png", base64: "A".repeat(1398104), width: 80, height: 120, totalHeight: null };
   vi.spyOn(evidence, "prepareCapture").mockResolvedValueOnce(base).mockResolvedValueOnce({ ...base, id: "mobile", base64: "B".repeat(1398000) });
