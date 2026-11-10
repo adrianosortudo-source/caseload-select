@@ -28,7 +28,7 @@ describe("read-only SCREEN report", () => {
   it.each(["family", "real_estate"] as const)("keeps actual contact structure in the %s view-only report", area => {
     const initial = initialiseState(area === "family" ? "I need a family lawyer for custody." : "I am buying a house and need a lawyer for the closing.");
     const state = area === "family" ? configureFirmPracticeAreas(initial, ["family"]) : initial;
-    const report = { ...buildReport(state), resolved_facts_v2: [{ label: "Name", value: "Example Person", source: "answered" as const }] };
+    const report = { ...buildReport(state), resolved_facts_v2: [{ label: "Name", value: "Example Person", source: "explicit_from_caller" as const }] };
     const html = renderBriefHtmlServer(report, "web", null, undefined, state.matter_type, state.practice_area, { presentation: "view-only" });
     expect(html).toContain("Fictional demonstration. No firm was contacted.");
     expect(html).toContain('class="nap-grid"');
