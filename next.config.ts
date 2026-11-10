@@ -194,6 +194,19 @@ const toolsEmbedSecurityHeaders = [
   // though both are us. The CSP frame-ancestors list above is the gate.
 ];
 
+// SCREEN embeds its canonical frontend and report on the same app origin.
+// A single owned marketing preview may frame this public demo during review.
+const screenPreviewOrigin = process.env.VERCEL_ENV === "preview"
+  ? process.env.SCREEN_DEMO_MARKETING_PREVIEW_ORIGIN : undefined;
+if (screenPreviewOrigin && !/^https:\/\/caseloadselect-site-[a-z0-9-]+\.vercel\.app$/.test(screenPreviewOrigin)) {
+  throw new Error("SCREEN marketing preview must be an exact CaseLoad Select preview origin.");
+}
+const screenDemoSecurityHeaders = toolsEmbedSecurityHeaders.map((header) => header.key === "Content-Security-Policy"
+  ? { ...header, value: header.value
+    .replace("frame-src https://cal.com https://app.cal.com", "frame-src 'self'")
+    .replace("http://localhost:3300", "http://localhost:3300" + (screenPreviewOrigin ? " " + screenPreviewOrigin : "")) }
+  : header).concat([{ key: "X-Robots-Tag", value: "noindex, nofollow" }]);
+
 const nextConfig: NextConfig = {
   turbopack: {
     root: __dirname,
@@ -221,7 +234,11 @@ const nextConfig: NextConfig = {
         // Version3_CaseLoadSelect/tools.html. Scoped to our own origins,
         // not the open '*' the widget uses.
         source: "/tools/screen",
-        headers: toolsEmbedSecurityHeaders,
+        headers: screenDemoSecurityHeaders,
+      },
+      {
+        source: "/screen-demo-app/:path*",
+        headers: screenDemoSecurityHeaders,
       },
       {
         source: "/tools/seo-check",
@@ -286,7 +303,7 @@ const nextConfig: NextConfig = {
         // both their embeddable set AND the strict main-app set, and the
         // latter's X-Frame-Options: DENY would block iframe embedding.
         source:
-          "/((?!widget/|widget-public/|tools/screen/?$|tools/seo-check|tools/firm-voice-builder|tools/start-a-conversation|tools/website-design-check|tools/why-your-firm|tools/desired-client-matter/?$|tools/best-cases-profile/?$|screen-demo).*)",
+          "/((?!widget/|widget-public/|screen-demo-app(?:/|$)|tools/screen/?$|tools/seo-check|tools/firm-voice-builder|tools/start-a-conversation|tools/website-design-check|tools/why-your-firm|tools/desired-client-matter/?$|tools/best-cases-profile/?$|screen-demo(?:/|$)).*)",
         headers: mainSecurityHeaders,
       },
     ];
