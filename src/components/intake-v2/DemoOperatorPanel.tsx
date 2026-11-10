@@ -34,7 +34,7 @@ export function DemoOperatorPanel({ view, continuation }: { view: ScreenDemoView
             <div><dt>Review</dt><dd>Lawyer decision required</dd></div>
           </dl> : <dl className={styles.metrics} aria-label="Intake assessment">
             <div><dt>Matter type</dt><dd>{label(state.matter_type)}</dd></div>
-            <div><dt>Fit band</dt><dd>{state.band ?? "Unassigned"}</dd></div>
+            <div><dt>{isFamily ? "Intake status" : "Fit band"}</dt><dd>{isFamily ? "Family law intake / Firm review required" : state.band ?? "Unassigned"}</dd></div>
             <div><dt>Core facts</dt><dd>{percent(state.coreCompleteness)}</dd></div>
             <div><dt>Confidence</dt><dd>{percent(state.confidence)}</dd></div>
           </dl>}

@@ -163,12 +163,16 @@ const ROUTING_PEER_SETS: Partial<Record<MatterType, MatterType[]>> = {
   ],
 };
 
-export function getExtractableSlots(matterType: MatterType): ExtractionSlot[] {
+export function getExtractableSlots(matterType: MatterType, familyEnabled = false): ExtractionSlot[] {
   // Language detector slot is ALWAYS at the head of the catalogue (DR-039).
   // The LLM resolves language on every call, not just when an upstream
   // detector was uncertain. Lead-intent classifier (DR-112) is always
   // injected alongside it, same rationale: every call, not just clarify.
   const prefix: ExtractionSlot[] = [languageDetectorSlot(), leadIntentSlot()];
+  if (matterType === 'unknown' || matterType === 'out_of_scope') {
+    prefix.push({ id: '__family_area', question: "Classify the legal area from the person's description, independent of whether a firm handles it. Family includes divorce, separation, parenting, access to children, and support. For example, 'my ex wife is not allowing me to see my kids' is family. Return family only when the description indicates a family-law matter; otherwise return other.", input_type: 'single_select', options: ['family', 'other'], description: 'Tier: classifier. Group: routing.' });
+    if (familyEnabled) prefix.push(...getSlotsForMatter('family_general').filter(isLlmAllowed).map(slotToExtractionSlot));
+  }
 
   // For unknown matter, return routing-level slots so the LLM can help
   // disambiguate within an area. Plus inject the special matter-type

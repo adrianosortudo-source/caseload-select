@@ -1,6 +1,7 @@
 import type { EngineState, LawyerReport, Band, ResolvedFact } from './types';
 import { computeBand, bandLabel, scoreFourAxes, buildAxisReasoning } from './band';
-import { selectNextSlot, getDecisionGap } from './selector';
+import { selectNextSlot, getDecisionGap, isUserAnswered } from './selector';
+import { SLOT_REGISTRY } from './slotRegistry';
 import { isContactComplete } from './contact-doctrine';
 
 // ─── Provenance helpers ───────────────────────────────────────────────────
@@ -1584,6 +1585,28 @@ export function validateReportFacts(state: EngineState): string[] {
 // ─── Main report builder ──────────────────────────────────────────────────
 
 export function buildReport(state: EngineState): LawyerReport {
+  if (state.matter_type === 'family_general') {
+    // Legacy report fields are required by existing storage readers. These
+    // zero values are compatibility sentinels, not scores; renderers must
+    // suppress them when intake_only is true.
+    const blankAxis = () => ({ score: 0, reasons: [] as string[] });
+    const familyQuestions = SLOT_REGISTRY.filter(slot => slot.applies_to.includes('family_general') && slot.tier !== 'contact' && !isUserAnswered(state, slot.id)).map(slot => slot.question);
+    const next = familyQuestions[0] ?? '';
+    return {
+      intake_only: true, lead_id: state.lead_id, submitted_at: state.submitted_at,
+      matter_snapshot: 'Family law intake', lawyer_time_priority: 'Firm review required', band: 'C',
+      band_reasoning_bullets: [], confidence_calibration: 'Not assessed',
+      four_axis: { value: 0, complexity: 0, urgency: 0, readiness: 0, readinessAnswered: false },
+      axis_reasoning: { value: blankAxis(), complexity: blankAxis(), urgency: blankAxis(), readiness: blankAxis(), readinessAnswered: false },
+      truth_warnings: matterClassificationInferred(state) ? ['Family law classification was inferred and needs confirmation.'] : [],
+      likely_legal_services: [], fee_estimate: 'Not assessed', why_it_matters: 'The firm will review the intake.',
+      cross_sell_opportunities: [], strategic_considerations: [], what_to_confirm: familyQuestions,
+      call_openers: [], best_next_question: next, resolved_facts_v2: buildResolvedFactsV2(state),
+      resolved_facts: buildResolvedFacts(state), inferred_signals: [], open_questions: familyQuestions, risk_flags: [],
+      contact_complete: isContactComplete({ client_name: state.slots.client_name, client_email: state.slots.client_email, client_phone: state.slots.client_phone }),
+      advisory_subtrack: state.advisory_subtrack, matter_type_provenance: state.matter_type_provenance ?? 'unknown', lead_intent: state.lead_intent ?? 'unknown',
+    };
+  }
   const bandResult = computeBand(state);
   const truthWarnings = validateReportFacts(state);
 

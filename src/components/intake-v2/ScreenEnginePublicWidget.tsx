@@ -621,7 +621,7 @@ export function ScreenEnginePublicWidget({
       let updated = mergeLlmResults({ ...state, input: context }, result.extracted);
       // Keep the original inquiry intact while grounding this turn in its actual reply.
       updated = { ...updated, input: state.input };
-      if (metaWorkflow) updated = groundDemoConversationFacts(updated, demoUserEvidence.current.join("\n"));
+      if (metaWorkflow) updated = groundDemoConversationFacts(updated, text);
       const mapped = result.mapped_answer;
       const mappedAnswer = mapped?.slotId === slotId && asked.options?.some((option) => option.value === mapped.value);
       if (mappedAnswer) updated = applyAnswer(updated, slotId, mapped!.value);

@@ -15,11 +15,11 @@ describe("configured family demonstration", () => {
     expect(original.matter_type).toBe("out_of_scope");
     expect(prepareFamilyDemoState(original, [])).toBe(original);
     const unrelated = initialiseState("I need help with an unpaid business invoice.");
-    expect(prepareFamilyDemoState(unrelated, ["family"])).toBe(unrelated);
+    expect(prepareFamilyDemoState(unrelated, ["family"]).matter_type).toBe("out_of_scope");
     expect(getExtractableSlots("unknown").some((slot) => slot.id.startsWith("family_"))).toBe(false);
     for (const text of ["Our company disputes custody of business assets.", "I need advice on separation of commercial property parcels."]) {
       const business = initialiseState(text);
-      expect(prepareFamilyDemoState(business, ["family"])).toBe(business);
+      expect(prepareFamilyDemoState(business, ["family"]).matter_type).not.toBe("family_general");
     }
   });
   it("recognizes clear family descriptions without forcing unrelated commercial disputes", () => {

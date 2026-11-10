@@ -1,0 +1,17 @@
+{
+  "id": "SCREEN-FAMILY-PROFILE-20261109",
+  "status": "preview-only",
+  "decision": "Use an opt-in family screening pack in the existing shared SCREEN engine and channel adapters.",
+  "scope": {
+    "legacyProfile": "No family flag preserves the existing DRG flow.",
+    "geneProfile": "Explicit family-only profile enables family intake and refers unrelated matters.",
+    "mixedProfile": "Family plus other supported areas retains those existing matter paths."
+  },
+  "classification": "AI identifies family area independently from whether the selected firm accepts it; exact user text is retained as evidence.",
+  "lifecycle": "Use existing follow-up, channel question budgets, insight, contact and completion steps.",
+  "report": "Family report is factual and intake-only. Legacy numeric fields are internal compatibility sentinels and are omitted from family display, copy and CRM preview. No calibrated suitability or fee claims.",
+  "transport": "Sandbox completion is local and does not write leads or contact a firm. Only extraction and pending-answer mapping call the preview AI endpoint.",
+  "compatibility": "Existing APIs gain optional profile metadata; no database migrations or production setting changes.",
+  "rollback": "Preserve codex/rollback-screen-family-20261109-* refs. New implementation is isolated on codex/screen-family-multichannel-20261109 and reviewed as draft PRs. Rehearse reverse patch and baseline smoke tests before release.",
+  "productionRelease": "Held for explicit approval of the specific PRs after preview review."
+}

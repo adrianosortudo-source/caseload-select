@@ -242,7 +242,7 @@ function buildLeadSummaryEn(state: EngineState): LeadSummary {
     };
     const area = areaLabels[state.practice_area] ?? 'this area';
     return {
-      intro: `From what you described, this looks like a ${area} matter.`,
+      intro: area === 'this area' ? 'From what you described, this matter needs review.' : `From what you described, this looks like a ${area} matter.`,
       points: [],
       closing: 'A team member will review and respond directly. The firm does not yet handle this area on its own, but they will tell you whether they can help or refer you to someone who can.',
     };
@@ -982,11 +982,6 @@ function shouldPresentInsight(
 // ─── Main control ─────────────────────────────────────────────────────────
 
 export function getNextStep(state: EngineState): NextStep {
-  // Explicitly configured family demonstrations ask unresolved factual slots before completion.
-  if (state.matter_type === 'family_general') {
-    const next = selectNextSlot(state);
-    return next ? { type: 'continue', slot: next } : { type: 'present_insight', bridgeText: 'The demonstration brief is ready for review.' };
-  }
   const bandResult = computeBand(state);
   const completeness = computeCoreCompleteness(state);
   const gap = getDecisionGap(state);

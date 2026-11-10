@@ -766,7 +766,7 @@ export function selectNextSlot(state: EngineState): SlotDefinition | null {
     if (!slotApplicableToSubtrack(state, slot)) return false;
     if (!slotApplicableToCorporateRouting(state, slot)) return false;
     if (slotIsAnswered(state, slot)) return false;
-    if (groupAlreadyAnswered(state, slot)) return false;
+    if (state.matter_type !== 'family_general' && groupAlreadyAnswered(state, slot)) return false;
 
     if (state.advisory_subtrack === 'solo_setup' && slot.id === 'ownership_split_discussed') return false;
 

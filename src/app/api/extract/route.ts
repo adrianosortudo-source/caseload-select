@@ -10,6 +10,7 @@ import type { MatterType } from "@/lib/screen-engine/types";
 interface ExtractRequest {
   description?: string;
   matter_type?: MatterType;
+  family_enabled?: boolean;
   already_extracted?: Record<string, string | null>;
   pending_slot_id?: string;
   reply?: string;
@@ -51,6 +52,7 @@ export async function POST(req: Request) {
   const state = {
     ...initialiseState(description),
     matter_type: body.matter_type ?? "unknown",
+    family_enabled: body.family_enabled === true,
     slots: body.already_extracted ?? {},
   };
 

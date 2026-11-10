@@ -1,5 +1,6 @@
 import type { EngineState } from "./screen-engine/types";
 import { familyNegativeIsGrounded } from "./screen-engine/llm/extractor";
+import { groundFamilyConversationFacts } from "./screen-engine/family";
 import { demoCapturedFacts } from "./screen-demo-confirmation";
 
 /** Only a person's literal words can ground a demo fact; AI guesses remain inferred. */
@@ -88,5 +89,5 @@ export function groundDemoConversationFacts(state: EngineState, userText: string
     slot_meta[id] = { source: "explicit", confidence: 1, evidence: text };
     changed = true;
   }
-  return changed ? { ...state, slots, slot_meta } : state;
+  return groundFamilyConversationFacts(changed ? { ...state, slots, slot_meta } : state, text);
 }
