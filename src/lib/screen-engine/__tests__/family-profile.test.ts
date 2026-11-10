@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { initialiseState } from '../extractor';
-import { configureFirmPracticeAreas, groundFamilyConversationFacts } from '../family';
+import { configureFirmPracticeAreas, groundFamilyConversationFacts, groundFamilyOrderReplies } from '../family';
 import { getExtractableSlots } from '../llm/schema';
 import { mergeLlmResults } from '../llm/extractor';
 import { applyAnswer, getNextStep, markInsightShown, startContactCapture } from '../control';
@@ -32,6 +32,15 @@ describe('opt-in family intake', () => {
     expect(updated.slots.family_existing_order).toBe('Neither');
     expect(updated.slots.family_timing).toMatch(/no upcoming court date/i);
     expect(updated.slot_meta.family_timing.source).toBe('explicit');
+  });
+  it('grounds only a consistent two-reply order answer', () => {
+    const state = configureFirmPracticeAreas(initialiseState('I need a family lawyer for custody.'), ['family']);
+    const partials = ['There is no court order that I know of.', 'There is no written agreement either.'];
+    const grounded = groundFamilyOrderReplies(state, partials);
+    expect(grounded.slots.family_existing_order).toBe('Neither');
+    expect(grounded.slot_meta.family_existing_order).toMatchObject({ source: 'explicit', evidence: partials.join('\n') });
+    expect(groundFamilyOrderReplies(state, [partials[0], 'There is a court order and no written agreement.']).slots.family_existing_order).toBeFalsy();
+    expect(groundFamilyOrderReplies(state, [partials[0]]).slots.family_existing_order).toBeFalsy();
   });
   it('updates an earlier explicit fact when the person corrects it', () => {
     let state = configureFirmPracticeAreas(initialiseState('I need a family lawyer for custody.'), ['family']);

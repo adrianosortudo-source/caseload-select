@@ -59,3 +59,17 @@ export function groundFamilyConversationFacts(state: EngineState, input: string)
   for (const [id, value] of Object.entries(candidates)) { slots[id] = value; slot_meta[id] = { source: 'explicit', confidence: 1, evidence: text }; }
   return { ...state, slots, slot_meta };
 }
+
+/** Ground a composite negative from two consecutive replies to the same order question. */
+export function groundFamilyOrderReplies(state: EngineState, replies: readonly string[]): EngineState {
+  if (state.matter_type !== 'family_general' || replies.length < 2) return state;
+  const recent = replies.slice(-2);
+  if (!/\b(?:no|without|neither)\b/i.test(recent[1])) return state;
+  // Do not let an earlier negative override a stated existing order/agreement.
+  const positive = /\b(?:(?:there is|we have|i have)\s+(?:an?|the)\s+(?:(?:court|parenting|written|separation)\s+)?(?:order|agreement)|(?:order|agreement)\s+(?:is|remains)\s+(?:in place|active))\b/i;
+  if (recent.some(reply => positive.test(reply))) return state;
+  const evidence = recent.join('\n');
+  if (!familyNegativeIsGrounded('family_existing_order', 'Neither', evidence)) return state;
+  return { ...state, slots: { ...state.slots, family_existing_order: 'Neither' },
+    slot_meta: { ...state.slot_meta, family_existing_order: { source: 'explicit', confidence: 1, evidence } } };
+}

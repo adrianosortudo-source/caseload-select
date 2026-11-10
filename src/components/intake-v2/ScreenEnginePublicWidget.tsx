@@ -33,6 +33,7 @@ import { DemoFactReview } from "./DemoFactReview";
 import { DemoConversation, type DemoConversationMessage } from "./DemoConversation";
 import { groundDemoConversationFacts } from "@/lib/screen-demo-conversation-grounding";
 import { prepareFamilyDemoState } from "@/lib/screen-demo-family";
+import { groundFamilyOrderReplies } from "@/lib/screen-engine/family";
 import { applyPendingSlotReply } from "@/lib/pending-slot-reply";
 import { meetsDiscoveryFloor } from "@/lib/discovery-floor";
 import { selectNextSlot } from "@/lib/screen-engine/selector";
@@ -621,7 +622,16 @@ export function ScreenEnginePublicWidget({
       let updated = mergeLlmResults({ ...state, input: context }, result.extracted);
       // Keep the original inquiry intact while grounding this turn in its actual reply.
       updated = { ...updated, input: state.input };
-      if (metaWorkflow) updated = groundDemoConversationFacts(updated, text);
+      if (metaWorkflow) {
+        updated = groundDemoConversationFacts(updated, text);
+        if (slotId === "family_existing_order") {
+          const prefix = `Question: ${asked.question}\nAnswer: `;
+          const recent = demoReplyHistory.current.slice(-2);
+          if (recent.length === 2 && recent.every((reply) => reply.startsWith(prefix))) {
+            updated = groundFamilyOrderReplies(updated, recent.map((reply) => reply.slice(prefix.length)));
+          }
+        }
+      }
       const mapped = result.mapped_answer;
       const mappedAnswer = mapped?.slotId === slotId && asked.options?.some((option) => option.value === mapped.value);
       if (mappedAnswer) updated = applyAnswer(updated, slotId, mapped!.value);
