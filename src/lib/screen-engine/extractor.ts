@@ -533,7 +533,7 @@ const PERSONAL_INJURY_SIGNALS = [
 ];
 
 const ESTATES_SIGNALS = [
-  'will and estate', 'wills and estates', 'wills', 'estate planning',
+  'will and estate', 'wills and estates', 'estate planning',
   'probate', 'apply for probate', 'estate trustee', 'executor of an estate',
   'contested will', 'challenge a will', 'contesting a will', 'fight over the will',
   'fight over the estate', 'inheritance dispute', 'capacity assessment',
@@ -604,6 +604,7 @@ function detectInScopeArea(input: string): InScopeAreaMatch | null {
   };
   let m: string | null;
   if ((m = hit(ESTATES_SIGNALS))) return { area: 'estates', signal: m };
+  if (/\bwills\b/i.test(t)) return { area: 'estates', signal: 'wills' };
   // A pay offer tied to a release from one's employer is employment context,
   // even when the caller has not said whether employment ended.
   if (/\bmy employer\b/.test(t) && /\b(?:pay|wages)\b/.test(t) && /\brelease\b/.test(t)) {
@@ -667,7 +668,7 @@ function classifyEmploymentSubType(input: string): MatterType {
 }
 
 const ESTATES_WILL_DRAFTING_SIGNALS = [
-  'make a will', 'need a will', 'write a will', 'update my will', 'wills',
+  'make a will', 'need a will', 'write a will', 'update my will',
   'i need a will', 'i want a will', 'i want to make a will', 'new will',
   'updating my will', 'revising my will', 'will and estate planning',
   'who gets what when i', 'leaving things to my', 'leave things to my kids',
@@ -705,7 +706,7 @@ function classifyEstatesSubType(input: string): MatterType {
   if (hit(ESTATES_DISPUTE_SIGNALS)) return 'estate_dispute';
   if (hit(ESTATES_PROBATE_SIGNALS)) return 'probate';
   if (hit(ESTATES_POA_SIGNALS)) return 'power_of_attorney';
-  if (hit(ESTATES_WILL_DRAFTING_SIGNALS)) return 'will_drafting';
+  if (hit(ESTATES_WILL_DRAFTING_SIGNALS) || /\bwills\b/i.test(t)) return 'will_drafting';
   return 'estates_general';
 }
 

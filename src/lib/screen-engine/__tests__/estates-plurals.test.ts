@@ -13,6 +13,8 @@ describe('estates plural descriptions', () => {
   });
   it('keeps a home purchase in real estate', () => {
     expect(classify('I signed an agreement to buy a condo in Ottawa and need help closing.').practice_area).toBe('real_estate');
+    expect(classify('I need a lawyer for closing on a house on Willson Avenue.').practice_area).toBe('real_estate');
+    expect(classify('My business operates a goodwill shop.').practice_area).not.toBe('estates');
   });
   it('keeps family intake in the family pack', () => {
     const state = configureFirmPracticeAreas(initialiseState('I need a family lawyer about custody.'), ['family']);

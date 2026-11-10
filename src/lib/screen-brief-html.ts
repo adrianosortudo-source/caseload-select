@@ -1016,7 +1016,9 @@ export function renderBriefHtmlServer(
       ${options.presentation === 'view-only' ? '<p>Fictional demonstration. No firm was contacted.</p>' : napBlock(report.resolved_facts_v2, channel)}
       <div class="brief-main-grid"><div class="brief-main-left"><section class="brief-group" data-group="routing"><h3 class="brief-group-title">Matter overview</h3>${textBlock(report.matter_snapshot)}</section><section class="brief-group" data-group="facts"><h3 class="brief-group-title">Resolved facts</h3>${clusteredFacts(report.resolved_facts_v2, channel)}</section></div></div>`;
   }
-  const isOOS = report.band == null;
+  // The engine can carry a compatibility band even for an out-of-scope matter.
+  // Matter classification is authoritative for the unassessed routing view.
+  const isOOS = report.band == null || matterType === 'out_of_scope';
   const {
     decisionDeadlineIso = null,
     subtrack = null,
