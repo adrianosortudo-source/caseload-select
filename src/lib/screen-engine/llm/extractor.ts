@@ -39,16 +39,17 @@ export interface LlmExtractionResponse {
 }
 
 const REQUEST_TIMEOUT_MS = 12_000;
+// Family classification and pending-answer mapping can share one provider call.
+const FAMILY_REQUEST_TIMEOUT_MS = 45_000;
 
 export async function llmExtract(
   description: string,
   state: EngineState,
   followUp?: { pendingSlotId: string; reply: string },
 ): Promise<LlmExtractionResponse> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), state.family_enabled === true ? FAMILY_REQUEST_TIMEOUT_MS : REQUEST_TIMEOUT_MS);
   try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-
     const res = await fetch('/api/extract', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -61,8 +62,6 @@ export async function llmExtract(
       }),
       signal: controller.signal,
     });
-    clearTimeout(timeout);
-
     if (!res.ok) {
       return { extracted: {}, mode: 'error', reason: `HTTP ${res.status}` };
     }
@@ -81,6 +80,8 @@ export async function llmExtract(
       mode: 'error',
       reason: err instanceof Error ? err.message : String(err),
     };
+  } finally {
+    clearTimeout(timeout);
   }
 }
 
