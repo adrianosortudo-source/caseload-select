@@ -81,7 +81,7 @@ export function groundFamilyConversationFacts(state: EngineState, input: string)
       /\b(?:(?:i|we) have (?:an? |the |existing )?(?:(?:court|parenting) )?order|there is (?:an? |the |existing )?(?:(?:court|parenting) )?order|(?:a |the )?(?:judge|court) (?:made|issued) (?:an? |the )?order|(?:court|parenting) order (?:is |was )?(?:in place|issued|dated))\b/i.test(part));
     const compoundOrder = clauses.some((part) =>
       !/\b(?:no|not|never|without|unsure|uncertain|maybe|might|perhaps|could|if|whether|don't know|do not know)\b/i.test(part) &&
-      /\b(?:i|we) have (?:a |the |an existing )?parenting court order\b/i.test(part));
+      /\b(?:(?:i|we) have|we live in\s+[a-z][a-z .'-]{0,40},\s*ontario,\s*have) (?:a |the |an existing )?parenting court order\b/i.test(part));
     if ((orderSentence && orderValue !== "Both") || (compoundOrder && orderValue !== 'Both' && priorAllows('family_existing_order', 'Court order'))) candidates.family_existing_order = "Court order";
     const noDateSentence = text.split(/[.!?;\n]+/).map((part) => part.trim()).find((part) =>
       /\bno\s+(?:upcoming\s+)?(?:court\s+)?(?:date|hearing|deadline)\b/i.test(part) &&

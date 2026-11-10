@@ -30,6 +30,13 @@ describe('literal family evidence', () => {
     }
     checkNoRepeat(s, ['family_help_sought', 'family_existing_order', 'family_jurisdiction']);
   });
+  it('grounds an order stated after the observed residence phrase', () => {
+    const text = 'Fictional example: My former spouse refuses parenting time with our two children. We live in Toronto, Ontario, have a parenting court order and a case conference on December 19, 2026. I need a lawyer this week, have not spoken with another lawyer and decide whether to hire one myself.';
+    const s = groundFamilyConversationFacts(proposed(text, { family_help_sought: 'Parenting or decision-making', family_children: 'Yes', family_existing_order: 'Court order', family_jurisdiction: 'Ontario' }), text);
+    expect(s.slot_meta.family_existing_order).toMatchObject({ source: 'explicit', confidence: 1, evidence: text });
+    expect(isUserAnswered(s, 'family_existing_order')).toBe(true);
+    checkNoRepeat(s, ['family_existing_order']);
+  });
   it('grounds the observed Portuguese opening without mistaking denied access for no children', () => {
     const text = 'Meu ex-marido não me deixa ver nossos dois filhos. Moramos em Toronto, Ontario. Gostaria de ajuda para organizar a convivência com eles.';
     const s = groundFamilyConversationFacts(proposed(text, { family_help_sought: 'Parenting or decision-making', family_children: 'Yes', family_jurisdiction: 'Ontario' }), text);
@@ -42,6 +49,7 @@ describe('literal family evidence', () => {
   });
   it.each([
     ['Maybe we have a parenting court order.', 'family_existing_order', 'Court order'],
+    ['Maybe we live in Toronto, Ontario, have a parenting court order and a case conference.', 'family_existing_order', 'Court order'],
     ["I don't know whether we have a parenting court order.", 'family_existing_order', 'Court order'],
     ['We do not have a parenting court order.', 'family_existing_order', 'Court order'],
     ['Maybe we and the children live in Toronto, Ontario.', 'family_jurisdiction', 'Ontario'],
