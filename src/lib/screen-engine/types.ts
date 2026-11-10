@@ -329,7 +329,8 @@ export type MatterTypeProvenance =
 
 export interface LeadSummary {
   intro: string;        // 1-2 sentences in plain language about what they're dealing with
-  points: string[];     // bullets of key confirmed facts in their language
+  points: string[];     // structured confirmed facts, retained for existing consumers
+  paragraphs?: string[]; // conversational lead-facing recap when available
   closing: string;      // what kind of help the firm typically provides for this
 }
 

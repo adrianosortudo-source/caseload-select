@@ -220,8 +220,9 @@ test("Guided intake reaches the brief and keeps answers across view switches", a
   await expect(page.getByRole("button", { name: "Use fictional contact", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Use fictional contact", exact: true }).click();
   const log = page.getByRole("log", { name: "" });
+  const completion = log.locator('[data-message-id="complete"]');
   for (let turn = 0; turn < 12; turn += 1) {
-    if (await log.getByText(/Brief ready\. No firm contacted\./).isVisible()) break;
+    if (await completion.isVisible()) break;
     const messages = log.locator('[data-ui-component-content="demo-conversation-message"]');
     const before = await messages.count();
     const hasOptions = await messages.last().locator("ol li").count() > 0;
@@ -231,7 +232,12 @@ test("Guided intake reaches the brief and keeps answers across view switches", a
     await page.getByRole("button", { name: "Send in demo", exact: true }).click();
     await expect.poll(async () => await messages.count()).toBeGreaterThan(before + 1);
   }
-  await expect(log.getByText(/Brief ready\. No firm contacted\./)).toBeVisible();
+  await expect(completion).toBeVisible();
+  await expect(completion).toContainText("no firm is contacted");
+  await expect(completion).toContainText("Here is what I understood so far.");
+  await expect(completion).toContainText("You told us");
+  await expect(completion).toContainText("A business client owes us $18,450 for completed work.");
+  expect(await completion.locator("p").count()).toBeGreaterThan(2);
   await expect(page.getByText("Brief ready", { exact: true }).first()).toBeVisible();
   await page.getByRole("button", { name: "Lawyer brief", exact: true }).click();
   await expect(page.getByText("Sample contact", { exact: true })).toBeVisible();
@@ -321,10 +327,11 @@ for (const width of WIDTHS) {
     await page.screenshot({ path: testInfo.outputPath(`ai-readback-${width}.png`), fullPage: true });
     await page.getByRole("button", { name: "Use fictional contact", exact: true }).click();
     const log = page.getByRole("log", { name: "" });
+    const completion = log.locator('[data-message-id="complete"]');
     for (let i = 0; i < 12; i++) {
       await expect(log.getByText("About how much money is involved?", { exact: true })).toHaveCount(0);
-      await expect(log.getByText("Who decides whether to hire a lawyer for this?", { exact: true })).toHaveCount(0);
-      if (await log.getByText(/Brief ready\. No firm contacted\./).isVisible()) break;
+      await expect(log.getByText("Who would be making the decision to hire a lawyer?", { exact: true })).toHaveCount(0);
+      if (await completion.isVisible()) break;
       const messages = log.locator('[data-ui-component-content="demo-conversation-message"]');
       const before = await messages.count();
       const hasOptions = await messages.last().locator("ol li").count() > 0;
@@ -334,7 +341,12 @@ for (const width of WIDTHS) {
       await page.getByRole("button", { name: "Send in demo", exact: true }).click();
       await expect.poll(async () => await messages.count()).toBeGreaterThan(before + 1);
     }
-    await expect(log.getByText(/Brief ready\. No firm contacted\./)).toBeVisible();
+    await expect(completion).toBeVisible();
+  await expect(completion).toContainText("no firm is contacted");
+  await expect(completion).toContainText("Here is what I understood so far.");
+  await expect(completion).toContainText("You told us");
+  await expect(completion).toContainText("A business client owes us $18,450 for completed work.");
+  expect(await completion.locator("p").count()).toBeGreaterThan(2);
     await assertLayout(page);
     await page.screenshot({ path: testInfo.outputPath(`ai-brief-${width}.png`), fullPage: true });
     expect(mutations).toEqual(["/api/extract"]);

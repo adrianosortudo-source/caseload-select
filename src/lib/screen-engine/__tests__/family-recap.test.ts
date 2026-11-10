@@ -30,7 +30,10 @@ describe('family case recap', () => {
     expect(summary.intro).toBe('Family law case recap');
     expect(summary.points).toHaveLength(9);
     expect(summary.points[0]).toBe('Your description: ' + inquiry);
-    for (const value of Object.values(answers)) expect(summary.points.some(point => point.endsWith(': ' + value))).toBe(true);
+    for (const [id, value] of Object.entries(answers)) {
+      const display = getI18n('en').slot_options[id]?.[value] || value;
+      expect(summary.points.some(point => point.endsWith(': ' + display))).toBe(true);
+    }
     expect(summary.closing).toMatch(/check.*accurate/i);
   });
 
@@ -41,7 +44,7 @@ describe('family case recap', () => {
       const step = getNextStep(state);
       expect(step.type).toBe('present_insight');
       expect(step.bridgeText).toContain(inquiry);
-      expect(step.bridgeText).toContain('Existing order or agreement: Neither');
+      expect(step.bridgeText).toContain('no written agreement or court order');
       expect(step.bridgeText).toContain('No upcoming court date');
       expect(step.bridgeText).toContain('Ontario');
     },
@@ -85,6 +88,6 @@ describe('family case recap', () => {
   it('uses the same full recap in the internationalized bridge path', () => {
     const state = completed();
     const text = getBridgeTextI18n(state, getI18n('en'));
-    for (const point of buildLeadSummary(state, getI18n('en')).points) expect(text).toContain(point);
+    for (const paragraph of buildLeadSummary(state, getI18n('en')).paragraphs!) expect(text).toContain(paragraph);
   });
 });

@@ -79,6 +79,11 @@
   text-wrap: wrap;
 }
 
+/* Measured orphan guard for assistant-written copy; authored text is untouched. */
+.assistantMessage p:not([data-ui-copy-exception]) {
+  text-wrap: pretty;
+}
+
 .message p[data-ui-copy-exception] {
   white-space: pre-wrap;
 }

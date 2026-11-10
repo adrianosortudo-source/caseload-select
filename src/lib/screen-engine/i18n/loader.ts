@@ -19,6 +19,10 @@ export interface I18nBundle {
    * Phase B).
    */
   slot_questions?: Record<string, string>;
+  /** Grounded lead-facing sentence templates keyed by immutable slot ID. */
+  recap_templates?: Record<string, string>;
+  /** Optional complete sentences keyed by slot ID and canonical option value. */
+  recap_options?: Record<string, Record<string, string>>;
   slot_options: Record<string, Record<string, string>>;
   /**
    * Per-option example text translation (WP-5, 2026-08-13). Maps
