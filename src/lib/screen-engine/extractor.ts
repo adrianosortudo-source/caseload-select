@@ -533,7 +533,7 @@ const PERSONAL_INJURY_SIGNALS = [
 ];
 
 const ESTATES_SIGNALS = [
-  'will and estate', 'wills and estates', 'estate planning',
+  'will and estate', 'wills and estates', 'wills', 'estate planning',
   'probate', 'apply for probate', 'estate trustee', 'executor of an estate',
   'contested will', 'challenge a will', 'contesting a will', 'fight over the will',
   'fight over the estate', 'inheritance dispute', 'capacity assessment',
@@ -545,7 +545,7 @@ const ESTATES_SIGNALS = [
   // estates entirely and fell to unknown, even though the sub-type
   // classifier (ESTATES_POA_SIGNALS) was ready. DRG sells POAs; this closes
   // the gate gap.
-  'power of attorney', 'continuing power of attorney',
+  'power of attorney', 'powers of attorney', 'continuing power of attorney',
   'guardianship of person', 'guardianship of property',
   'estate of my', 'when my mother passed', 'when my father passed',
   'when my parent passed', 'after my father died', 'after my mother died',
@@ -667,7 +667,7 @@ function classifyEmploymentSubType(input: string): MatterType {
 }
 
 const ESTATES_WILL_DRAFTING_SIGNALS = [
-  'make a will', 'need a will', 'write a will', 'update my will',
+  'make a will', 'need a will', 'write a will', 'update my will', 'wills',
   'i need a will', 'i want a will', 'i want to make a will', 'new will',
   'updating my will', 'revising my will', 'will and estate planning',
   'who gets what when i', 'leaving things to my', 'leave things to my kids',
@@ -676,7 +676,7 @@ const ESTATES_WILL_DRAFTING_SIGNALS = [
 const ESTATES_POA_SIGNALS = [
   'power of attorney for property', 'power of attorney for personal care',
   'poa for property', 'poa for personal care',
-  'power of attorney', 'continuing power of attorney',
+  'power of attorney', 'powers of attorney', 'continuing power of attorney',
   'guardianship of person', 'guardianship of property',
 ];
 
