@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import config from "../../../next.config";
 import ScreenToolPage from "@/app/tools/screen/page";
-import { ProspectDemoClient } from "@/components/prospect-demo/ProspectDemoClient";
+import { GeneCurrentScreenMockup } from "@/components/prospect-demo/GeneCurrentScreenMockup";
 import GeneColmanScreenPage from "@/app/tools/screen/gene-colman/page";
 import { PublicScreenSandboxFrame } from "@/components/intake-v2/PublicScreenSandboxFrame";
-vi.mock("@/components/prospect-demo/ProspectDemoClient", () => ({ ProspectDemoClient: () => null }));
+vi.mock("@/components/prospect-demo/GeneCurrentScreenMockup", () => ({ GeneCurrentScreenMockup: () => null }));
 describe("current SCREEN entry point and embed boundary", () => {
   it("renders the canonical app-origin demo and passes only permitted settings", async () => {
     const page = await ScreenToolPage({ searchParams: Promise.resolve({ embed: "1", practice_area: "employment", channel: "sms", profile: "gene" }) });
@@ -17,8 +17,8 @@ describe("current SCREEN entry point and embed boundary", () => {
   });
   it("preserves the Gene family prospect presentation", () => {
     const page = GeneColmanScreenPage();
-    expect(page.type).toBe(ProspectDemoClient);
-    expect(page.props).toEqual({ profileId: "gene-colman", sampleOnly: true });
+    expect(page.type).toBe(GeneCurrentScreenMockup);
+    expect(page.props).toEqual({});
   });
   it("routes the existing tools entry to the new demo while preserving old result URLs", async () => {
     const rules = await config.redirects!();
