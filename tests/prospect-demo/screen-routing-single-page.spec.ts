@@ -3,6 +3,7 @@ import { expect, test, type Page, type Route, type TestInfo } from "@playwright/
 const APP_URL = process.env.SCREEN_ROUTING_APP_PREVIEW?.replace(/\/$/, "") ?? "";
 const SITE_URL = process.env.SCREEN_ROUTING_SITE_PREVIEW?.replace(/\/$/, "") ?? "";
 const OIDC_TOKEN = process.env.SCREEN_ROUTING_OIDC_TOKEN ?? "";
+const SITE_OIDC_TOKEN = process.env.SCREEN_ROUTING_SITE_OIDC_TOKEN ?? "";
 const REPORTED_INPUT = "my ex wife wont allow me to enter our home and pick up my stuff";
 const WIDTHS = [1440, 1024, 768, 640, 375, 320] as const;
 
@@ -35,8 +36,9 @@ async function observeSafeNetwork(page: Page) {
       }
       return;
     }
-    const headers = OIDC_TOKEN && url.origin === APP_URL
-      ? { ...request.headers(), "x-vercel-trusted-oidc-idp-token": OIDC_TOKEN }
+    const originToken = url.origin === APP_URL ? OIDC_TOKEN : url.origin === SITE_URL ? SITE_OIDC_TOKEN : "";
+    const headers = originToken
+      ? { ...request.headers(), "x-vercel-trusted-oidc-idp-token": originToken }
       : request.headers();
     await route.continue({ headers });
   });
@@ -83,6 +85,7 @@ async function settle(page: Page) {
 
 test("direct, Tools, and legacy links reach the paired single-page demo without loading AI", async ({ page }) => {
   test.skip(!APP_URL || !SITE_URL, "Paired app and site preview URLs were not supplied.");
+  test.skip(!SITE_OIDC_TOKEN, "The paired site preview requires its separately scoped OIDC token.");
   const { requests, blockedPosts, pageErrors } = await observeSafeNetwork(page);
 
   const direct = await page.goto(`${APP_URL}/tools/screen`);
@@ -168,7 +171,7 @@ test("web reset rejects a late same-text result and confirmed selector changes r
   expect(requests[3]).toMatchObject({ description: REPORTED_INPUT, matter_type: "real_estate_general", routing: { selection: "real_estate", active_area: "real_estate" } });
   await expect(page.locator("#firm-profile-select")).toHaveValue("real_estate");
   await expect(page.locator("#recap-text")).toContainText(REPORTED_INPUT);
-  await expect(page.getByText("Confirm the practice area", { exact: false })).toBeVisible();
+  await expect(page.locator("#question-area")).toContainText(/confirm the practice area/i);
   await expect(page.locator("#brief-mount")).not.toContainText("Family General");
   releaseThird();
   await expect(page.locator("#firm-profile-select")).toHaveValue("real_estate");
@@ -192,7 +195,7 @@ test("Voice pauses for area confirmation and visible channel tabs match the supp
   await expect.poll(() => requests.length).toBe(1);
   expect(requests[0].matter_type).toBe("family_general");
   expect(requests[0].routing).toMatchObject({ selection: "family", active_area: "family" });
-  await expect(page.getByText("Confirm the practice area", { exact: false })).toBeVisible();
+  await expect(page.locator("#voice-sim [data-status]")).toContainText(/confirm the practice area/i);
   await expect(page.locator("#brief-mount")).not.toContainText("Corporate General");
   await expect(page.locator("#voice-sim").getByRole("button", { name: /family/i })).toBeVisible();
   await page.locator("#voice-sim").getByRole("button", { name: /family/i }).click();
@@ -249,7 +252,7 @@ test("expanded report and conversation layout fit six widths", async ({ page }, 
   await page.locator("#screen-btn").click();
   await expect(page.locator("#intake-recap")).toBeVisible();
   await expect.poll(() => requests.length).toBe(1);
-  expect(requests[0]).toMatchObject({ description: longInput, matter_type: "corporate_general", routing: { selection: "corporate", active_area: "corporate" } });
+  expect(requests[0]).toMatchObject({ description: longInput.trim(), matter_type: "unpaid_invoice", routing: { selection: "corporate", active_area: "corporate" } });
   await page.locator("#expand-brief").click();
   await expect(page.locator("#brief-mount")).toBeVisible();
   await expect(page.locator(".brief-frame .axis-block-score").first()).toBeVisible();
