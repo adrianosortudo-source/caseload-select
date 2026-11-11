@@ -1,0 +1,14 @@
+# Acceptance evidence
+Current runtime:2b0bc08c92fedd6f36db77ccd3b70880429bf2c2. Private pilot only; no production approval.
+
+- Final UI workflow42509859394/job128820347466:SUCCESS,11/11 tests in1.1m. Seven widths1440/1024/768/640/390/375/320; both parts, all directions, partial/error states, evidence links, keyboard, clipboard, full usable width, orphan/line-flow and light/dark CTA contrast. Retained typography and screenshots are in the artifact results.json. Root independently viewed375/320 and accepted readability/coherence. No remaining known finite-fixture UI failure.
+- The same workflow's bounded backend step passed. Cite the actual run, not source test-definition counts. Shared SSRF tests cover private/rebinding initial and redirect targets; feature tests exercise caps, deadline/cancellation, ownership, fallback provenance, validation and limiter failure behavior.
+- a49 non-UI required checks completed successfully; its UI remained9/11 and passed11/11 only on2b0. The a49 real-Postgres check passed:128814595920 (18:04:12–18:24:32UTC). The final2b0 runtime's new long Postgres check and any docs-only head checks must be reported separately; no false all-current-head-green claim.
+- Actual hosted Gene:a49,HTTP200,37,737ms server,one model call,18,946 input/2,389 output tokens,7 pages,both screenshots analyzed/clipped. Actual MHC:HTTP200,41,137ms server (41.38s client),one call,10,160 input/1,854 output tokens,8 pages,both screenshots captured/analyzed. Both meet90s in this two-run sample; this is not a validated long-run percentile.
+- Hosted failure case:https://127.0.0.1 rejected before quota/provider; error heading focused, no retry or report. Actual source auto-expansion, direction choice, native clipboard brief and consultation destination verified. No enquiry/booked event/CRM write occurred.
+- Internal corpus:7 readable valid reports+1 unreadable/no AI output, plus two actual hosted agent reviews; no unresolved material support issue after the v6.1 label repair. Human-reviewed95% production criterion is NOT performed; no public accuracy or calibrated-confidence claim.
+
+Artifacts: D:\00_Work\01_CaseLoad_Select\05_Product\Planning\Positioning_Diagnostic\ui-evidence\cloud-2b0-final. Hosted JSON/screenshots: planning evaluation-local/hosted. Raw packets/provider bodies remain outside Git and contain no captured credentials.
+
+Limitations: structural prompt/data separation is not a semantic attack benchmark; no live malicious-DNS/page attack or concurrency-load stress was performed. Budget reservation is conservative, not provider-enforced billing. Gene's experience phrasing loses some lower-bound qualifiers; this is recorded as minor precision, not contradiction. Broader market/client perception and service quality were not assessed.
+
