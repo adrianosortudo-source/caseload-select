@@ -235,7 +235,7 @@ jobs:
 
   secure-import-rendered:
     name: Secure Import rendered copy gates
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04 # Keep browser checks on the supported Playwright OS.
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -261,7 +261,7 @@ jobs:
 
   operator-login-rendered:
     name: Operator login rendered copy gates
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04 # Keep browser checks on the supported Playwright OS.
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -349,7 +349,7 @@ jobs:
 
   integration-test:
     name: Publication concurrency integration tests (real Postgres)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04 # Keep browser checks on the supported Playwright OS.
     # A dedicated job, not a step tacked onto `test`: standing up the local
     # Supabase/Docker stack adds real wall-clock time and a distinct
     # infrastructure failure mode, and isolating it here means that failure
@@ -654,7 +654,7 @@ jobs:
 
   website-checker-brand:
     name: Website checker brand acceptance
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04 # Keep browser checks on the supported Playwright OS.
     steps:
       - name: Checkout
         uses: actions/checkout@v4

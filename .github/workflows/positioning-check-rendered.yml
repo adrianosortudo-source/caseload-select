@@ -15,7 +15,7 @@ permissions:
 jobs:
   positioning-rendered:
     name: Positioning review rendered copy and contrast
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04 # Keep browser checks on the supported Playwright OS.
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4

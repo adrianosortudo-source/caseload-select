@@ -27,7 +27,7 @@ permissions:
 jobs:
   independent-segments:
     name: Independent widget and brief
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04 # Keep browser checks on the supported Playwright OS.
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
