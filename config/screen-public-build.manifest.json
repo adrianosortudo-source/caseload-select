@@ -3,19 +3,19 @@
   "canonicalPath": "/tools/screen",
   "assetBase": "/screen-demo-app/",
   "sourceRepository": "adrianosortudo-source/caseload-screen-sandbox",
-  "sourceCommit": "7ebbe993bbe939e2f2dfdec5d8ea6faa70d22589",
+  "sourceCommit": "0610018cf4c12c9481c12832a0ecce21b1c49525",
   "files": [
     {
       "path": "assets/demo-DW1x6iEr.js",
       "sha256": "da2041848e6d86b70b5dcacf164ffd8a6c5c05b757be76aa69320fdde7fdcdb8"
     },
     {
-      "path": "assets/main-DbVUhV0i.js",
-      "sha256": "5e8dc9a4805f4b8bec1b1bc7958590323bb7bd3109f9e5739c17e36f98db322f"
-    },
-    {
       "path": "assets/main-VApQs_M0.css",
       "sha256": "5a3b32e1d658184568d3302f6a4b9919c0b3c916749471e991f54680cc941f17"
+    },
+    {
+      "path": "assets/main-caUHRiYX.js",
+      "sha256": "64e1213ec70c223dfab8ea5b198d76dfe9024442e30f1e743311ce32526d1d9a"
     },
     {
       "path": "assets/modulepreload-polyfill-B5Qt9EMX.js",
@@ -59,7 +59,7 @@
     },
     {
       "path": "index.html",
-      "sha256": "e363515e0683df6e557e3e50722b0ded7c45a0c777ddb236637268c5446009c5"
+      "sha256": "965ef8bdb097e8174456b5ea498f3362d1a0c843ed9158f2f9f7b459f96b8ed9"
     }
   ]
 }

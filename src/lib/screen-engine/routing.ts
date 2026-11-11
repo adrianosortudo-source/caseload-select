@@ -23,7 +23,8 @@ export function startDemoRouting(state: EngineState, selection: DemoRoutingArea 
   const detected = state.practice_area;
   const specific = state.matter_type !== 'unknown' && state.matter_type !== 'out_of_scope' && !state.matter_type.endsWith('_general');
   const route = selection === 'auto' ? classificationForMatterType('unknown') :
-    detected === selection ? {} : classification(selection);
+    detected === selection && state.matter_type !== 'unknown' && state.matter_type !== 'out_of_scope' &&
+      classificationForMatterType(state.matter_type).practice_area === selection ? {} : classification(selection);
   let result = pruneToMatter({ ...state, ...route, ...(selection === 'auto' || detected !== selection ? { raw: extractRawSignals('') } : {}), family_enabled: true, family_only: false,
     demoRouting: { selection, candidate: null, pending: null, revision: 0, declinedCandidate: null } });
   if (specific && ['corporate', 'real_estate', 'employment', 'estates', 'family'].includes(detected)) {
