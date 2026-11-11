@@ -16,3 +16,5 @@
 @media(max-width:360px){.pc-possibilities{padding-left:12px;padding-right:12px}}
 .pc-partial-note{margin:20px 0}.pc-partial-note h3{font-size:17px}.pc-partial-note p{margin-top:8px}
 @media(max-width:360px){.pc-root .pc-main:has(.pc-today){padding-left:8px;padding-right:8px}}
+
+@media(max-width:360px){.pc-root .pc-intro h1{font-size:24px}}

@@ -179,7 +179,7 @@ export default async function SeoCheckPage({ searchParams }: PageProps) {
         .seo-hero-title {
           width: 100%;
           max-width: none;
-          font-family: var(--font-display);
+          font-family: var(--font-manrope), sans-serif;
           font-size: var(--fs-hero);
           font-weight: 800;
           color: var(--navy);
@@ -187,6 +187,7 @@ export default async function SeoCheckPage({ searchParams }: PageProps) {
           letter-spacing: var(--ls-headline);
           margin: 0 0 var(--sp-5);
         }
+        @media (max-width: 400px) { .seo-hero-title { font-size: clamp(26px, 8vw, 32px); } }
         .seo-hero-sub {
           width: 100%;
           max-width: none;

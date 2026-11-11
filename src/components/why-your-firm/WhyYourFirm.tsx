@@ -235,9 +235,9 @@ export default function WhyYourFirm() {
 
   if (phase === "intro") {
     return (
-      <div className="card p-6 max-w-xl mx-auto">
+      <div className="card p-6 max-[360px]:p-4 max-w-xl mx-auto">
         <p className="label mb-2">{copy.tool.eyebrow}</p>
-        <h1 className="text-2xl font-display font-semibold text-navy mb-3">{copy.tool.name}</h1>
+        <h1 className="text-2xl max-[360px]:text-[22px] font-primary font-extrabold text-navy mb-3">{copy.tool.name}</h1>
         <p className="text-sm text-body leading-relaxed mb-3">{copy.tool.intro}</p>
         <p className="text-sm text-body leading-relaxed mb-3">{privacyLine}</p>
         <button type="button" className="btn-gold mt-2" onClick={startFresh}>
