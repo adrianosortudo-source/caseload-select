@@ -33,7 +33,7 @@ function isValidSupportedLanguage(value: string): boolean {
 
 export interface LlmExtractionResponse {
   extracted: Record<string, string | null>;
-  mode: 'live' | 'disabled' | 'error';
+  mode: 'live' | 'disabled' | 'error' | 'degraded';
   reason?: string;
   mapped_answer?: { slotId: string; value: string };
   mapping_mode?: 'live' | 'disabled' | 'error';
@@ -69,7 +69,9 @@ export async function llmExtract(
       return { extracted: {}, mode: 'error', reason: `HTTP ${res.status}` };
     }
     const data = await res.json();
-    if (!data || typeof data !== 'object' || !data.extracted || typeof data.extracted !== 'object' || Array.isArray(data.extracted) || !['live', 'disabled', 'error'].includes(data.mode)) {
+    if (!data || typeof data !== 'object' || !['live', 'disabled', 'error', 'degraded'].includes(data.mode) ||
+        (data.mode === 'live' && (!data.extracted || typeof data.extracted !== 'object' || Array.isArray(data.extracted))) ||
+        (data.extracted != null && (typeof data.extracted !== 'object' || Array.isArray(data.extracted)))) {
       return { extracted: {}, mode: 'error', reason: 'invalid_response' };
     }
     return {
