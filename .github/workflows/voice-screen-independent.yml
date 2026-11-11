@@ -36,7 +36,7 @@ jobs:
           node-version: "22"
           cache: npm
       - run: npm ci
-      - run: npx playwright install --with-deps chromium
+      - run: node scripts/ensure-playwright-chromium.mjs
       - name: Test each segment without service credentials
         run: npx playwright test --config=playwright.voice-screen-independent.config.ts
         env:

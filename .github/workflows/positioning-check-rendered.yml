@@ -27,7 +27,7 @@ jobs:
       - name: Verify bounded backend
         run: npx vitest run src/lib/positioning-check/__tests__
       - name: Install fixed Chromium
-        run: npx playwright install --with-deps chromium
+        run: node scripts/ensure-playwright-chromium.mjs
       - name: Verify positioning interaction, copy and contrast
         run: npx playwright test --config=playwright.positioning.config.ts
       - name: Upload positioning screenshots and measurements
