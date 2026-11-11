@@ -50,4 +50,3 @@ Demo-only explanatory display copy uses shorter sentences and full-width list ro
 ## Single-scroll preview acceptance
 
 Verify both website entry points with the actual packaged app, at 1440, 1024, 768, 640, 375 and 320 CSS pixels. Only the outer website document should scroll vertically; textareas may retain native scrolling and the channel strip may scroll horizontally. Check wheel behavior over both columns, initial inquiry visibility, follow-ups, long reports, editing, going back, channel changes and reset. All content must remain reachable without hidden-overflow clipping. Preserve the screening engine and the current release as the rollback point. Preview links and draft PRs are not publication.
-
