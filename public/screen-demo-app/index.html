@@ -10,9 +10,9 @@
   <link rel="preload" href="/screen-demo-app/fonts/dm-sans-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="preload" href="/screen-demo-app/fonts/Oxanium-latin.woff2" as="font" type="font/woff2" crossorigin />
 
-  <script type="module" crossorigin src="/screen-demo-app/assets/main-BY3Fx_Jy.js"></script>
+  <script type="module" crossorigin src="/screen-demo-app/assets/main-DcJLjHLx.js"></script>
   <link rel="modulepreload" crossorigin href="/screen-demo-app/assets/modulepreload-polyfill-B5Qt9EMX.js">
-  <link rel="stylesheet" crossorigin href="/screen-demo-app/assets/main-BC74i7WI.css">
+  <link rel="stylesheet" crossorigin href="/screen-demo-app/assets/main-O7XrGKJJ.css">
 </head>
 <body>
 
@@ -34,12 +34,14 @@
   <div class="sandbox-header-inner">
     <div class="sandbox-heading-row" data-ui-component-content="sandbox-introduction">
       <h1 class="sandbox-title" data-ui-copy="heading">Try SCREEN as a prospective client</h1>
-      <button id="reset-btn" class="topbar-action" type="button">Start over</button>
     </div>
-    <p class="sandbox-lede" data-ui-copy="body">Describe a fictional legal situation and answer SCREEN’s follow-up questions. Review the client’s recap, then see the report your firm would receive.</p>
+    <p class="sandbox-lede" data-ui-copy="body">Enter a fictional inquiry. Answer the follow-ups, review the recap, and see your firm’s report.</p>
     <div class="demo-toolbar">
     <div class="firm-profile-control">
-      <label for="firm-profile-select">Practice area (optional)</label>
+      <div class="practice-label-row">
+        <label for="firm-profile-select">Practice area (optional)</label>
+        <button id="reset-btn" class="topbar-action" type="button">Start over</button>
+      </div>
       <select id="firm-profile-select" aria-label="Practice area (optional)">
         <option value="auto" selected>Detect from the inquiry</option>
         <option value="corporate">Business/corporate</option>
