@@ -14,7 +14,7 @@ Status: the public SCREEN tool is published. The November 11, 2026 single-scroll
 
 ## Pinned authorities and boundaries
 
-- Engine baseline: production `7ace743c004c7e1026c335173eb39da6495f2e5f`; all 17 manifest-governed engine TS/JSON files remain unchanged. Existing engine-manifest CI continues to verify them.
+- Engine baseline: production `7ace743c004c7e1026c335173eb39da6495f2e5f`, with the approved focused will-preparation routing correction mirrored from pushed SCREEN source `d90815a5b046d185f3b317a652f532173a33780b`. Engine sync and the manifest verify the shared implementation. Scoring, questions and DR-069 confirmation policy remain unchanged.
 - Web experience policy: read `WEB_EXPERIENCE_POLICY_VERSION` and the bounded-discovery constants from the engine. Target 5 to 7 adaptive follow-ups, maximum 8 including routing, earlier completion when sufficient facts are known. Business routing stays in the engine.
 - Report: `renderBriefHtmlServer` with `presentation: demo`, projection `production-demo-v1`. Same axis, prose and provenance functions as the portal; no queue, lead ID, operational action rail or real deadline. All resolved facts and quote checks remain available. The portal retains its operational layout.
 - Brand: canonical ACTS Brand Book V2.0.2, effective August 18, 2026, `01_Brand/BrandBook/V2_Canonical/BrandBook_ACTS_V2.html`. Shared demo CSS opts in only on the demo. Square flat geometry, approved palette, Manrope 800 headings, DM Sans 400 interface/body, Oxanium 600 compact labels and numerals. No decorative terminal square on this utility page.
@@ -49,7 +49,7 @@ Demo-only explanatory display copy uses shorter sentences and full-width list ro
 
 ## Single-scroll preview acceptance
 
-Verify both website entry points with the actual packaged app, at 1440, 1024, 768, 640, 375 and 320 CSS pixels. Only the outer website document should scroll. Channel choices wrap into visible rows and textareas grow with their contents; no internal horizontal or vertical scroll areas are permitted. Check wheel behavior over both columns, initial inquiry visibility, follow-ups, long reports, editing, going back, channel changes and reset. All content must remain reachable without hidden-overflow clipping. Preserve the screening engine and the current release as the rollback point. Preview links and draft PRs are not publication.
+Verify both website entry points with the actual packaged app, at 1440, 1024, 768, 640, 375 and 320 CSS pixels. Only the outer website document should scroll. Channel choices wrap into visible rows and textareas grow with their contents; no internal horizontal or vertical scroll areas are permitted. Check wheel behavior over both columns, initial inquiry visibility, follow-ups, long reports, editing, going back, channel changes and reset. All content must remain reachable without hidden-overflow clipping. Preserve the approved routing correction and the current release as the rollback point. Preview links and draft PRs are not publication.
 
 ## Client-widget parity preview acceptance
 
@@ -57,8 +57,8 @@ The client opening uses the public widget defaults: “Tell us how a lawyer can 
 
 The inquiry, follow-ups, conversational recap, edits and fictional contact step retain the client perspective. Completion does not claim a submission or firm contact; the surrounding page identifies the simulated outcome. The existing report renderer and its preliminary/completed timing are preserved. Verify free-text cases across the five available practice areas, all six channel layouts, editable example selection with no extraction, recap/contact/completion, and absence of writes beyond the authorized extraction endpoint. Review both real website entry points before any publication approval.
 
-## Routing issue found during this preview
+## Will-preparation routing correction
 
-Publication is held for a routing decision as well as review. A fictional narrative beginning “I live in Kingston, Ontario and want to prepare my first will” and mentioning “our family home” is classified as `residential_purchase_sale`, including with Wills/estates selected. The observed extraction returned language and intent, without a replacement matter classification. The selected practice area is not an instruction to force an unrelated narrative into a pack; the failure is the treatment of the explicit will-planning request in the original narrative.
+The earlier preview routed a fictional first-will inquiry mentioning the family home to `residential_purchase_sale`. The original failed inquiry, provider response and source revision are preserved in the local SCREEN_Widget_Parity_2026-11-11 evidence folder.
 
-The distinct phrase “I need estate planning help to make a will” completes the wills flow with the same family-home background. This passing case does not resolve or conceal the failed wording. The failed case, provider response and source revision are preserved in the local SCREEN_Widget_Parity_2026-11-11 evidence folder. No engine or routing-policy change belongs to the current interface patch; Adriano has been asked whether to include a focused repair. Keep the draft release unmerged until that decision and any required repair verification are complete.
+Adriano approved a focused deterministic routing correction, mirrored from pushed SCREEN source `d90815a5b046d185f3b317a652f532173a33780b`. It recognizes an explicit will-preparation request in the original narrative while preserving ordinary modal uses of “will,” negated requests and the selected practice area’s existing non-forcing behavior. The source regression suite covers the original example, existing plural wills and non-estates counterexamples. This is preview only; final integrated verification and review are required before any publication approval.
