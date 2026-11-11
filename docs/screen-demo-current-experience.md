@@ -1,6 +1,6 @@
 # Current SCREEN demonstration
 
-Status: the public SCREEN tool is published. The November 11, 2026 single-scroll and clearer-guidance update is preview only and held for Adriano to review before publication.
+Status: the public SCREEN tool is published. The November 11, 2026 single-scroll, client-widget copy parity and relocated-example update is preview only and held for Adriano to review before publication.
 
 ## Entry points
 
@@ -18,7 +18,7 @@ Status: the public SCREEN tool is published. The November 11, 2026 single-scroll
 - Web experience policy: read `WEB_EXPERIENCE_POLICY_VERSION` and the bounded-discovery constants from the engine. Target 5 to 7 adaptive follow-ups, maximum 8 including routing, earlier completion when sufficient facts are known. Business routing stays in the engine.
 - Report: `renderBriefHtmlServer` with `presentation: demo`, projection `production-demo-v1`. Same axis, prose and provenance functions as the portal; no queue, lead ID, operational action rail or real deadline. All resolved facts and quote checks remain available. The portal retains its operational layout.
 - Brand: canonical ACTS Brand Book V2.0.2, effective August 18, 2026, `01_Brand/BrandBook/V2_Canonical/BrandBook_ACTS_V2.html`. Shared demo CSS opts in only on the demo. Square flat geometry, approved palette, Manrope 800 headings, DM Sans 400 interface/body, Oxanium 600 compact labels and numerals. No decorative terminal square on this utility page.
-- Runtime: `demo-live-ai` permits only `/api/extract`. Guided mode makes no extraction request. Neither creates a lead, checkpoint, consent record, audio recording, host completion signal or notification. Contact information is explained, not collected. No new telemetry collection is enabled.
+- Runtime: `demo-live-ai` permits only `/api/extract`. Guided mode makes no extraction request. Neither creates a lead, checkpoint, consent record, audio recording, host completion signal or notification. The public sandbox accepts fictional contact values in local session memory to demonstrate the real contact step; it sends no contact values to intake or notification endpoints and persists no lead. The fictional-data and simulated-completion notices remain outside the client widget. No new telemetry collection is enabled.
 - Provider success, no-provider-needed, explicit guided mode and fallback are distinct states. Keys remain server-side. The existing Gemini key is authorized for this branch preview only; do not broaden its environment scope.
 
 ## Confirmation and corrections
@@ -50,3 +50,9 @@ Demo-only explanatory display copy uses shorter sentences and full-width list ro
 ## Single-scroll preview acceptance
 
 Verify both website entry points with the actual packaged app, at 1440, 1024, 768, 640, 375 and 320 CSS pixels. Only the outer website document should scroll. Channel choices wrap into visible rows and textareas grow with their contents; no internal horizontal or vertical scroll areas are permitted. Check wheel behavior over both columns, initial inquiry visibility, follow-ups, long reports, editing, going back, channel changes and reset. All content must remain reachable without hidden-overflow clipping. Preserve the screening engine and the current release as the rollback point. Preview links and draft PRs are not publication.
+
+## Client-widget parity preview acceptance
+
+The client opening uses the public widget defaults: “Tell us how a lawyer can help you today.” and “Continue matter review”. Demonstration-only examples, practice-area controls, channel choices and privacy/completion notices stay outside the client card. A single example selector above both panels fills the active channel opening without starting extraction or resetting an existing conversation. It retains the original automatic/selected-practice-area catalogs, disables during active intake, and re-enables on an explicit reset. The voice pane also uses the shared outer selector rather than an inner sample list.
+
+The inquiry, follow-ups, conversational recap, edits and fictional contact step retain the client perspective. Completion does not claim a submission or firm contact; the surrounding page identifies the simulated outcome. The existing report renderer and its preliminary/completed timing are preserved. Verify free-text cases across the five available practice areas, all six channel layouts, editable example selection with no extraction, recap/contact/completion, and absence of writes beyond the authorized extraction endpoint. Review both real website entry points before any publication approval.
