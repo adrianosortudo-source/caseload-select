@@ -221,7 +221,7 @@ export default function FirmVoiceBuilder() {
     return (
       <div className="card p-6 max-w-xl mx-auto">
         <p className="label mb-2">Free tool, about 25 minutes</p>
-        <h1 className="text-2xl font-display font-semibold text-navy mb-3">The Firm Voice Builder</h1>
+        <h1 className="text-2xl font-primary font-extrabold text-navy mb-3">Tone of Voice Guide</h1>
         <p className="text-sm text-body leading-relaxed mb-3">
           Ask an AI to draft a client email and what comes back is stiff and generic. This tool interviews
           you, studies how you actually write and speak, and builds a Firm Voice Profile you paste into any

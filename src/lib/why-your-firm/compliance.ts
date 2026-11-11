@@ -1,5 +1,5 @@
 /**
- * Why Your Firm · Compliance Rules, Statement Patterns, and Wizard Copy
+ * Why Choose Your Firm? · Compliance Rules, Statement Patterns, and Wizard Copy
  *
  * THE COMPLIANCE FILTER IS THE POINT OF THIS TOOL
  *
@@ -301,7 +301,7 @@ export function getPattern(id: string): StatementPattern | undefined {
 export const copy = {
   tool: {
     eyebrow: "Free tool, about three minutes",
-    name: "Why Your Firm",
+    name: "Why Choose Your Firm?",
     /** Landing paragraph, shown above the first step */
     intro:
       "A client choosing a lawyer sees a row of firms saying the same things. This tool works out what your firm can say that the others cannot, checks each claim against the Law Society's advertising rules, and gives you a positioning brief you can hand to whoever writes your firm's website.",

@@ -5,14 +5,14 @@ import PublicToolFooter from "../PublicToolFooter";
 import WebsiteDesignCheckTool from "@/components/website-design-check/WebsiteDesignCheckTool";
 
 export const metadata: Metadata = {
-  title: "Free Website Design & Conversion Check · CaseLoad Select",
+  title: "Free Website Design Review · CaseLoad Select",
   description:
     "See how your law firm's website scores on typography, contrast, forms, mobile usability, and authority signals, plus a ranked list of specific fixes. Free, no account required.",
   alternates: {
     canonical: "https://caseloadselect.ca/tools/website-design-check",
   },
   openGraph: {
-    title: "Free Website Design & Conversion Check · CaseLoad Select",
+    title: "Free Website Design Review · CaseLoad Select",
     description: "See how your law firm's website scores on design and conversion craft, plus a ranked list of specific fixes. Free, no account required.",
     type: "website",
     locale: "en_CA",
@@ -49,7 +49,7 @@ export default async function WebsiteDesignCheckPage({ searchParams }: PageProps
       <main className="dc-main">
         {!isEmbedded && (
           <header className="dc-hero" data-ui-component-content="checker-introduction">
-            <h1 className="dc-hero-title" data-ui-copy="heading">Website Design &amp; Conversion Check</h1>
+            <h1 className="dc-hero-title" data-ui-copy="heading">Website Design Review</h1>
             <p className="dc-hero-sub" data-ui-copy="body">
               A visitor decides whether your firm looks credible within seconds, before reading a word. This tool loads your
               homepage in a real browser at mobile and desktop widths, then measures typography, contrast, spacing, forms, and

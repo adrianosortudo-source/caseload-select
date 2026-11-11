@@ -4,9 +4,9 @@ import { useState } from "react";
 import type { ChatMessage } from "./FirmVoiceBuilder";
 
 function buildTranscriptMarkdown(messages: ChatMessage[]): string {
-  const lines = ["# Firm Voice Builder, interview transcript", ""];
+  const lines = ["# Tone of Voice Guide, interview transcript", ""];
   for (const m of messages) {
-    lines.push(m.role === "interviewer" ? "**Firm Voice Builder:**" : "**You:**");
+    lines.push(m.role === "interviewer" ? "**Tone of Voice Guide:**" : "**You:**");
     lines.push(m.displayText);
     lines.push("");
   }

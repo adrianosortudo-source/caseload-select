@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import DesiredClientTool from "@/components/desired-client/DesiredClientTool";
 
 export const metadata: Metadata = {
-  title: "Best Cases Profile | CaseLoad Select",
+  title: "Best Case Profile | CaseLoad Select",
   robots: { index: false, follow: false },
 };
 
@@ -20,7 +20,7 @@ export default async function DesiredClientMatterPage({ searchParams }: PageProp
       {!embedded && (
         <header className="dc-site-header">
           <nav aria-label="CaseLoad Select">
-            <div className="dc-identity"><a href="https://caseloadselect.ca" aria-label="CaseLoad Select home"><Image className="dc-brand-logo" src="/brand/logos/lockup-horizontal-tagline-dark-transparent.png" alt="CaseLoad Select. Sign better cases." width={833} height={160} unoptimized priority /></a><span className="dc-tool-tag">Best Cases Profile</span></div>
+            <div className="dc-identity"><a href="https://caseloadselect.ca" aria-label="CaseLoad Select home"><Image className="dc-brand-logo" src="/brand/logos/lockup-horizontal-tagline-dark-transparent.png" alt="CaseLoad Select. Sign better cases." width={833} height={160} unoptimized priority /></a><span className="dc-tool-tag">Best Case Profile</span></div>
             <a href="https://caseloadselect.ca/tools.html">Back to tools</a>
           </nav>
         </header>

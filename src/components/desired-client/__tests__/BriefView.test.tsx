@@ -12,7 +12,7 @@ function fixture() {
   return {answers,saved};
 }
 
-describe("Best Cases Profile definition review",()=>{
+describe("Best Case Profile definition review",()=>{
   it("keeps a saved report visible and shows server call usage after a failed regeneration",()=>{
     const {answers,saved}=fixture(),onRetry=vi.fn();
     const {container}=render(<BriefView saved={saved} answers={answers} dismissedCode={null} reviewed onReview={vi.fn()} onEdit={vi.fn()} onAnother={vi.fn()} onClear={vi.fn()} onRetry={onRetry} analysisError="unavailable" retryAllowed providerCallsUsed={2} providerCallLimit={3} storageWarning={false}/>);

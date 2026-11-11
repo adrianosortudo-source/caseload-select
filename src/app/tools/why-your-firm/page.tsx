@@ -3,7 +3,7 @@ import WhyYourFirm from "@/components/why-your-firm/WhyYourFirm";
 import ToolHeader from "@/components/why-your-firm/ToolHeader";
 
 export const metadata: Metadata = {
-  title: "Why Your Firm · CaseLoad Select",
+  title: "Why Choose Your Firm? · CaseLoad Select",
   description:
     "A positioning tool for small Ontario law firms. Pick what makes your firm different, test each claim against the Law Society's advertising rules, and read your Firm Positioning Brief on screen.",
   robots: { index: false, follow: false },
@@ -13,7 +13,7 @@ export const metadata: Metadata = {
  * /tools/why-your-firm
  *
  * Interactive positioning wizard (BUILD_PLAN §5). Deliberately noindex,
- * matching the Firm Voice Builder's own launch posture: unpromoted until
+ * matching the Tone of Voice Guide's own launch posture: unpromoted until
  * Adriano links it publicly. Outside the frozen (marketing) route group by
  * the same rule that placed the Voice Builder here (check-website-boundary.mjs
  * Rule A, zero exceptions since 2026-07-05); a fresh top-level route, sibling

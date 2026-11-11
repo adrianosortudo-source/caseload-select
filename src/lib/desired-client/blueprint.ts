@@ -166,7 +166,7 @@ export function buildBlueprintViewModel(brief: DesiredClientBrief | DesiredClien
   const work = answers.focus.work === "other"
     ? answers.focus.work_other.trim()
     : answers.focus.area && answers.focus.work ? getWorkLabel(answers.focus.area, answers.focus.work) : "Matter to define";
-  const title = work && work !== "Matter to define" ? `${area}: ${work}` : `${area} Best Cases Profile`;
+  const title = work && work !== "Matter to define" ? `${area}: ${work}` : `${area} Best Case Profile`;
   const confirmed = meta.wordingReviewed;
   const contributionResult = calculateContribution(answers);
   const conditions: string[] = [];

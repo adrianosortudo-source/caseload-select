@@ -284,7 +284,7 @@ function buildEmailHtml({ firstName, firmName, profileName }: EmailHtmlInput): s
 
         <tr><td style="background:#1E2F58;padding:28px 32px;color:#FFFFFF;">
           <div style="font-family:'Oxanium',monospace;font-size:10px;font-weight:700;letter-spacing:2px;color:#C4B49A;text-transform:uppercase;margin-bottom:8px;">
-            CaseLoad Select · Why Your Firm
+            CaseLoad Select · Why Choose Your Firm?
           </div>
           <div style="font-family:'Oxanium',monospace;font-size:22px;font-weight:800;line-height:1.25;">
             ${escapeHtml(copy.email.subject)}

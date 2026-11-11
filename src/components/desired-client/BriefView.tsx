@@ -136,7 +136,7 @@ export function BriefView({
       <Image className="dc-report-logo" src="/brand/logos/lockup-horizontal-tagline-light-transparent.png" alt="CaseLoad Select. Sign better cases." width={834} height={165} unoptimized />
       {legacy
         ? <><p className="dc-eyebrow" data-ui-copy="supporting">ORIGINAL REPORT VERSION</p><h1 data-ui-copy="heading">Desired Client Blueprint</h1><p className="dc-report-status" data-ui-copy="supporting">Original dcm-blueprint-v1 · {saved.mode === "ai" ? "AI-assisted" : "Structured"} · {new Date(saved.generatedAt).toLocaleDateString("en-CA")}</p></>
-        : <><p className="dc-eyebrow" data-ui-copy="supporting">CASELOAD SELECT · BEST CASES PROFILE</p><h1 data-ui-copy="heading">{model!.title}</h1><p className="dc-report-meta" data-ui-copy="supporting">{model!.modeLabel} · Created {model!.date}</p><div className="dc-report-status"><strong data-ui-copy="supporting">{model!.status}</strong><span data-ui-copy="supporting">{model!.evidenceStatus}</span></div></>}
+        : <><p className="dc-eyebrow" data-ui-copy="supporting">CASELOAD SELECT · BEST CASE PROFILE</p><h1 data-ui-copy="heading">{model!.title}</h1><p className="dc-report-meta" data-ui-copy="supporting">{model!.modeLabel} · Created {model!.date}</p><div className="dc-report-status"><strong data-ui-copy="supporting">{model!.status}</strong><span data-ui-copy="supporting">{model!.evidenceStatus}</span></div></>}
     </header>
     {storageWarning && <p className="dc-alert dc-screen-only" data-ui-copy="supporting">This browser could not save your progress. You can still finish and download your profile.</p>}
     {analysisLoading && <p className="dc-alert dc-screen-only" role="status" data-ui-copy="supporting">{COMMON_COPY.previousBlueprintAvailable}</p>}
