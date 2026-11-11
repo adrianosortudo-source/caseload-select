@@ -1,13 +1,13 @@
 # Current SCREEN demonstration
 
-Status: preview only. PR #468 must remain unmerged until Adriano reviews the completed preview and approves publication.
+Status: the public SCREEN tool is published. The November 11, 2026 single-scroll and clearer-guidance update is preview only and held for Adriano to review before publication.
 
 ## Entry points
 
 - **Canonical experience: prospect website presentation.** Adriano confirmed on November 8 that the version he tested is the widget placed on a prospect website, not the separate generic split workspace. `ProspectDemoClient` and `ProspectDemoPresentation` are the shared implementation.
 - `/admin/prospect-demos`: protected builder for saving, importing and positioning a prospect website screenshot. Existing browser-local profiles, screenshots and placements remain authoritative.
 - `/demo/prospect/[profileId]`: protected canonical presentation. Opens the profile’s Website view, with Lawyer view and Split view available without discarding answers. CaseLoad presentation defaults to live AI with an explicit guided option.
-- `/tools/screen`: public fixed-sample entry to that same canonical presentation, using the fictional Example Law Firm website illustration and fictional inquiries. It never reads or writes the operator’s browser-local profile library, performs no firm database lookup, and exposes no builder. `?embed=1` removes the extra logo and permits the parent frame to shrink after changing views. The website and firm are explicitly fictional; publication remains held for review.
+- `/tools/screen`: public practice-area and channel demonstration, packaged from a pushed commit in `adrianosortudo-source/caseload-screen-sandbox` and pinned in `config/screen-public-build.manifest.json`. It does not use the protected builder or operator profile library. `?embed=1` removes the duplicate masthead; the inner demo publishes its natural content height in both embedded and standalone app routes. The app wrapper validates the exact child frame and origin, resizes for growth and shrinkage, and relays height to an approved website parent. The demo creates no lead and contacts no firm.
 - `/screen-demo`: temporary redirect to the canonical route; incoming query values, including `embed`, are retained. Existing quiz and report subpaths remain available for previous bookmarks.
 - `/widget-v2/demo/[firmId]`: retained secondary workspace with the existing firm's colour and font theme. Only the CaseLoad-owned shell and report use CaseLoad branding. The demonstration geometry is square. No production intake route is changed.
 - `/widget-public/demo`: separate deterministic demonstration, retained for existing consumers. It is not the canonical live-AI tool.
@@ -46,3 +46,8 @@ The engine's `$25,000-$100,000` amount bucket cannot identify the correct court.
 The demo retains the complete original inquiry and lists corrected facts separately. A lawyer can check source context alongside the structured report gaps. In particular, the existing unpaid-invoice pack has no `written_terms` slot even though its gap vocabulary can mention an agreement; this engine/schema limitation is not silently repaired by inventing a demo-only canonical slot.
 
 Demo-only explanatory display copy uses shorter sentences and full-width list rows for phone readability. Canonical facts, scores, evidence and the portal wording are retained. Axis explanation sentences are separate paragraphs. Rendered checks exclude genuinely closed disclosure content; expanded sections are checked separately in browser review.
+
+## Single-scroll preview acceptance
+
+Verify both website entry points with the actual packaged app, at 1440, 1024, 768, 640, 375 and 320 CSS pixels. Only the outer website document should scroll vertically; textareas may retain native scrolling and the channel strip may scroll horizontally. Check wheel behavior over both columns, initial inquiry visibility, follow-ups, long reports, editing, going back, channel changes and reset. All content must remain reachable without hidden-overflow clipping. Preserve the screening engine and the current release as the rollback point. Preview links and draft PRs are not publication.
+
