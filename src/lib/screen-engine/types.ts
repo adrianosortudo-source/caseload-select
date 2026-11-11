@@ -401,7 +401,19 @@ export type Channel = 'web' | 'whatsapp' | 'sms' | 'instagram' | 'facebook' | 'g
 
 export type SupportedLanguage = 'en' | 'fr' | 'es' | 'pt' | 'zh' | 'ar';
 
+export type DemoRoutingArea = 'corporate' | 'real_estate' | 'employment' | 'estates' | 'family';
+export interface DemoRouting {
+  selection: DemoRoutingArea | 'auto';
+  candidate: DemoRoutingArea | null;
+  pending: 'confirmation' | 'conflict' | null;
+  revision: number;
+  extracting?: boolean;
+  declinedCandidate: DemoRoutingArea | null;
+}
+
 export interface EngineState {
+  /** Interactive public demo routing; absent on legacy and single-pass flows. */
+  demoRouting?: DemoRouting;
   input: string;
   /** Optional profile flag; omitted by existing firms and stored states. */
   family_enabled?: boolean;

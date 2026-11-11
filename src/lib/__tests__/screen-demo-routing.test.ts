@@ -1,22 +1,14 @@
 import { describe, expect, it, vi } from "vitest";
 import config from "../../../next.config";
-import ScreenToolPage from "@/app/tools/screen/page";
 import { ProspectDemoClient } from "@/components/prospect-demo/ProspectDemoClient";
 import GeneColmanScreenPage from "@/app/tools/screen/gene-colman/page";
-import { PublicScreenSandboxFrame } from "@/components/intake-v2/PublicScreenSandboxFrame";
 vi.mock("@/components/prospect-demo/ProspectDemoClient", () => ({ ProspectDemoClient: () => null }));
 describe("current SCREEN entry point and embed boundary", () => {
-  it("renders the canonical app-origin demo and passes only permitted settings", async () => {
-    const page = await ScreenToolPage({ searchParams: Promise.resolve({ embed: "1", practice_area: "employment", channel: "sms", profile: "gene" }) });
-    expect(page.type).toBe(PublicScreenSandboxFrame);
-    expect(page.props.query).toBe("embed=1&practice_area=employment&channel=sms&profile=gene");
-    const frame = PublicScreenSandboxFrame(page.props);
-    expect(frame.props.children.type).toBe("iframe");
-    expect(frame.props.children.props.src).toBe("/screen-demo-app/index.html?embed=1&practice_area=employment&channel=sms&profile=gene");
-    const defaults = await ScreenToolPage({ searchParams: Promise.resolve({}) });
-    expect(defaults.props.query).toBe("");
-    const rejected = await ScreenToolPage({ searchParams: Promise.resolve({ embed: "yes", practice_area: "criminal", channel: "gbp", profile: "other" }) });
-    expect(rejected.props.query).toBe("");
+  it("serves the built SCREEN document at the public route", async () => {
+    const rules = await config.rewrites!();
+    expect(Array.isArray(rules)).toBe(true);
+    if (!Array.isArray(rules)) throw new Error("expected rewrite list");
+    expect(rules).toContainEqual({ source: "/tools/screen", destination: "/screen-demo-app/index.html" });
   });
   it("preserves the Gene family prospect presentation", () => {
     const page = GeneColmanScreenPage();

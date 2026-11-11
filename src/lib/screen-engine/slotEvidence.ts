@@ -122,6 +122,7 @@ export function deriveAdvisorySpecificTask(state: EngineState): EngineState {
 // ─── Full evidence pass ────────────────────────────────────────────────────
 
 export function runEvidencePass(input: string, state: EngineState): EngineState {
+  if (state.demoRouting?.pending || (state.demoRouting && state.practice_area === 'unknown')) return state;
   let s = extractSlotEvidence(input, state);
   s = deriveAdvisorySpecificTask(s);
   return s;

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { llmExtractServer } from "@/lib/screen-llm-server";
-import { initialiseState } from "@/lib/screen-engine/extractor";
+import { initialiseState, classificationForMatterType, isValidMatterType } from "@/lib/screen-engine/extractor";
 import { checkRateLimit, ipFromRequest, rateLimitHeaders } from "@/lib/rate-limit";
 import { familyNegativeIsGrounded } from "@/lib/screen-engine/llm/extractor";
 import { SLOT_REGISTRY } from "@/lib/screen-engine/slotRegistry";
@@ -11,6 +11,7 @@ interface ExtractRequest {
   description?: string;
   matter_type?: MatterType;
   family_enabled?: boolean;
+  routing?: { selection: string; active_area: string; revision: number };
   already_extracted?: Record<string, string | null>;
   pending_slot_id?: string;
   reply?: string;
@@ -46,9 +47,30 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "description too long" }, { status: 413 });
   }
 
+  const matter = body.matter_type ?? "unknown";
+  if (typeof matter !== "string" || !isValidMatterType(matter)) {
+    return NextResponse.json({ error: "invalid matter type" }, { status: 400 });
+  }
+  const areas = ["corporate", "real_estate", "employment", "estates", "family"];
+  const routing = body.routing;
+  if (routing !== undefined) {
+    const actualArea = classificationForMatterType(matter).practice_area;
+    if (!routing || typeof routing !== "object" || !["auto", ...areas].includes(routing.selection) ||
+        !["unknown", ...areas].includes(routing.active_area) || !Number.isSafeInteger(routing.revision) || routing.revision < 0 ||
+        actualArea !== routing.active_area) {
+      return NextResponse.json({ error: "invalid routing context" }, { status: 400 });
+    }
+    if (body.already_extracted !== undefined && (!body.already_extracted || typeof body.already_extracted !== "object" || Array.isArray(body.already_extracted) ||
+        Object.entries(body.already_extracted).some(([id, value]) => !SLOT_REGISTRY.some(slot =>
+          slot.id === id && slot.applies_to.includes(matter) && (value === null || (typeof value === "string" && (slot.input_type !== "single_select" || !slot.options || slot.options.some(option => option.value === value)))))))) {
+      return NextResponse.json({ error: "invalid extracted fields" }, { status: 400 });
+    }
+  }
+
   const state = {
     ...initialiseState(description),
-    matter_type: body.matter_type ?? "unknown",
+    ...(routing ? classificationForMatterType(matter) : { matter_type: matter }),
+    ...(routing ? { demoRouting: { selection: routing.selection as "auto" | "corporate" | "real_estate" | "employment" | "estates" | "family", candidate: null, pending: null, revision: routing.revision, declinedCandidate: null } } : {}),
     family_enabled: body.family_enabled === true,
     slots: body.already_extracted ?? {},
   };

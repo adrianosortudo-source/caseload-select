@@ -16,6 +16,8 @@ import { deriveAdvisorySpecificTask } from './slotEvidence';
 import { buildClosingMessage } from './closing';
 import { getOptionDisplayLabel } from './i18n/display';
 import { buildFamilyRecapParagraphs, type FamilyRecapFact } from './family-recap';
+import { proposePracticeArea, resolvePracticeArea } from './routing';
+import type { DemoRoutingArea } from './types';
 
 const INSIGHT_THRESHOLD_COMPLETENESS = 75;
 const BAND_A_COMPLETENESS = 65;
@@ -1111,6 +1113,15 @@ function shouldPresentInsight(
 // ─── Main control ─────────────────────────────────────────────────────────
 
 export function getNextStep(state: EngineState): NextStep {
+  if (state.demoRouting?.extracting) return { type: 'clarify', reason: 'unclassified', message: 'Reading the description.' };
+  if (state.demoRouting?.pending && state.demoRouting.candidate) {
+    const options = [...CLARIFY_AREA_OPTIONS, { value: 'family_general' as const, labelKey: 'clarify_chip_family' }];
+    const candidate = options.find(option => option.value === `${state.demoRouting!.candidate}_general`);
+    const current = options.find(option => option.value === `${state.practice_area}_general`);
+    return { type: 'clarify', reason: 'unclassified', messageKey: 'clarify_practice_proposal',
+      message: 'This description may fit another practice area. Which area would you like to use?',
+      options: candidate ? [candidate, current ?? { value: 'unknown', labelKey: 'clarify_chip_choose_another' }] : [] };
+  }
   const bandResult = computeBand(state);
   const completeness = computeCoreCompleteness(state);
   const gap = getDecisionGap(state);
@@ -1261,7 +1272,7 @@ export function getNextStep(state: EngineState): NextStep {
       type: 'clarify',
       reason,
       messageKey: reason === 'contact_request' ? 'clarify_body_meta' : 'clarify_body_default',
-      options: [...CLARIFY_AREA_OPTIONS],
+      options: state.demoRouting ? [...CLARIFY_AREA_OPTIONS, { value: 'family_general', labelKey: 'clarify_chip_family' }] : [...CLARIFY_AREA_OPTIONS],
       message: "Could you share a little more about what's going on? A short sentence is enough. Common areas: business setup, contracts, real estate, wills and estates, and employment matters.",
     };
   }
@@ -1279,6 +1290,10 @@ export function getNextStep(state: EngineState): NextStep {
 // ─── State mutation helpers ───────────────────────────────────────────────
 
 export function applyAnswer(state: EngineState, slotId: string, value: string): EngineState {
+  if (state.demoRouting && (state.demoRouting.pending || state.demoRouting.extracting || !SLOT_REGISTRY.some(
+    slot => slot.id === slotId && slot.applies_to.includes(state.matter_type as never) &&
+      (slot.input_type !== 'single_select' || !slot.options || slot.options.some(option => option.value === value)),
+  ))) return state;
   let updated: EngineState = {
     ...state,
     slots: { ...state.slots, [slotId]: value },
@@ -1422,6 +1437,20 @@ export function startContactCapture(state: EngineState): EngineState {
  * DR-071 two-round budget only counts free-text submissions.
  */
 export function applyClarifyChoice(state: EngineState, choice: MatterType): EngineState {
+  if (state.demoRouting) {
+    if (state.demoRouting.pending) {
+      const accept = choice === `${state.demoRouting.candidate}_general`;
+      const decline = choice === 'unknown' || choice === `${state.practice_area}_general`;
+      return accept || decline ? resolvePracticeArea(state, accept) : state;
+    }
+    if (state.practice_area === 'unknown') {
+      const area = classificationForMatterType(choice).practice_area;
+      if (['corporate', 'real_estate', 'employment', 'estates', 'family'].includes(area)) {
+        return resolvePracticeArea(proposePracticeArea(state, area as DemoRoutingArea), true);
+      }
+    }
+    return state;
+  }
   if (!CLARIFY_AREA_VALUES.has(choice)) return state;
 
   const classification = classificationForMatterType(choice);

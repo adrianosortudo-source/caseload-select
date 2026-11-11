@@ -885,6 +885,9 @@ export function classificationForMatterType(mt: MatterType): {
   dispute_family: DisputeFamily;
   advisory_subtrack: AdvisorySubtrack;
 } {
+  if (mt === 'family_general') {
+    return { intent_family: 'unknown', practice_area: 'family', matter_type: mt, dispute_family: 'unknown', advisory_subtrack: 'unknown' };
+  }
   if (mt === 'business_setup_advisory') {
     return {
       intent_family: 'setup_advisory',
@@ -1014,7 +1017,7 @@ const ALL_CANONICAL_MATTER_TYPES: ReadonlyArray<MatterType> = [
 ];
 
 export function isValidMatterType(value: string): value is MatterType {
-  return (ALL_CANONICAL_MATTER_TYPES as ReadonlyArray<string>).includes(value);
+  return value === 'unknown' || value === 'family_general' || (ALL_CANONICAL_MATTER_TYPES as ReadonlyArray<string>).includes(value);
 }
 
 export { ALL_CANONICAL_MATTER_TYPES };

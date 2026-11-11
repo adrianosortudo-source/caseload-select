@@ -1109,6 +1109,17 @@
     "dividend_or_money_issue": "Is company money being taken or used in a way you don't agree with?"
   },
   "widget_strings": {
+    "demo_switch_prompt": "Start a new case in the selected area using this description?",
+    "demo_switch_accept": "Start new case",
+    "demo_switch_keep": "Keep current case",
+    "demo_new_case_area": "Start a new case to change the practice area.",
+    "clarify_practice_heading": "Confirm the practice area",
+    "clarify_practice_body": "This description may fit another practice area. Which area would you like to use?",
+    "clarify_chip_family": "Family",
+    "clarify_chip_choose_another": "Choose another area",
+    "demo_confirm_area": "Confirm the practice area to continue.",
+    "demo_area_confirmed": "Practice area confirmed. See the sample report.",
+    "demo_report_pending": "Confirm the practice area to see the sample report.",
     "convo_opening": "This is an AI-assisted demo. Use fictional details. Nothing is saved, and no firm is contacted. Tell me what you would like help with, in your own words. You do not need to know the legal terms.",
     "convo_help_me_choose": "Help me choose",
     "convo_hint_written_record": "A written record can help show what was agreed.",
