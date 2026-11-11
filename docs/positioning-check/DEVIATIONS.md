@@ -1,0 +1,32 @@
+# Deviations
+D-001 · 2026-11-08 · Owner coordinator
+Expected: Phase 0 readiness before feature implementation.
+Actual: feature modules drafted while isolated checkout and preview settings were pending, to avoid idle time. Work is unaccepted and no runtime gate claimed.
+Affected: Gates 0-3. Smallest remedy: verify real preview services and resource envelope before functional acceptance. No scope/dependency/cost expansion. Coordinator authorized parallel independent work.
+
+D-002 · 2026-11-08 · Owner Sol
+Canonical node_modules is incomplete, so reused compatible existing D: website-check-brand worktree installation through this worktree's own untracked junction. No dependency versions changed; no install/shared writes. CI remains authoritative for exact lockfile environment.
+
+D-003 · 2026-11-08 · Owner coordinator
+Six raw development-site input packets were stored under test-results; ordinary Playwright cleanup removed them. No model outputs existed there, and no user or production data was lost. Terra recaptures once into D:\00_Work\01_CaseLoad_Select\05_Product\Planning\Positioning_Diagnostic\evaluation-local, outside browser output cleanup. Raw inputs must never be stored under test-results again and are not committed. Schedule effect: one bounded recapture; source capture fixes are included before recapture.
+
+D-004 · 2026-11-08 · Owner Sol
+First preview compiled but failed TypeScript on JSON fixture tuple inference. Explicit test-only cast corrected for independently validated fixture JSON. No runtime schema weakened. Required CI remains authoritative; redundant slow global local typecheck stopped to reduce I/O contention.
+
+D-005 · 2026-11-08 · Owner Sol/coordinator
+Local full seven-width fixture batch completed with 4/10 passed, 6/10 failed. Confirmed defects: mobile single-word endings, partial test selector ambiguity and consultation anchor text contrast. Browser context teardown/file-I/O timeouts also affected 768/390/320; one trace ZIP was truncated. Screenshots preserved in planning/ui-evidence/batch-1. Coordinator authorized one scoped CI job reusing the repository Playwright pattern; no new dependency/provider. Final normal CSS/copy/contrast batch is applied; CI confirmation and independent review remain required. No acceptance threshold reduced. Browser case timeout90s allows six screenshot states; it is not the105s service deadline or pilot performance target.
+
+D-006 · 2026-11-08 · Coordinator-approved runtime correction
+Successful preview build logs explicitly selected Node26.x because package engines>=18.17.0 overrode the existing project24.x setting. The new collector uses the existing undici6 outbound transport, whose incompatibility with native Node26 fetch was already reproduced in the renderer repair. Root package engine and corresponding root lockfile metadata are pinned24.x to preserve the intended runtime. Feature CI uses24 and exercises focused backend + rendered checks. No shared fetch rewrite or dependency change. Live new-route transport remains to be verified; the build warning alone is not a request-level root cause proof.
+
+D-007 · 2026-11-08 · Coordinator-approved final bounded UI correction
+Cloud matrix passed7/11;640/390/375/320 failed only single-word endings in21 unique source/model fixture strings. All component-width and line-flow checks passed, so canonical structural padding is retained. One final correction round is approved: the existing scoped helper may test computed base+1px, then base+2px font size only after measured orphan and existing wrap remedies fail. It retains the first variant passing both orphan and natural-line-flow checks; otherwise restores canonical base. Fonts are never reduced; source quotations and acceptance thresholds remain unchanged. Base resets on content/width changes, and ResizeObserver responds only to width to prevent typography-height feedback. One cloud matrix confirmation follows. No further blind tweaks if unresolved.
+
+D-008 · 2026-11-08 · Coordinator-approved measured residual correction
+The fixed font-increase round reduced21 unique orphan strings to9, but did not pass the matrix. Existing code retried natural wrapping alone at+1/+2px. Coordinator authorized one observed-case investigation of the fixed natural/pretty/balance combinations within the same+2px ceiling and ordinary canonical-padding alternatives. Exact word/line widths and ancestor padding are attached to failing captures; diagnostic styles are fully restored and acceptance still fails. Local startup114s and navigation timeout prevented measurement, so the existing cloud matrix carries the probe. No additional product fields, dependency, workflow job or source-copy rewrite.
+
+D-008 measured candidate, coordinator approved
+Cloud006bba measurements show six residual strings pass with font+pretty/balance within+2px. At320, reducing message-card horizontal padding16→12 expands text256→264px and passes naturally. Validation lists reserve22px (336px text at390;321px at375). Coordinator approved a full-width list with no decorative markers/indent plus12px main horizontal padding at<=400, and the measured12px card padding at<=360. Explicit list semantics are retained. The helper retries only the fixed natural/pretty/balance choices at+1/+2px. Full seven-width CI must validate the combined candidate; no unchanged failure is accepted.
+
+D-009 final bounded UI cycle, coordinator approved
+The measured candidate passed9/11; only375/320 failed on three strings. Exactly one final constant candidate set is approved: existing natural/pretty/balance at+1/+2px; natural only at+3/+4px; then natural canonical font with tracking tightened by0.1/0.2px if still needed. Each change is retained only after actual orphan/line-flow checks pass, otherwise all styles reset to canonical. No source/fixture words, manual breaks, NBSP, narrow tracks, new dependency or framework. Cloud captures record retained typography for independent visual review. Any remaining failure will be reported as an unresolved minor limitation; no further tuning or false green claim.

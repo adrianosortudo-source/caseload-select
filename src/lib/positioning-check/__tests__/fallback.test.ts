@@ -1,0 +1,9 @@
+import { describe, expect, it } from "vitest";
+import { applyRenderedFallback } from "../fallback";
+import type { CollectedSite } from "../collector";
+const site=():CollectedSite=>({requestedUrl:"https://example.com/",resolvedOrigin:"https://example.com",pages:[{url:"https://example.com/",title:"Home",capturedAt:"2026-11-08",state:"readable",retainedChars:20},{url:"https://example.com/about",title:"About",capturedAt:"2026-11-08",state:"readable",retainedChars:1000}],evidence:[{id:"old",kind:"text",sourceUrl:"https://example.com/",title:"Home",capturedAt:"2026-11-08",excerpt:"old short text",truncated:false},{id:"other",kind:"text",sourceUrl:"https://example.com/about",title:"About",capturedAt:"2026-11-08",excerpt:"other page",truncated:false}],limitations:[]});
+describe("rendered fallback provenance",()=>{
+ it("replaces old primary evidence and records actual final URL and truncation",()=>{const s=site();applyRenderedFallback(s,{sourceUrl:"https://www.example.com/home",text:"a".repeat(8000),originalChars:9000});expect(s.pages[0]).toMatchObject({url:"https://www.example.com/home",retainedChars:8000,state:"truncated"});expect(s.evidence.some(e=>e.id==="old")).toBe(false);expect(s.evidence.some(e=>e.id==="other")).toBe(true);expect(s.evidence.filter(e=>e.id.startsWith("rendered")).every(e=>e.sourceUrl==="https://www.example.com/home"&&e.kind==="text"&&e.truncated)).toBe(true);});
+ it("does not infer truncation solely from exactly 8000 characters",()=>{const s=site();applyRenderedFallback(s,{sourceUrl:"https://example.com/",text:"a".repeat(8000),originalChars:8000});expect(s.pages[0].state).toBe("readable");});
+ it("respects the total retained packet limit",()=>{const s=site();s.pages[1].retainedChars=47000;applyRenderedFallback(s,{sourceUrl:"https://example.com/",text:"a".repeat(8000),originalChars:8000});expect(s.pages[0].retainedChars).toBe(1000);expect(s.pages[0].state).toBe("truncated");});
+});
