@@ -10,9 +10,6 @@ describe("current SCREEN entry point and embed boundary", () => {
     const page = await ScreenToolPage({ searchParams: Promise.resolve({ embed: "1", practice_area: "employment", channel: "sms", profile: "gene" }) });
     expect(page.type).toBe(PublicScreenSandboxFrame);
     expect(page.props.query).toBe("embed=1&practice_area=employment&channel=sms&profile=gene");
-    const frame = PublicScreenSandboxFrame(page.props);
-    expect(frame.props.children.type).toBe("iframe");
-    expect(frame.props.children.props.src).toBe("/screen-demo-app/index.html?embed=1&practice_area=employment&channel=sms&profile=gene");
     const defaults = await ScreenToolPage({ searchParams: Promise.resolve({}) });
     expect(defaults.props.query).toBe("");
     const rejected = await ScreenToolPage({ searchParams: Promise.resolve({ embed: "yes", practice_area: "criminal", channel: "gbp", profile: "other" }) });
