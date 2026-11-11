@@ -545,7 +545,7 @@ const ESTATES_SIGNALS = [
   // estates entirely and fell to unknown, even though the sub-type
   // classifier (ESTATES_POA_SIGNALS) was ready. DRG sells POAs; this closes
   // the gate gap.
-  'power of attorney', 'continuing power of attorney',
+  'power of attorney', 'powers of attorney', 'continuing power of attorney',
   'guardianship of person', 'guardianship of property',
   'estate of my', 'when my mother passed', 'when my father passed',
   'when my parent passed', 'after my father died', 'after my mother died',
@@ -604,6 +604,12 @@ function detectInScopeArea(input: string): InScopeAreaMatch | null {
   };
   let m: string | null;
   if ((m = hit(ESTATES_SIGNALS))) return { area: 'estates', signal: m };
+  if (/\bwills\b/i.test(t)) return { area: 'estates', signal: 'wills' };
+  // A pay offer tied to a release from one's employer is employment context,
+  // even when the caller has not said whether employment ended.
+  if (/\bmy employer\b/.test(t) && /\b(?:pay|wages)\b/.test(t) && /\brelease\b/.test(t)) {
+    return { area: 'employment', signal: 'employer pay and release' };
+  }
   if ((m = hit(EMPLOYMENT_SIGNALS))) return { area: 'employment', signal: m };
   return null;
 }
@@ -671,7 +677,7 @@ const ESTATES_WILL_DRAFTING_SIGNALS = [
 const ESTATES_POA_SIGNALS = [
   'power of attorney for property', 'power of attorney for personal care',
   'poa for property', 'poa for personal care',
-  'power of attorney', 'continuing power of attorney',
+  'power of attorney', 'powers of attorney', 'continuing power of attorney',
   'guardianship of person', 'guardianship of property',
 ];
 
@@ -700,7 +706,7 @@ function classifyEstatesSubType(input: string): MatterType {
   if (hit(ESTATES_DISPUTE_SIGNALS)) return 'estate_dispute';
   if (hit(ESTATES_PROBATE_SIGNALS)) return 'probate';
   if (hit(ESTATES_POA_SIGNALS)) return 'power_of_attorney';
-  if (hit(ESTATES_WILL_DRAFTING_SIGNALS)) return 'will_drafting';
+  if (hit(ESTATES_WILL_DRAFTING_SIGNALS) || /\bwills\b/i.test(t)) return 'will_drafting';
   return 'estates_general';
 }
 

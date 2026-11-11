@@ -2,60 +2,31 @@ import type { SlotOption, SupportedLanguage } from '../types';
 import type { I18nBundle } from './loader';
 
 /**
- * Returns the display text for a slot's question in the lead's language.
- *
- * Fail-safe cascade:
- *   1. language === 'en'                          → return englishQuestion (no lookup)
- *   2. i18n.slot_questions[slotId] non-empty      → return the translated string
- *   3. i18n.slot_questions missing the slot id    → return englishQuestion (fallback)
- *   4. i18n.slot_questions[slotId] empty string   → return englishQuestion (defensive)
- *
- * Levels 3 and 4 protect against partial translations: a bundle that
- * translates 30 of 110 slot questions still works correctly for those
- * 30 and falls back to English for the rest. No throw, no empty render.
- *
- * Added 2026-06-08 to close the i18n propagation gap surfaced on the
- * DRG WhatsApp PT smoke test ("quero abrir minha empresa no canada"
- * was producing English follow-up questions).
+ * Return the bundle's question in the selected language, including English.
+ * Missing or empty entries fall back to the canonical registry question.
+ * getI18n supplies the English bundle for unsupported locales.
  */
 export function getQuestionDisplayText(
   slotId: string,
   englishQuestion: string,
-  language: SupportedLanguage,
+  _language: SupportedLanguage,
   i18n: I18nBundle,
 ): string {
-  if (language === 'en') return englishQuestion;
   const translated = i18n.slot_questions?.[slotId];
   return translated || englishQuestion;
 }
 
 /**
- * Returns the display label for a slot option in the lead's language.
- *
- * Fail-safe cascade (5 levels):
- *   1. language === 'en'                      → return opt.label (no i18n lookup at all)
- *   2. i18n.slot_options[slotId] is present
- *      AND slotMap[opt.value] is a non-empty string → return the translated string
- *   3. i18n.slot_options[slotId] is absent   → return opt.label (whole slot untranslated)
- *   4. slotMap exists but opt.value key is missing → return opt.label (one option untranslated)
- *   5. slotMap[opt.value] is an empty string → return opt.label (guards against empty-string
- *      entries that a translator may accidentally deliver; `|| opt.label` handles this)
- *
- * Levels 3–5 all return opt.label, which is the English string set during the SlotOption
- * migration. Level 5 is the extra defensive layer beyond the original 4-level spec —
- * `translated || opt.label` rather than `translated ?? opt.label` so an empty translation
- * never reaches the lead.
- *
- * The canonical value (opt.value) is never modified. Only the display string
- * changes. Call applyAnswer() with opt.value, never with the return of this function.
+ * Return the bundle's display label, falling back to the registry label for
+ * missing or empty entries. Canonical option values remain unchanged and must
+ * be passed to applyAnswer rather than the displayed label.
  */
 export function getOptionDisplayLabel(
   opt: SlotOption,
   slotId: string,
-  language: SupportedLanguage,
+  _language: SupportedLanguage,
   i18n: I18nBundle,
 ): string {
-  if (language === 'en') return opt.label;
   const slotMap = i18n.slot_options?.[slotId];
   if (!slotMap) return opt.label;
   const translated = slotMap[opt.value];
@@ -95,6 +66,14 @@ export function getDisplayLabels(
   i18n: I18nBundle,
 ): string[] {
   return options.map(opt => getOptionDisplayLabel(opt, slotId, language, i18n));
+}
+
+/** Map an exact displayed label back to its immutable stored value. */
+export function resolveDisplayedOption(raw: string, options: readonly SlotOption[], slotId: string, language: SupportedLanguage, i18n: I18nBundle): string {
+  const reply = raw.trim();
+  const needle = reply.toLocaleLowerCase();
+  const option = options.find(item => item.value.toLocaleLowerCase() === needle || getOptionDisplayLabel(item, slotId, language, i18n).toLocaleLowerCase() === needle);
+  return option?.value ?? reply;
 }
 
 // ─── Channel chip data ────────────────────────────────────────────────────

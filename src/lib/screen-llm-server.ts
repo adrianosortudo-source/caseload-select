@@ -77,6 +77,7 @@ async function sleep(ms: number): Promise<void> {
 export async function llmExtractServer(
   description: string,
   state: EngineState,
+  maxDescriptionLength = MAX_DESCRIPTION_LENGTH,
 ): Promise<LlmExtractionResponse> {
   // GOOGLE_AI_API_KEY first (operator standard, also used by openrouter.ts
   // for the web channel /api/screen). GEMINI_API_KEY accepted as a
@@ -90,17 +91,13 @@ export async function llmExtractServer(
     };
   }
 
-  const trimmed = (description ?? '').slice(0, MAX_DESCRIPTION_LENGTH);
+  const trimmed = (description ?? '').slice(0, maxDescriptionLength);
   if (!trimmed.trim()) {
     return { extracted: {}, mode: 'error', reason: 'empty description' };
   }
 
   const matterType: MatterType = state.matter_type ?? 'unknown';
-  if (matterType === 'out_of_scope') {
-    return { extracted: {}, mode: 'live', reason: 'out_of_scope' };
-  }
-
-  const slots = getExtractableSlots(matterType);
+  const slots = getExtractableSlots(matterType, state.family_enabled === true);
   if (slots.length === 0) {
     return { extracted: {}, mode: 'live', reason: 'no_applicable_slots' };
   }
@@ -174,7 +171,7 @@ export async function llmExtractServer(
     const cleaned: Record<string, string> = {};
     const dropped: Record<string, string> = {};
     const normalize = (s: string) =>
-      s.toLowerCase().replace(/[–—]/g, '-').replace(/\s+/g, ' ').trim();
+      s.toLowerCase().replace(/[–—]/g, '-').replace(/\s+/g, ' ').replace(/\s*-\s*/g, '-').trim();
     for (const [k, v] of Object.entries(parsed)) {
       const slot = slotsById.get(k);
       if (!slot) continue;

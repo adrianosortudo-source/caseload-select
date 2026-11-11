@@ -1,7 +1,7 @@
 /**
  * /widget-v2/demo/[firmId] — split-screen demo.
  *
- * Left: the real public intake renderer running against an in-browser fixture.
+ * Left: the real public intake renderer running against a live-AI or guided fictional inquiry.
  * Right: a read-only firm-review brief derived from the same engine state.
  *
  * Used for sales demos: walk a prospect (or a partner-firm decision-maker)
@@ -14,7 +14,7 @@
 
 import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 import { DemoSplitClient } from "./DemoSplitClient";
-import { DRG_WIDGET_THEME, themeToCssVars } from "@/lib/widget-theme";
+import { resolveWidgetTheme, themeToCssVars, type FirmBranding } from "@/lib/widget-theme";
 
 interface PageProps {
   params: Promise<{ firmId: string }>;
@@ -25,9 +25,9 @@ export default async function DemoSplitPage({ params }: PageProps) {
 
   const { data: firm } = await supabase
     .from("intake_firms")
-    .select("name")
+    .select("name, branding")
     .eq("id", firmId)
-    .single();
+    .single<{ name: string; branding: FirmBranding | null }>();
 
   if (!firm) {
     return (
@@ -42,11 +42,10 @@ export default async function DemoSplitPage({ params }: PageProps) {
   const displayName = (firm.name as string).replace(/\s+(?:Test|\[DEMO\])$/i, "");
 
   return (
-    <div style={themeToCssVars(DRG_WIDGET_THEME)}>
+    <div style={themeToCssVars(resolveWidgetTheme(firm.branding))}>
       <DemoSplitClient
         firmId={firmId}
         firmName={displayName}
-        consentCaptureEnabled
       />
     </div>
   );

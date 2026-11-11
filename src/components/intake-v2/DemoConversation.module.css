@@ -1,0 +1,252 @@
+.conversation {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-width: 0;
+  border: 1px solid #1E2F58;
+  background: #FFFFFF;
+  color: #0D1520;
+  font-family: "DM Sans Variable", "DM Sans", sans-serif;
+  overflow: hidden;
+}
+
+.history {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  max-height: min(62dvh, 560px);
+  padding: 14px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-color: #C4B49A #F4F3EF;
+  scrollbar-width: thin;
+}
+
+.message {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+  padding: 12px 14px;
+  border: 1px solid #1E2F58;
+  overflow-wrap: anywhere;
+}
+
+.speaker {
+  display: block;
+  width: 100%;
+  font-family: var(--font-manrope), Manrope, sans-serif;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.4;
+  letter-spacing: 0.03em;
+}
+
+.assistantMessage .speaker {
+  color: #1E2F58;
+}
+
+.visitorMessage .speaker {
+  color: #FFFFFF;
+}
+
+.assistantMessage {
+  border-color: #C4B49A;
+  background: #F4F3EF;
+  color: #0D1520;
+}
+
+.visitorMessage {
+  border-color: #1E2F58;
+  background: #1E2F58;
+  color: #FFFFFF;
+}
+
+.message p {
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  font: 400 16px/1.55 "DM Sans Variable", "DM Sans", sans-serif;
+  overflow-wrap: anywhere;
+  white-space: normal;
+  text-wrap: wrap;
+}
+
+/* Measured orphan guard for assistant-written copy; authored text is untouched. */
+.assistantMessage p:not([data-ui-copy-exception]) {
+  text-wrap: pretty;
+}
+
+.message p[data-ui-copy-exception] {
+  white-space: pre-wrap;
+}
+
+.options {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  margin: 6px 0 0;
+  padding: 0 0 0 1.5em;
+  list-style: decimal;
+}
+
+.option {
+  display: list-item;
+  min-width: 0;
+  padding: 2px 0;
+  color: inherit;
+  font: 400 15px/1.5 "DM Sans Variable", "DM Sans", sans-serif;
+  overflow-wrap: anywhere;
+}
+
+.status {
+  flex: 0 0 auto;
+  width: 100%;
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid #C4B49A;
+  background: #F4F3EF;
+  color: #1E2F58;
+  font: 600 14px/1.5 "DM Sans Variable", "DM Sans", sans-serif;
+  overflow-wrap: anywhere;
+}
+
+.actions {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  padding: 10px 12px 0;
+  border-top: 1px solid #C4B49A;
+  background: #FFFFFF;
+}
+
+.action,
+.sendButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  min-height: 44px;
+  padding: 9px 14px;
+  border: 1px solid #1E2F58;
+  border-radius: 0;
+  color: #1E2F58;
+  font: 600 15px/1.35 "DM Sans Variable", "DM Sans", sans-serif;
+  text-align: center;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+.action {
+  background: #FFFFFF;
+}
+
+.action:hover:not(:disabled) {
+  background: #F4F3EF;
+}
+
+.action:disabled,
+.sendButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
+.composer {
+  display: grid;
+  flex: 0 0 auto;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
+  padding: 12px;
+  border-top: 1px solid #C4B49A;
+  background: #FFFFFF;
+}
+
+.input {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  min-height: 64px;
+  max-height: 120px;
+  padding: 10px 12px;
+  border: 1px solid #1E2F58;
+  border-radius: 0;
+  background: #FFFFFF;
+  color: #0D1520;
+  font: 400 16px/1.5 "DM Sans Variable", "DM Sans", sans-serif;
+  resize: none;
+  overflow-x: hidden;
+  overflow-y: hidden;
+  overflow-wrap: anywhere;
+}
+
+.input::placeholder {
+  color: #526071;
+  opacity: 1;
+}
+
+.sendButton {
+  background: #1E2F58;
+  color: #FFFFFF;
+}
+
+.sendButton:hover:not(:disabled) {
+  border-color: #C4B49A;
+  background: #C4B49A;
+  color: #0D1520;
+}
+
+.action:focus-visible,
+.input:focus-visible,
+.sendButton:focus-visible {
+  outline: 2px solid #1E2F58;
+  outline-offset: 2px;
+}
+
+@media (max-width: 639px) {
+  .history {
+    max-height: min(54dvh, 460px);
+    gap: 10px;
+    padding: 10px;
+  }
+
+  .message {
+    padding: 10px 11px;
+  }
+
+  .composer {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+    padding: 10px;
+  }
+
+  .input {
+    min-height: 60px;
+  }
+
+  .sendButton {
+    width: 100%;
+  }
+
+  .actions {
+    padding: 9px 10px 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .history {
+    scroll-behavior: auto;
+  }
+}

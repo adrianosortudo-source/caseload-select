@@ -9,7 +9,7 @@ const eslintConfig = [
     // config's Next.js/React assumptions -- see
     // docs/BUILD_PLAN_render_isolation_v1.md §3.3. Mirrors the same
     // exclusion in the root tsconfig.json.
-    ignores: ["services/render/**"],
+    ignores: ["services/render/**", "public/screen-demo-app/**"],
   },
   ...nextCoreWebVitals,
   ...nextTypescript,

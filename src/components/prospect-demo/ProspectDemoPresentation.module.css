@@ -68,3 +68,184 @@
     grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
   }
 }
+
+.caseload { composes: surface from "../intake-v2/ScreenDemo.module.css"; }
+.caseload > header { position: static; background: #0d1520; color: white; padding: 28px 24px; }
+.caseload > header > div { max-width: 1200px; margin-inline: auto; gap: 24px; }
+.brand { display: inline-block; margin-bottom: 24px; }
+.brand img { width: 210px; height: auto; }
+.caseload > header h1 { width: 100%; margin: 0; font: 800 36px/1.2 var(--font-manrope),sans-serif; letter-spacing: normal; text-wrap: wrap; }
+.introduction { width: 100%; margin: 16px 0 0; font: 400 17px/1.6 "DM Sans Variable",sans-serif; color: white; }
+.caseload > header label { font: 600 13px/1.5 var(--font-oxanium),sans-serif; color: white; }
+.caseload > header :is(button,select) { min-height: 44px; border: 1px solid #c4b49a; border-radius: 0; background: #0d1520; color: white; font: 400 16px/1.5 "DM Sans Variable",sans-serif; }
+.caseload > header button[aria-pressed="true"], .caseload > header button:hover { background: #c4b49a; color: #0d1520; }
+.caseload > header :is(a,button,select):focus-visible { outline-color: #c4b49a; }
+.caseload .presentationBody { padding: 24px; max-width: 1280px; }
+.caseload .panels { gap: 24px; }
+.caseload .split { grid-template-columns: minmax(0,1fr); }
+.caseload [data-demo-layout="split"] .websiteStage { border: 1px solid #1e2f58; background: white !important; }
+.caseload [data-demo-layout="split"] :is(.screenshotSlice,.formBackdrop) { display: none; }
+.caseload [data-demo-layout="split"] .formRegion { min-height: 0 !important; }
+.caseload [data-demo-layout="split"] .intake { width: 100% !important; margin-left: 0 !important; min-height: 0 !important; background: white !important; }
+.intakeSurface { composes: widget from "../intake-v2/ScreenDemo.module.css"; min-width: 0; }
+.caseload [aria-label="Lawyer review"] { background: white; border: 1px solid #1e2f58; padding: 0; color: #0d1520; }
+.caseload [data-ui-component-content="demo-ai-status"] { width: 100%; margin: 0; color: white; font: 400 17px/1.6 "DM Sans Variable",sans-serif; }
+@media (min-width: 1180px) { .caseload .split { grid-template-columns: minmax(0,1fr) minmax(0,1fr); } }
+@media (max-width: 639px) { .caseload > header { padding: 24px 16px; } .caseload .presentationBody { padding: 20px 16px; } .caseload > header h1 { font-size: 30px; } }
+
+.caseload > header h1 { text-wrap: pretty; }
+@media (max-width: 639px) { .caseload .presentationBody { padding-inline: 0; } .caseload [aria-label="Lawyer review"], .caseload [data-demo-layout="split"] .websiteStage { border-inline: 0; } }
+
+.caseload .introduction, .caseload [data-ui-component-content="demo-ai-status"] p { text-wrap: pretty; }
+.caseload [data-ui-component-content="demo-ai-status"] p[data-ui-copy="body"] { text-wrap: wrap; }
+.caseload [data-ui-component-content="demo-ai-status"] p { width: 100%; margin: 0; color: white; font: 400 17px/1.6 "DM Sans Variable",sans-serif; }
+.caseload [data-ui-component-content="demo-ai-status"] p[role="status"] { font: 600 15px/1.5 var(--font-oxanium),sans-serif; }
+
+.caseload[data-demo-embedded="true"] { min-height: 0; }
+
+.toolbarControls {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr));
+  align-items: end;
+  gap: 12px;
+  width: 100%;
+}
+
+.viewGroup,
+.modeGroup {
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.groupLegend {
+  width: 100%;
+  padding: 0;
+  color: #0D1520;
+  font: 600 14px/1.5 "DM Sans Variable", sans-serif;
+}
+
+.viewButtons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  width: 100%;
+}
+
+.choiceButton,
+.startOver {
+  min-height: 44px;
+  border: 1px solid #1E2F58;
+  border-radius: 0;
+  padding: 8px 14px;
+  color: #1E2F58;
+  font: 600 15px/1.4 "DM Sans Variable", sans-serif;
+  cursor: pointer;
+}
+
+.choiceButton {
+  background: #FFFFFF;
+}
+
+.choiceButton:hover {
+  background: #F4F3EF;
+}
+
+.choiceButton:focus-visible,
+.startOver:focus-visible {
+  outline: 2px solid #1E2F58;
+  outline-offset: 2px;
+}
+
+.activeChoice,
+.choiceButton.activeChoice:hover {
+  border-color: #1E2F58;
+  background: #1E2F58;
+  color: #FFFFFF;
+}
+
+.startOver {
+  justify-self: start;
+  background: transparent;
+}
+
+.modeOptions {
+  display: grid;
+  gap: 8px;
+  width: 100%;
+}
+
+.modeStatus,
+.sessionNote {
+  width: 100%;
+  margin: 0;
+  color: #0D1520;
+  font: 400 15px/1.5 "DM Sans Variable", sans-serif;
+}
+
+.demoOptions {
+  width: 100%;
+  border-top: 1px solid #C4B49A;
+  padding-top: 8px;
+}
+
+.demoOptions summary {
+  width: 100%;
+  color: #1E2F58;
+  font: 600 15px/1.5 "DM Sans Variable", sans-serif;
+  cursor: pointer;
+}
+
+.demoOptions summary:focus-visible {
+  outline: 2px solid #1E2F58;
+  outline-offset: 3px;
+}
+
+
+
+.caseload > header .groupLegend,
+.caseload > header .modeStatus,
+.caseload > header .sessionNote {
+  color: #FFFFFF;
+}
+
+.caseload > header .choiceButton[aria-pressed="true"],
+.caseload > header .choiceButton[aria-pressed="true"]:hover {
+  border-color: #C4B49A;
+  background: #C4B49A;
+  color: #0D1520;
+}
+
+.caseload > header .startOver {
+  border-color: #C4B49A;
+  background: transparent;
+  color: #FFFFFF;
+}
+
+.caseload > header .startOver:hover {
+  background: #C4B49A;
+  color: #0D1520;
+}
+
+.caseload > header .demoOptions {
+  border-color: #C4B49A;
+}
+.caseload > header .choiceButton:focus-visible,
+.caseload > header .startOver:focus-visible,
+.caseload > header .demoOptions summary:focus-visible {
+  outline-color: #C4B49A;
+}
+
+.caseload > header .demoOptions summary {
+  color: #FFFFFF;
+}
+
+.sessionNote {
+  width: 100%;
+  margin: 0;
+  color: #4A5A72;
+  font: 400 14px/1.5 "DM Sans Variable", sans-serif;
+  text-wrap: pretty;
+}

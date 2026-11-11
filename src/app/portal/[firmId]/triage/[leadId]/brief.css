@@ -425,6 +425,7 @@
   margin: 4px 0 0 0;
   font-size: 0.88rem;
   line-height: 1.5;
+  text-wrap: pretty;
   color: var(--bf-black);
 }
 

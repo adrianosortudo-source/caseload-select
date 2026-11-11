@@ -72,6 +72,7 @@ describe('Slot priority audit — free_text inventory', () => {
       'client_name',
       'client_phone',
       'client_postal_code',
+      'family_timing',
       'gca_specific_document',
       'ownership_percentage',
     ]);

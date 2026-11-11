@@ -14,6 +14,8 @@ import {
 } from './extractor';
 import { deriveAdvisorySpecificTask } from './slotEvidence';
 import { buildClosingMessage } from './closing';
+import { getOptionDisplayLabel } from './i18n/display';
+import { buildFamilyRecapParagraphs, type FamilyRecapFact } from './family-recap';
 
 const INSIGHT_THRESHOLD_COMPLETENESS = 75;
 const BAND_A_COMPLETENESS = 65;
@@ -135,12 +137,14 @@ function overChannelBudget(state: EngineState): boolean {
 // ─── Bridge messages ───────────────────────────────────────────────────────
 
 function getBridgeText(state: EngineState): string {
+  if (isConversationalPractice(state)) return conversationalBridgeText(state, getI18n(state.language));
   return state.language === 'en'
     ? getBridgeTextEn(state)
     : getBridgeTextI18n(state, getI18n(state.language));
 }
 
 function getBridgeTextEn(state: EngineState): string {
+  if (state.matter_type === 'family_general') return familyBridgeText(state, getI18n(state.language));
   if (state.matter_type === 'out_of_scope') {
     const areaLabels: Record<string, string> = {
       family: 'family law',
@@ -190,6 +194,8 @@ function getBridgeTextEn(state: EngineState): string {
 }
 
 export function getBridgeTextI18n(state: EngineState, i18n: I18nBundle): string {
+  if (isConversationalPractice(state) && i18n.recap_templates) return conversationalBridgeText(state, i18n);
+  if (state.matter_type === 'family_general') return familyBridgeText(state, i18n);
   const bt = i18n.bridge_text ?? {};
   if (state.matter_type === 'out_of_scope') {
     const prefix = bt['out_of_scope_prefix']
@@ -219,9 +225,132 @@ function slot(state: EngineState, id: string): string | null {
  * the English flow.
  */
 export function buildLeadSummary(state: EngineState, i18n: I18nBundle): LeadSummary {
-  return state.language === 'en'
+  if (state.matter_type === 'family_general') return buildFamilyLeadSummary(state, i18n);
+  const legacy = state.language === 'en'
     ? buildLeadSummaryEn(state)
     : buildLeadSummaryI18n(state, i18n);
+  if (!isConversationalPractice(state) || !i18n.recap_templates) return legacy;
+  return buildGroundedLeadSummary(state, i18n, legacy);
+}
+
+function isConversationalPractice(state: EngineState): boolean {
+  return !['out_of_scope', 'notary_services'].includes(state.matter_type) && ['corporate', 'real_estate', 'employment', 'estates'].includes(state.practice_area);
+}
+
+/** Quote only the visitor's own description and confirmed replies. Inferred slots
+ * remain available to the lawyer report but are never presented as established facts. */
+function buildGroundedLeadSummary(state: EngineState, i18n: I18nBundle, legacy: LeadSummary): LeadSummary {
+  const pt = state.language === 'pt';
+  const paragraphs: string[] = [];
+  if (state.input.trim()) paragraphs.push(`${pt ? 'Você nos contou' : 'You told us'}: “${state.input.trim()}”`);
+  const facts: string[] = [];
+  const readiness: FamilyRecapFact[] = [];
+  const opening = state.input.trim();
+  for (const definition of SLOT_REGISTRY) {
+    const meta = state.slot_meta[definition.id];
+    const value = state.slots[definition.id]?.trim();
+    if (!value || !meta || !['answered', 'explicit'].includes(meta.source) || definition.tier === 'contact') continue;
+    const option = definition.options?.find(item => item.value === value);
+    const shown = option ? getOptionDisplayLabel(option, definition.id, state.language, i18n) : value;
+    const evidence = meta.evidence?.trim();
+    // Some compatibility paths hold an internal routing enum rather than a
+    // selectable answer. Do not expose it as the visitor's words.
+    if (!option && definition.input_type === 'single_select' && /^[a-z][a-z0-9]*(?:_[a-z0-9]+)+$/.test(value) && (!evidence || evidence === value)) continue;
+    const answer = evidence && evidence !== value ? evidence : shown;
+    // An explicit value extracted from the entire opener is already represented
+    // by that exact quotation. Do not repeat the same words for every slot.
+    if (evidence && evidence === opening) continue;
+    if (['hiring_timeline', 'other_counsel', 'decision_authority'].includes(definition.id)) {
+      readiness.push({ id: definition.id, value, answer });
+      continue;
+    }
+    const ordinaryChoice = option && (!evidence || evidence === value || evidence === shown);
+    const sentence = ordinaryChoice ? i18n.recap_options?.[definition.id]?.[value] : undefined;
+    const template = i18n.recap_templates?.[definition.id] || getI18n('en').recap_templates?.[definition.id];
+    if (sentence) facts.push(sentence);
+    else if (template) facts.push(template.replace('{answer}', answer));
+  }
+  // Group sentences for reading without constructing a question/answer list.
+  for (let i = 0; i < facts.length; i += 3) paragraphs.push(facts.slice(i, i + 3).join(' '));
+  paragraphs.push(...buildFamilyRecapParagraphs('', readiness, i18n));
+  const titles: Record<string, [string, string]> = {
+    corporate: ['Your business inquiry', 'Seu assunto empresarial'],
+    real_estate: ['Your real estate inquiry', 'Seu assunto imobiliário'],
+    employment: ['Your employment inquiry', 'Seu assunto trabalhista'],
+    estates: ['Your wills and estates inquiry', 'Seu assunto de testamento ou espólio'],
+  };
+  return {
+    intro: titles[state.practice_area][pt ? 1 : 0],
+    points: legacy.points,
+    paragraphs,
+    closing: pt ? 'Você pode corrigir ou acrescentar detalhes.' : 'You can correct or add details.',
+  };
+}
+
+function conversationalBridgeText(state: EngineState, i18n: I18nBundle): string {
+  const summary = buildLeadSummary(state, i18n);
+  return [summary.intro, ...(summary.paragraphs ?? []), summary.closing].join('\n\n');
+}
+
+const FAMILY_RECAP_FIELDS = [
+  ['family_help_sought', 'Help requested'],
+  ['family_children', 'Children involved'],
+  ['family_existing_order', 'Existing order or agreement'],
+  ['family_timing', 'Court date or deadline'],
+  ['family_jurisdiction', 'Location'],
+  ['hiring_timeline', 'When you want a lawyer'],
+  ['other_counsel', 'Other legal help'],
+  ['decision_authority', 'Hiring decision'],
+] as const;
+
+/** A grounded recap of the inquiry and every supplied family-case answer. */
+function buildFamilyLeadSummary(state: EngineState, i18n: I18nBundle): LeadSummary {
+  const copy = i18n.summary?.family_general ?? {};
+  const labels = i18n.summary_labels ?? {};
+  const points: string[] = [];
+  const facts: FamilyRecapFact[] = [];
+  if (state.input.trim()) points.push(`${labels.family_description || 'Your description'}: ${state.input.trim()}`);
+  for (const [id, label] of FAMILY_RECAP_FIELDS) {
+    const value = state.slots[id]?.trim();
+    if (!value) continue;
+    const meta = state.slot_meta[id];
+    if (meta && ['inferred', 'llm_inferred', 'unknown'].includes(meta.source)) continue;
+    // Keep extra detail in a free-text answer, such as the city or children's ages.
+    // Canonical slot values still drive screening; the recap preserves the person's words.
+    const answer = meta && ['answered', 'explicit'].includes(meta.source) && meta.evidence?.trim()
+      ? meta.evidence.trim()
+      : i18n.slot_options?.[id]?.[value] || value;
+    points.push(`${labels[id] || label}: ${answer}`);
+    if (answer !== state.input.trim()) facts.push({ id, value, answer });
+  }
+  const paragraphs = buildFamilyRecapParagraphs(state.input, facts, i18n);
+  const knownIds = new Set<string>(FAMILY_RECAP_FIELDS.map(([id]) => id));
+  const additional: string[] = [];
+  for (const definition of SLOT_REGISTRY) {
+    if (knownIds.has(definition.id) || definition.tier === 'contact') continue;
+    const meta = state.slot_meta[definition.id];
+    const value = state.slots[definition.id]?.trim();
+    if (!value || !meta || !['answered', 'explicit'].includes(meta.source)) continue;
+    const evidence = meta.evidence?.trim();
+    if (evidence && evidence === state.input.trim()) continue;
+    const option = definition.options?.find(item => item.value === value);
+    if (!option && definition.input_type === 'single_select' && /^[a-z][a-z0-9]*(?:_[a-z0-9]+)+$/.test(value) && (!evidence || evidence === value)) continue;
+    const shown = option ? getOptionDisplayLabel(option, definition.id, state.language, i18n) : value;
+    const template = i18n.recap_templates?.[definition.id] || getI18n('en').recap_templates?.[definition.id];
+    if (template) additional.push(template.replace('{answer}', evidence && evidence !== value ? evidence : shown));
+  }
+  for (let i = 0; i < additional.length; i += 3) paragraphs.push(additional.slice(i, i + 3).join(' '));
+  return {
+    intro: copy.intro || 'Family law case recap',
+    points,
+    paragraphs,
+    closing: copy.closing || 'Please check that this recap is accurate.',
+  };
+}
+
+function familyBridgeText(state: EngineState, i18n: I18nBundle): string {
+  const summary = buildFamilyLeadSummary(state, i18n);
+  return [summary.intro, ...(summary.paragraphs ?? summary.points), summary.closing].join('\n\n');
 }
 
 // ─── English fast path (state.language === 'en') ──────────────────────────
@@ -242,7 +371,7 @@ function buildLeadSummaryEn(state: EngineState): LeadSummary {
     };
     const area = areaLabels[state.practice_area] ?? 'this area';
     return {
-      intro: `From what you described, this looks like a ${area} matter.`,
+      intro: area === 'this area' ? 'From what you described, this matter needs review.' : `From what you described, this looks like a ${area} matter.`,
       points: [],
       closing: 'A team member will review and respond directly. The firm does not yet handle this area on its own, but they will tell you whether they can help or refer you to someone who can.',
     };

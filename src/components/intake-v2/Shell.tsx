@@ -34,6 +34,8 @@ import styles from "./contained-widget.module.css";
 export type ShellLayout = "default" | "contained";
 
 interface ShellProps {
+  /** A containing demo reports its full height, rather than a nested pane height. */
+  reportHeight?: boolean;
   /** Total number of screens in the current round. Drives dot count. */
   totalScreens: number;
   /** 0-indexed current screen position. */
@@ -67,9 +69,9 @@ interface ShellProps {
   layout?: ShellLayout;
 }
 
-export function Shell({ totalScreens, currentScreen, roundLabel, onBack, onSkip, backLabel = "Back", skipLabel = "Skip", children, footer, layout = "default" }: ShellProps) {
+export function Shell({ totalScreens, currentScreen, roundLabel, onBack, onSkip, backLabel = "Back", skipLabel = "Skip", children, footer, layout = "default", reportHeight = true }: ShellProps) {
   const outerRef = useRef<HTMLDivElement | null>(null);
-  const isEmbedded = useEmbeddedWidgetResize(outerRef);
+  const isEmbedded = useEmbeddedWidgetResize(outerRef, reportHeight);
   const flowsToContent = isEmbedded || layout === "contained";
 
   // Outer chrome: min-h-screen ONLY in standalone, never when embedded.
@@ -89,6 +91,7 @@ export function Shell({ totalScreens, currentScreen, roundLabel, onBack, onSkip,
   // Main body: vertical centering ONLY in standalone. When embedded the
   // iframe is resized to match content exactly, so centering would only
   // add empty padding the host doesn't want.
+  const Content = layout === "contained" ? "div" : "main";
   const mainClass = [
     "flex-1 flex flex-col px-5",
     flowsToContent ? "py-5" : "py-6 items-center justify-center",
@@ -167,9 +170,9 @@ export function Shell({ totalScreens, currentScreen, roundLabel, onBack, onSkip,
       </header>
 
       {/* Body */}
-      <main className={mainClass}>
+      <Content className={mainClass} data-shell-content>
         <div className="w-full max-w-[720px]">{children}</div>
-      </main>
+      </Content>
 
       {/* Footer (optional). In standalone it sticks to viewport bottom; when
           embedded we drop sticky positioning because the host iframe sized to

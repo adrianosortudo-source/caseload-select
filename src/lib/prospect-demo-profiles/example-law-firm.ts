@@ -1,0 +1,20 @@
+import type { ProspectDemoProfile } from "@/lib/prospect-demo/types";
+
+/** Fictional public sample, never registered in the operator profile library. */
+export const exampleLawFirmProspectDemoProfile: ProspectDemoProfile = {
+  formatVersion: 1, id: "example-law-firm", slug: "example-law-firm", revision: 1,
+  createdAt: "2026-11-08T00:00:00.000Z", updatedAt: "2026-11-08T00:00:00.000Z",
+  firmName: "Example Law Firm", websiteTitle: "Fictional Example Law Firm website preview",
+  reference: { url: "https://example.invalid/", capturedAt: "2026-11-08", notes: "Fictional website created for this demonstration." },
+  screenshot: { assetId: "example-law-firm-website", width: 2340, height: 1650, mimeType: "image/png" },
+  placement: { x: 230 / 2340, y: 625 / 1650, width: 730 / 2340, height: 850 / 1650 },
+  theme: { accent: "#B59A6F", surface: "#FAF9F6", text: "#1C2B39", buttonText: "#FFFFFF" },
+  practiceAreas: ["family", "employment", "corporate", "real_estate", "estates"],
+  scenarios: [
+    { id: "your-inquiry", label: "Write your own inquiry", description: "Write a fictional inquiry in your own words." },
+    { id: "fictional-family", label: "Family law", description: "This is a fictional example. I am separating from my spouse and need help arranging time with our children. We live in Ontario. I do not know what information a lawyer needs." },
+    { id: "fictional-unpaid-invoice", label: "Unpaid invoice", description: "I own a small business and can decide whether to hire a lawyer. A client has not paid a $4,800 invoice for work delivered on March 15, 2026, under a written services agreement. I have the agreement, invoice, and follow-up email." },
+    { id: "fictional-employment-dispute", label: "Employment issue", description: "My employer dismissed me after I worked there for seven years. It offered eight weeks of severance pay in exchange for signing a release. I have not signed. The offer says I must respond by November 20, 2026. I want to understand what else a lawyer needs to review." },
+  ],
+  defaultView: "website", defaultMode: "guided",
+};

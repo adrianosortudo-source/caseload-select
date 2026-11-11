@@ -15,6 +15,7 @@ import type {
   ProspectDemoProfile,
   ProspectDemoSessionAdapter,
   ProspectDemoSessionContext,
+  ProspectDemoSessionResetReason,
   ProspectDemoView,
 } from "@/lib/prospect-demo/types";
 
@@ -30,12 +31,15 @@ interface Props {
   initialProfileId?: string;
   /** Never substitute another browser-local profile when a direct presentation URL is missing. */
   strictInitialProfile?: boolean;
+  appearance?: "classic" | "caseload";
+  embedded?: boolean;
+  browserLocalProfiles?: boolean;
 }
 
 const VIEW_LABELS: Record<ProspectDemoView, string> = {
-  website: "Website",
-  review: "Lawyer view",
-  split: "Split view",
+  website: "Website preview",
+  review: "Lawyer brief",
+  split: "Side by side",
 };
 const EMPTY_REGISTRATIONS: ProspectDemoRegistration[] = [];
 
@@ -141,6 +145,9 @@ export function ProspectDemoPresentation({
   registrations,
   initialProfileId,
   strictInitialProfile = false,
+  appearance = "classic",
+  embedded = false,
+  browserLocalProfiles = true,
 }: Props) {
   const shippedProfiles = registrations ?? EMPTY_REGISTRATIONS;
   const [profiles, setProfiles] = useState<ProspectDemoProfile[]>([]);
@@ -154,8 +161,12 @@ export function ProspectDemoPresentation({
 
   const refreshProfiles = useCallback(async () => {
     try {
-      await Promise.all(shippedProfiles.map(({ profile, asset: screenshot }) => ensureProspectDemoProfile(profile, screenshot)));
-      const nextProfiles = await listProspectDemoProfiles();
+      if (browserLocalProfiles) {
+        await Promise.all(shippedProfiles.map(({ profile, asset: screenshot }) => ensureProspectDemoProfile(profile, screenshot)));
+      }
+      const nextProfiles = browserLocalProfiles
+        ? await listProspectDemoProfiles()
+        : shippedProfiles.map(({ profile }) => profile);
       setProfiles(nextProfiles);
       const initialProfileIsAvailable = Boolean(
         initialProfileId && nextProfiles.some((profile) => profile.id === initialProfileId),
@@ -178,7 +189,7 @@ export function ProspectDemoPresentation({
     } catch {
       setStatus("This browser could not open the local prospect preview library.");
     }
-  }, [initialProfileId, selectedId, shippedProfiles, strictInitialProfile]);
+  }, [browserLocalProfiles, initialProfileId, selectedId, shippedProfiles, strictInitialProfile]);
 
   useEffect(() => { void refreshProfiles(); }, [refreshProfiles]);
 
@@ -188,27 +199,57 @@ export function ProspectDemoPresentation({
   useEffect(() => {
     if (!profile) return;
     setView(profile.defaultView);
-    setMode(profile.defaultMode);
+    setMode(appearance === "caseload" ? "live-ai" : profile.defaultMode);
     setScenarioId(profile.scenarios[0]?.id ?? "");
     setSessionKey((current) => current + 1);
-    void readProspectDemoAsset(profile.screenshot.assetId).then(setAsset).catch(() => setAsset(null));
-  }, [profile?.id]); // changing prospects starts a fresh presentation session
+    if (browserLocalProfiles) {
+      void readProspectDemoAsset(profile.screenshot.assetId).then(setAsset).catch(() => setAsset(null));
+    } else {
+      setAsset(shippedProfiles.find((item) => item.profile.id === profile.id)?.asset ?? null);
+    }
+  }, [profile?.id, browserLocalProfiles]); // changing prospects starts a fresh presentation session
 
+  const showReview = useCallback(() => setView("review"), []);
   const session = useMemo<ProspectDemoSessionContext | null>(() => profile && scenario ? {
     profile,
     scenario,
     mode,
+    showReview,
     sessionKey,
-  } : null, [mode, profile, scenario, sessionKey]);
+  } : null, [mode, profile, scenario, sessionKey, showReview]);
+
+  const notifySessionReset = useCallback((reason: ProspectDemoSessionResetReason) => {
+    if (!session) return;
+    if (sessionAdapter.onSessionReset) {
+      sessionAdapter.onSessionReset(session, reason);
+    } else if (reason === "start-over") {
+      sessionAdapter.onRestart?.(session);
+    }
+  }, [session, sessionAdapter]);
 
   const restart = useCallback(() => {
     if (!session) return;
-    sessionAdapter.onRestart?.(session);
+    notifySessionReset("start-over");
     setSessionKey((current) => current + 1);
-  }, [session, sessionAdapter]);
+  }, [notifySessionReset, session]);
+
+  function changeProfile(nextProfileId: string) {
+    if (nextProfileId === selectedId) return;
+    notifySessionReset("profile");
+    setSelectedId(nextProfileId);
+  }
 
   function changeScenario(nextScenarioId: string) {
+    if (nextScenarioId === scenario?.id) return;
+    notifySessionReset("sample");
     setScenarioId(nextScenarioId);
+    setSessionKey((current) => current + 1);
+  }
+
+  function changeMode(nextMode: ProspectDemoMode) {
+    if (nextMode === mode) return;
+    notifySessionReset("mode");
+    setMode(nextMode);
     setSessionKey((current) => current + 1);
   }
 
@@ -228,45 +269,62 @@ export function ProspectDemoPresentation({
   const review = sessionAdapter.renderReview(session);
 
   return (
-    <main className="min-h-screen bg-[#F4F3EF] text-[#182538]" data-prospect-demo-presentation>
-      <header className="border-b border-[#182538]/15 bg-white px-4 py-4 sm:px-6" data-ui-component-content="prospect-demo-toolbar">
-        <div className="mx-auto flex w-full max-w-[1440px] flex-col gap-4">
+    <main className={`min-h-screen bg-[#F4F3EF] text-[#182538] ${appearance === "caseload" ? styles.caseload : ""}`} data-prospect-demo-presentation data-demo-embedded={embedded}>
+      <header className="border-b border-[#182538]/15 bg-white px-4 py-4 sm:px-6">
+        <div className="mx-auto flex w-full max-w-[1440px] flex-col gap-4" data-ui-component-content="prospect-demo-toolbar">
           <div className="w-full">
-            <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#90734B]">CaseLoad Select prospect preview</p>
-            <h1 className="mt-1 w-full text-pretty text-[17px] font-extrabold leading-snug tracking-[-0.02em] sm:text-2xl" data-ui-copy="heading">{profile.firmName} intake preview</h1>
+            {appearance === "caseload" ? !embedded && <a href="https://caseloadselect.ca/" className={styles.brand}><Image src="/brand/logos/lockup-horizontal-dark-transparent.png" alt="CaseLoad Select" width={210} height={48} priority /></a> : <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#90734B]">CaseLoad Select prospect preview</p>}
+            <h1 className="mt-1 w-full text-pretty text-[17px] font-extrabold leading-snug tracking-[-0.02em] sm:text-2xl" data-ui-copy="heading">{appearance === "caseload" ? "Try the SCREEN" : `${profile.firmName} intake preview`}</h1>
+            {appearance === "caseload" && <p className={styles.introduction} data-ui-copy="body">{profile.id === "gene-colman" ? "Preview SCREEN on your website." : "Preview SCREEN on a sample website."} Follow a fictional inquiry through confirmed facts, a lawyer brief and a simulated reply.</p>}
           </div>
-          <div className="grid w-full gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
-            <label className="block text-xs font-semibold text-[#374457]">
+          {sessionAdapter.renderStatus?.(session)}
+          <div className={styles.toolbarControls}>
+            {(appearance !== "caseload" || profiles.length > 1) && <label className="block text-xs font-semibold text-[#374457]">
               Prospect
-              <select value={selectedId} onChange={(event) => setSelectedId(event.target.value)} className="mt-1.5 w-full border border-[#182538]/20 bg-white px-3 py-2.5 text-sm text-[#182538] focus:border-[#B28B50] focus:outline-none">
+              <select value={selectedId} onChange={(event) => changeProfile(event.target.value)} className="mt-1.5 w-full border border-[#182538]/20 bg-white px-3 py-2.5 text-sm text-[#182538] focus:border-[#B28B50] focus:outline-none">
                 {profiles.map((item) => <option key={item.id} value={item.id}>{item.firmName}</option>)}
               </select>
-            </label>
+            </label>}
             <label className="block text-xs font-semibold text-[#374457]">
-              Fictional client scenario
+              Sample case
               <select value={scenario.id} onChange={(event) => changeScenario(event.target.value)} className="mt-1.5 w-full border border-[#182538]/20 bg-white px-3 py-2.5 text-sm text-[#182538] focus:border-[#B28B50] focus:outline-none">
                 {profile.scenarios.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
               </select>
             </label>
-            <button type="button" onClick={restart} className="self-end border border-[#182538] bg-[#182538] px-4 py-2.5 text-sm font-bold text-white transition hover:bg-[#283A54]">Restart demo</button>
+            <button type="button" onClick={restart} className={styles.startOver}>Start over</button>
           </div>
-          <div className="flex flex-wrap gap-2" aria-label="Presentation layout">
-            {(Object.keys(VIEW_LABELS) as ProspectDemoView[]).map((item) => (
-              <button key={item} type="button" onClick={() => setView(item)} aria-pressed={view === item} className={view === item ? "border border-[#182538] bg-[#182538] px-3 py-2 text-xs font-bold text-white" : "border border-[#182538]/20 bg-white px-3 py-2 text-xs font-bold text-[#374457] hover:border-[#182538]/50"}>{VIEW_LABELS[item]}</button>
-            ))}
-            <span className="h-8 w-px bg-[#182538]/15" aria-hidden="true" />
-            {(["guided", "live-ai"] as ProspectDemoMode[]).map((item) => (
-              <button key={item} type="button" onClick={() => { setMode(item); setSessionKey((current) => current + 1); }} aria-pressed={mode === item} className={mode === item ? "border border-[#B28B50] bg-[#F7F1E6] px-3 py-2 text-xs font-bold text-[#765724]" : "border border-[#182538]/20 bg-white px-3 py-2 text-xs font-bold text-[#374457] hover:border-[#182538]/50"}>{item === "guided" ? "Guided sample" : "Live AI"}</button>
-            ))}
+          <p className={styles.sessionNote} data-ui-copy="supporting">Changing a sample or mode resets this demo.</p>
+          <fieldset className={styles.viewGroup}>
+            <legend className={styles.groupLegend}>View</legend>
+            <div className={styles.viewButtons}>
+              {(Object.keys(VIEW_LABELS) as ProspectDemoView[]).map((item) => (
+                <button key={item} type="button" onClick={() => setView(item)} aria-pressed={view === item} className={`${styles.choiceButton} ${view === item ? styles.activeChoice : ""}`}>{VIEW_LABELS[item]}</button>
+              ))}
+            </div>
+          </fieldset>
+          <div className={styles.modeOptions}>
+            <p className={styles.modeStatus} role="status" aria-live="polite">AI mode: {mode === "live-ai" ? "Live AI" : "Guided sample"}</p>
+            <details className={styles.demoOptions}>
+              <summary>Demo options</summary>
+
+              <fieldset className={styles.modeGroup}>
+                <legend className={styles.groupLegend}>AI mode</legend>
+                <div className={styles.viewButtons}>
+                  {(["live-ai", "guided"] as ProspectDemoMode[]).map((item) => (
+                    <button key={item} type="button" onClick={() => changeMode(item)} aria-pressed={mode === item} className={`${styles.choiceButton} ${mode === item ? styles.activeChoice : ""}`}>{item === "live-ai" ? "Live AI" : "Guided sample"}</button>
+                  ))}
+                </div>
+              </fieldset>
+            </details>
           </div>
         </div>
       </header>
 
       <section className={styles.presentationBody}>
         {/** Both sides stay mounted. Layout changes must never discard intake answers. */}
-        <div className={`${styles.panels} ${view === "split" ? styles.split : ""}`}>
+        <div className={`${styles.panels} ${view === "split" ? styles.split : ""}`} data-demo-layout={view}>
           <div className={view === "review" ? "hidden" : "min-w-0"} aria-hidden={view === "review"}>
-            <ScreenshotStage profile={profile} asset={asset}>{intake}</ScreenshotStage>
+            <div className={appearance === "caseload" ? styles.intakeSurface : undefined}><ScreenshotStage profile={profile} asset={asset}>{intake}</ScreenshotStage></div>
           </div>
           <div className={view === "website" ? "hidden" : "min-w-0"} aria-hidden={view === "website"}>
             <ReviewStage>{review}</ReviewStage>

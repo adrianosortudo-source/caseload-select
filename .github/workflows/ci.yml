@@ -651,3 +651,29 @@ jobs:
       - name: Stop local Supabase stack
         if: always()
         run: supabase stop
+
+  website-checker-brand:
+    name: Website checker brand acceptance
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+      - name: Install dependencies
+        run: npm ci
+      - name: Install fixed Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Verify checker brand and flow at six widths
+        run: npm run test:website-design-check-rendered
+      - name: Upload checker visual evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: website-checker-brand-evidence
+          path: test-results/website-design-check*
+          if-no-files-found: ignore
+          retention-days: 7

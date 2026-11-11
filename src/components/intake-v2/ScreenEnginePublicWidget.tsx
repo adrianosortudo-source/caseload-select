@@ -22,6 +22,7 @@ import {
 } from "@/lib/screen-engine/control";
 import { getI18n, type I18nBundle } from "@/lib/screen-engine/i18n/loader";
 import { getOptionDisplayLabel, getOptionDescription, getQuestionDisplayText } from "@/lib/screen-engine/i18n/display";
+import { getQuestionContext } from "@/lib/screen-conversation-copy";
 import type { SupportedLanguage } from "@/lib/screen-engine/types";
 import { llmExtract, mergeLlmResults } from "@/lib/screen-engine/llm/extractor";
 import { buildReport } from "@/lib/screen-engine/report";
@@ -29,10 +30,19 @@ import { renderBriefHtmlServer } from "@/lib/screen-brief-html";
 import { getWebAttribution } from "@/lib/screen-engine/persist";
 import type { EngineState, LawyerReport, MatterType, SlotDefinition } from "@/lib/screen-engine/types";
 import { answerDemoState, buildDemoReport, startDemoState } from "@/lib/screen-demo";
+import { DemoFactReview } from "./DemoFactReview";
+import { DemoConversation, type DemoConversationMessage } from "./DemoConversation";
+import { groundDemoConversationFacts } from "@/lib/screen-demo-conversation-grounding";
+import { prepareFamilyDemoState } from "@/lib/screen-demo-family";
+import { groundFamilyOrderReplies } from "@/lib/screen-engine/family";
+import { applyPendingSlotReply } from "@/lib/pending-slot-reply";
+import { meetsDiscoveryFloor } from "@/lib/discovery-floor";
+import { selectNextSlot } from "@/lib/screen-engine/selector";
+import { confirmDemoFacts, demoCapturedFacts, demoReviewFacts } from "@/lib/screen-demo-confirmation";
 
 export type ScreenWidgetStage = "kickoff" | "questions" | "contact" | "done";
 export type ScreenWidgetRuntime = "live" | "demo" | "demo-live-ai";
-export type ScreenWidgetExtractionStatus = "not-requested" | "reading" | "live" | "fallback";
+export type ScreenWidgetExtractionStatus = "not-requested" | "reading" | "live" | "fallback" | "not-needed";
 
 /**
  * Runtime capabilities are deliberately defined at the widget boundary so a
@@ -137,8 +147,13 @@ export interface ScreenEnginePublicWidgetProps {
   runtime?: ScreenWidgetRuntime;
   /** Content-sized widget frame for a mockup column or card. Defaults to the existing viewport-aware frame. */
   layout?: ShellLayout;
+  /** A parent demo workspace owns iframe height when false. */
+  reportEmbeddedHeight?: boolean;
   /** Read-only state bridge for the separate sales presentation panel. */
   onDemoStateChange?: (view: ScreenDemoView) => void;
+  /** Optional, browser-only continuation for the prospect presentation. */
+  demoContinuation?: { workflow?: "meta"; contactUsed?: boolean; onUseSampleContact: () => void; onResetSession?: () => void; reply: string | null; onShowReview?: () => void };
+  configuredPracticeAreas?: readonly import("@/lib/screen-engine/types").PracticeArea[];
   /** Optional fictional opening used by the presentation toolbar. */
   initialDescription?: string;
 }
@@ -271,6 +286,8 @@ function FreeTextAnswerCard({
   );
 }
 
+
+
 export function ScreenEnginePublicWidget({
   firmId,
   firmName,
@@ -280,18 +297,34 @@ export function ScreenEnginePublicWidget({
   onSubmitResult,
   runtime = "live",
   layout = "default",
+  reportEmbeddedHeight = true,
   onDemoStateChange,
+  demoContinuation,
   initialDescription = "",
+  configuredPracticeAreas = [],
 }: ScreenEnginePublicWidgetProps) {
   const policy = SCREEN_WIDGET_EXECUTION_POLICY[runtime];
   const isDemo = policy.isGuidedDemo;
+  const metaWorkflow = isDemo && demoContinuation?.workflow === "meta";
   const [stage, setStage] = useState<Stage>("kickoff");
+  const [pendingDemoReview, setPendingDemoReview] = useState(false);
   const [description, setDescription] = useState(initialDescription);
   const [state, setState] = useState<EngineState | null>(null);
   const [history, setHistory] = useState<EngineState[]>([]);
   const [isReading, setIsReading] = useState(false);
+  const [readingAnswer, setReadingAnswer] = useState(false);
+  const [answerFeedback, setAnswerFeedback] = useState<string | null>(null);
   const [persistStatus, setPersistStatus] = useState<string | null>(null);
   const persistedRef = useRef(false);
+  const extractionRun = useRef(0);
+  const demoReplyHistory = useRef<string[]>([]);
+  const demoUserEvidence = useRef<string[]>([]);
+  const conversationBusy = useRef(false);
+  const [conversationVersion, setConversationVersion] = useState(0);
+  const [conversation, setConversation] = useState<DemoConversationMessage[]>([
+    { id: "welcome", role: "assistant", text: "Tell us what happened." },
+  ]);
+  useEffect(() => () => { extractionRun.current += 1; }, []);
   // Clarify state (DR-071, 2026-06-11). When the engine cannot classify
   // the lead's input (matter_type stays 'unknown' after the LLM merge,
   // per the DR-070 no-force-fit rule), `getNextStep` returns
@@ -308,7 +341,24 @@ export function ScreenEnginePublicWidget({
     status: "not-requested",
   });
 
-  const next = useMemo(() => state ? getNextStep(state) : null, [state]);
+  const next = useMemo(() => {
+    if (!state) return null;
+    const step = getNextStep(state);
+    // Same user-grounded discovery floor enforced by the Meta processor.
+    if (metaWorkflow && (step.type === "stop" || step.type === "present_insight") &&
+        !meetsDiscoveryFloor(state) && state.questionHistory.length < WEB_DISCOVERY_HARD_CAP) {
+      const slot = selectNextSlot(state);
+      if (slot) return { type: "continue" as const, slot };
+    }
+    return step;
+  }, [state, metaWorkflow]);
+
+  useEffect(() => {
+    if (!metaWorkflow || !state || isReading || pendingDemoReview || stage !== "questions" ||
+        state.matter_type === "out_of_scope" || next?.type === "clarify") return;
+    if (!demoContinuation?.contactUsed) setStage("contact");
+    else if (next?.type === "capture_contact" || next?.type === "stop" || next?.type === "present_insight") setStage("done");
+  }, [metaWorkflow, state, isReading, pendingDemoReview, stage, next?.type, demoContinuation?.contactUsed]);
 
   // Drop-off checkpoint (qualification audit F2/F6/item 5, 2026-07-02).
   // Fires a best-effort, fire-and-forget POST after every turn advance
@@ -367,28 +417,46 @@ export function ScreenEnginePublicWidget({
     return slotToItem(next.slot, language, i18n);
   }, [next, language, i18n]);
 
+  useEffect(() => {
+    if (!metaWorkflow || isReading || pendingDemoReview || !state) return;
+    let message: DemoConversationMessage | null = null;
+    if (state.matter_type === "out_of_scope") {
+      message = { id: "scope", role: "assistant", text: "This area is not configured in this demo. You can edit your inquiry or choose another sample." };
+    } else if (stage === "contact" && !demoContinuation?.contactUsed) {
+      message = { id: "contact", role: "assistant", text: "First, we need a name and a way to reach the person. Use the fictional sample contact to continue. You can reply with the number of an option or answer in your own words." };
+    } else if (stage === "questions" && demoContinuation?.contactUsed && next?.type === "continue" && currentItem) {
+      message = { id: `question:${state.questionHistory.length}:${currentItem.id}`, role: "assistant", text: [getQuestionContext(state, next.slot!), currentItem.question].filter(Boolean).join("\n\n"), options: currentItem.options?.map((option) => option.label) };
+    } else if (stage === "questions" && next?.type === "clarify") {
+      message = { id: `clarify:${clarifyAttempts}`, role: "assistant", text: "Could you share a little more about what is happening?" };
+    } else if (stage === "done") {
+      const summary = buildLeadSummary(state, i18n);
+      message = { id: "complete", role: "assistant", text: ["Brief ready.", i18n.widget_strings?.convo_recap_heading || "Here is what we understood.", ...(summary.paragraphs ?? summary.points), i18n.widget_strings?.convo_completion_body || "No firm contacted."].join("\n\n") };
+    }
+    if (message) setConversation((items) => items.some((item) => item.id === message!.id) ? items : [...items, message!]);
+  }, [metaWorkflow, isReading, pendingDemoReview, state, stage, demoContinuation?.contactUsed, next, currentItem, clarifyAttempts, language]);
+
+  useEffect(() => {
+    if (!metaWorkflow || stage !== "done" || !demoContinuation?.reply) return;
+    const text = demoContinuation.reply;
+    setConversation((items) => items.some((item) => item.id === "simulated-reply") ? items : [...items, { id: "simulated-reply", role: "assistant", text, speaker: `Simulated reply from ${firmName}`, verbatim: true }]);
+  }, [metaWorkflow, stage, demoContinuation?.reply, firmName]);
+
   const demoReport = useMemo(() => {
-    if (!isDemo || !state) return null;
-    if (
-      stage !== "done" &&
-      next?.type !== "present_insight" &&
-      next?.type !== "capture_contact" &&
-      next?.type !== "stop"
-    ) return null;
+    if (!isDemo || !state || pendingDemoReview || isReading) return null;
     return buildDemoReport(state);
-  }, [isDemo, stage, state, next?.type]);
+  }, [isDemo, state, pendingDemoReview, isReading]);
 
   useEffect(() => {
     if (!isDemo) return;
     onDemoStateChange?.({
       stage,
       state,
-      currentQuestion: currentItem,
+      currentQuestion: pendingDemoReview || isReading || stage !== "questions" || next?.type === "capture_contact" ? null : currentItem,
       report: demoReport,
       extraction,
       runtime,
     });
-  }, [isDemo, runtime, onDemoStateChange, stage, state, currentItem, demoReport, extraction]);
+  }, [isDemo, runtime, onDemoStateChange, stage, state, currentItem, demoReport, extraction, pendingDemoReview, isReading, next?.type]);
 
   async function start() {
     await runStart(description);
@@ -401,9 +469,18 @@ export function ScreenEnginePublicWidget({
   async function runStart(rawText: string) {
     const text = rawText.trim();
     if (text.length < 10) return;
+    demoReplyHistory.current = [];
+    demoUserEvidence.current = [text];
+    setPendingDemoReview(false);
+    setAnswerFeedback(null);
+    setReadingAnswer(false);
+    const run = ++extractionRun.current;
 
     if (policy.usesFixtureEngine) {
-      setState(startDemoState(text));
+      let fixtureState = prepareFamilyDemoState(startDemoState(text), configuredPracticeAreas);
+      if (metaWorkflow) fixtureState = scoreState(groundDemoConversationFacts(fixtureState, text));
+      setState(fixtureState);
+      setPendingDemoReview(!metaWorkflow && demoCapturedFacts(fixtureState).length > 0);
       setStage("questions");
       setIsReading(false);
       setExtraction({ status: "not-requested" });
@@ -411,7 +488,9 @@ export function ScreenEnginePublicWidget({
     }
 
     let nextState = initialiseState(text);
+    if (isDemo) nextState = prepareFamilyDemoState(nextState, configuredPracticeAreas);
     nextState = runEvidencePass(text, nextState);
+    if (metaWorkflow) nextState = groundDemoConversationFacts(nextState, text);
     nextState = scoreState(nextState);
     setState(nextState);
     setStage("questions");
@@ -425,28 +504,34 @@ export function ScreenEnginePublicWidget({
 
     try {
       const extracted = await llmExtract(text, nextState);
+      if (run !== extractionRun.current) return;
       if (extracted.mode === "live") {
         nextState = scoreState(mergeLlmResults(nextState, extracted.extracted));
+        if (metaWorkflow) nextState = scoreState(groundDemoConversationFacts(nextState, text));
         setState(nextState);
+        if (runtime === "demo-live-ai") setPendingDemoReview(!metaWorkflow && demoCapturedFacts(nextState).length > 0);
       }
       if (isDemo) {
+        setPendingDemoReview(!metaWorkflow && demoCapturedFacts(nextState).length > 0);
         setExtraction(
           extracted.mode === "live"
-            ? { status: "live" }
+            ? extracted.reason === "out_of_scope" || extracted.reason === "no_applicable_slots" ? { status: "not-needed" } : { status: "live" }
             : { status: "fallback", reason: extracted.reason ?? "Live extraction was unavailable." },
         );
       }
     } catch (error) {
+      if (run !== extractionRun.current) return;
       // llmExtract normally resolves failures as { mode: "error" }, but keep
       // the presentation state truthful if that contract is ever violated.
       if (isDemo) {
+        setPendingDemoReview(!metaWorkflow && demoCapturedFacts(nextState).length > 0);
         setExtraction({
           status: "fallback",
           reason: error instanceof Error ? error.message : "Live extraction was unavailable.",
         });
       }
     } finally {
-      setIsReading(false);
+      if (run === extractionRun.current) setIsReading(false);
     }
   }
 
@@ -482,27 +567,99 @@ export function ScreenEnginePublicWidget({
     setState(scoreState(nextState));
   }
 
-  function answer(slotId: string, rawValue: string | string[]) {
-    if (!state) return;
+  async function answer(slotId: string, rawValue: string | string[]) {
+    if (!state || isReading) return;
     const value = Array.isArray(rawValue) ? rawValue.join(", ") : rawValue;
-    setHistory((items) => [...items, state]);
-    mutate(policy.usesFixtureEngine
-      ? answerDemoState(state, slotId, value)
-      : applyAnswer(state, slotId, value));
+    if (metaWorkflow && next?.slot?.id === slotId) {
+      const reply = value.startsWith("other:") ? value.slice("other:".length).trim() : value;
+      demoReplyHistory.current = [...demoReplyHistory.current, `Question: ${next.slot.question}\nAnswer: ${reply}`];
+      demoUserEvidence.current = [...demoUserEvidence.current, reply];
+    }
+    setAnswerFeedback(null);
+    if (!metaWorkflow || !value.startsWith("other:")) {
+      setHistory((items) => [...items, state]);
+      mutate(policy.usesFixtureEngine ? answerDemoState(state, slotId, value) : applyAnswer(state, slotId, value));
+      return;
+    }
+    const text = value.slice("other:".length).trim();
+    if (!text) return;
+    const asked = next?.slot;
+    if (!asked || asked.id !== slotId) return;
+    const matched = applyPendingSlotReply(text, { ...state, pendingAskedSlotId: slotId });
+    if (matched.slot_meta[slotId]?.source === "answered" && matched.slots[slotId] !== state.slots[slotId]) {
+      setHistory((items) => [...items, state]); mutate(matched); return;
+    }
+    if (asked.input_type === "free_text") {
+      setHistory((items) => [...items, state]); mutate(applyAnswer(state, slotId, text)); return;
+    }
+    if (!policy.allowsExtraction) {
+      setAnswerFeedback("Please choose the closest option, or switch to Live AI to answer in your own words."); return;
+    }
+    const run = ++extractionRun.current;
+    setReadingAnswer(true); setIsReading(true); setExtraction({ status: "reading" });
+    try {
+      const context = `${state.input}\n\n${demoReplyHistory.current.join("\n\n")}`;
+      const result = await llmExtract(context, state, { pendingSlotId: slotId, reply: text });
+      if (run !== extractionRun.current) return;
+      if (result.mode !== "live" && !result.mapped_answer) {
+        setExtraction({ status: "fallback", reason: result.reason });
+        setAnswerFeedback("AI could not read this answer. Please choose an option or try your answer again."); return;
+      }
+      let updated = mergeLlmResults({ ...state, input: context }, result.extracted);
+      // Keep the original inquiry intact while grounding this turn in its actual reply.
+      updated = { ...updated, input: state.input };
+      if (metaWorkflow) {
+        updated = groundDemoConversationFacts(updated, text);
+        if (slotId === "family_existing_order") {
+          const prefix = `Question: ${asked.question}\nAnswer: `;
+          const recent = demoReplyHistory.current.slice(-2);
+          if (recent.length === 2 && recent.every((reply) => reply.startsWith(prefix))) {
+            updated = groundFamilyOrderReplies(updated, recent.map((reply) => reply.slice(prefix.length)));
+          }
+        }
+      }
+      const mapped = result.mapped_answer;
+      const mappedAnswer = mapped?.slotId === slotId && asked.options?.some((option) => option.value === mapped.value);
+      if (mappedAnswer) updated = applyAnswer(updated, slotId, mapped!.value);
+      const captured = demoReviewFacts(updated).some((fact) => state.slots[fact.id] !== fact.value);
+      const directlyGrounded = updated.slot_meta[slotId]?.source === "explicit" && updated.slots[slotId] !== state.slots[slotId];
+      if (!captured && !mappedAnswer && !directlyGrounded) {
+        setExtraction({ status: "live" });
+        setAnswerFeedback("That answer did not resolve this question. Choose the closest option or add a little more detail."); return;
+      }
+      if (!metaWorkflow && !mappedAnswer && !directlyGrounded && updated.slots[slotId] && updated.slots[slotId] !== state.slots[slotId]) {
+        updated = { ...updated, pendingAskedSlotId: null, questionHistory: [...state.questionHistory, slotId] };
+      }
+      setHistory((items) => [...items, state]); mutate(updated);
+      if (metaWorkflow && !mappedAnswer && !directlyGrounded) setAnswerFeedback("That answer did not resolve this question. Choose the closest option or add a little more detail.");
+      setPendingDemoReview(!metaWorkflow && captured); setExtraction({ status: "live" });
+    } catch {
+      if (run !== extractionRun.current) return;
+      setExtraction({ status: "fallback", reason: "The answer could not be read." });
+      setAnswerFeedback("Please choose an option or try your answer again.");
+    } finally {
+      if (run === extractionRun.current) setIsReading(false);
+    }
   }
 
   function back() {
+    demoReplyHistory.current = [];
+    extractionRun.current += 1;
+    setIsReading(false);
+    setPendingDemoReview(false);
     const prev = history.at(-1);
     if (!prev) {
       // Returning all the way to kickoff resets the clarify counter so a
       // re-submitted description gets a fresh two-round budget (DR-071).
       setStage("kickoff");
+      if (isDemo) { setState(null); setExtraction({ status: "not-requested" }); }
       setClarifyAttempts(0);
       setClarifyFallback(false);
       return;
     }
     setHistory((items) => items.slice(0, -1));
     setState(prev);
+    if (isDemo) setPendingDemoReview(!metaWorkflow && demoReviewFacts(prev).length > 0);
     setStage("questions");
   }
 
@@ -619,7 +776,52 @@ export function ScreenEnginePublicWidget({
     void persist(nextState);
   }
 
+  const demoReviewFooter = isDemo && !metaWorkflow && state && !pendingDemoReview && !isReading && demoCapturedFacts(state).length > 0
+    ? <button type="button" className="min-h-[44px] w-full border border-[#1E2F58] bg-white px-4 py-3 text-[#1E2F58]" onClick={() => setPendingDemoReview(true)}>Review captured facts</button>
+    : undefined;
+
+  if (metaWorkflow) {
+    const familyOnly = configuredPracticeAreas.length === 1 && configuredPracticeAreas[0] === "family";
+    const awaitingContact = stage === "contact" && !demoContinuation?.contactUsed;
+    const completed = stage === "done";
+    const outOfScope = state?.matter_type === "out_of_scope";
+    const actions = [];
+    if (awaitingContact && demoContinuation) actions.push({ label: "Use fictional contact", onClick: () => {
+      setConversation((items) => [...items, { id: "sample-contact", role: "visitor", text: "Alex Morgan, alex.morgan@example.com (fictional sample contact)" }]);
+      demoContinuation.onUseSampleContact();
+      setStage("questions");
+    }});
+    if (completed && demoContinuation?.onShowReview) actions.push({ label: "Review the lawyer brief", onClick: demoContinuation.onShowReview });
+    if (stage !== "kickoff" && !completed) actions.push({ label: "Edit inquiry", onClick: () => {
+      extractionRun.current += 1;
+      setIsReading(false); setPendingDemoReview(false); setState(null); setHistory([]);
+      setExtraction({ status: "not-requested" }); setAnswerFeedback(null); setStage("kickoff");
+      setClarifyAttempts(0); setClarifyFallback(false); demoReplyHistory.current = []; demoUserEvidence.current = [];
+      demoContinuation?.onResetSession?.();
+      setConversation([{ id: "welcome", role: "assistant", text: "Edit your fictional inquiry. Earlier answers have been cleared." }]);
+      setConversationVersion((version) => version + 1);
+    }});
+    return <DemoConversation key={conversationVersion} messages={conversation} actions={actions}
+      initialDraft={stage === "kickoff" ? description : ""} minChars={stage === "kickoff" ? 10 : 1}
+      placeholder={stage === "kickoff" && familyOnly ? "I recently separated and need help agreeing on a parenting schedule. We live in Ontario." : "Type a fictional message"}
+      disabled={isReading || awaitingContact || completed || Boolean(outOfScope)} actionsDisabled={isReading}
+      status={isReading ? "Reading your message..." : answerFeedback}
+      onSend={(text) => {
+        if (conversationBusy.current) return;
+        conversationBusy.current = true;
+        setConversation((items) => [...items, { id: `visitor:${crypto.randomUUID()}`, role: "visitor", text }]);
+        void (async () => {
+          try {
+            if (stage === "kickoff") { setDescription(text); await runStart(text); }
+            else if (next?.type === "clarify") await submitClarify(text);
+            else if (next?.slot) await answer(next.slot.id, `other:${text}`);
+          } finally { conversationBusy.current = false; }
+        })();
+      }} />;
+  }
+
   if (stage === "kickoff") {
+    const familyOnlyDemo = isDemo && configuredPracticeAreas.length === 1 && configuredPracticeAreas[0] === "family";
     // Kickoff language: seeded by `initialLang` (the embedding page's
     // locale hint via ?lang=). English embeds default to "en"; a /pt
     // route passes "pt" so the first screen matches the visitor's chosen
@@ -637,23 +839,22 @@ export function ScreenEnginePublicWidget({
     // a workflow step ("Continue matter review"), not a generic CTA, so
     // visitors understand they have not finished submitting yet.
     return (
-      <Shell totalScreens={1} currentScreen={0} roundLabel={roundLabel} layout={layout}>
+      <Shell totalScreens={1} currentScreen={0} roundLabel={roundLabel} layout={layout} reportHeight={reportEmbeddedHeight} footer={demoReviewFooter}>
         <TextCard
           contained={layout === "contained"}
           item={{
             id: "situation",
             question: ws("kickoff_heading", "Tell us how a lawyer can help you today."),
             description: isDemo
-              ? `A few plain-language sentences are enough. Include what is happening, any deadline, and the documents you have. After that, we usually ask ${WEB_DISCOVERY_TARGET_MIN} to ${WEB_DISCOVERY_TARGET_MAX} short questions and never more than ${WEB_DISCOVERY_HARD_CAP}.`
+              ? `Describe what happened, any deadline, and the documents you have. Review the captured facts, then answer only what is missing. There are never more than ${WEB_DISCOVERY_HARD_CAP} follow-up questions.`
               : ws(
                   "kickoff_helper",
                   `A few plain-language sentences are enough. Include what is happening, any deadline, and the documents you have. After that, the Screen usually asks ${WEB_DISCOVERY_TARGET_MIN}–${WEB_DISCOVERY_TARGET_MAX} short questions and never more than ${WEB_DISCOVERY_HARD_CAP}.`,
                 ),
             presentation: "text",
-            placeholder: ws(
-              "kickoff_placeholder",
-              "I am about to sign a commercial lease and want to know what risks I should check before committing.",
-            ),
+            placeholder: familyOnlyDemo
+              ? "I recently separated and need help agreeing on a parenting schedule. We live in Ontario."
+              : ws("kickoff_placeholder", "I am about to sign a commercial lease and want to know what risks I should check before committing."),
           }}
           value={description}
           onChange={setDescription}
@@ -662,7 +863,11 @@ export function ScreenEnginePublicWidget({
           minChars={10}
           enableVoice={policy.allowsVoice}
           voiceHint={ws("voice_hint", "speak your answer instead of typing it")}
-          examplePrompts={[
+          examplePrompts={familyOnlyDemo ? [
+            "I recently separated...",
+            "I need help with a parenting schedule...",
+            "I have a family court date...",
+          ] : [
             ws("kickoff_example_1", "I am about to sign..."),
             ws("kickoff_example_2", "I received a document and need to know..."),
             ws("kickoff_example_3", "I need to decide whether..."),
@@ -680,7 +885,37 @@ export function ScreenEnginePublicWidget({
   const fontDisplay = "var(--cls-font-display, Manrope, sans-serif)";
   const fontBody = "var(--cls-font-body, DM Sans, sans-serif)";
 
-  if (stage === "done" || next?.type === "stop") {
+  if (isDemo && isReading) {
+    return <Shell totalScreens={1} currentScreen={0} roundLabel="Reading" onBack={back} backLabel={backLabel} layout={layout} reportHeight={reportEmbeddedHeight} footer={demoReviewFooter}>
+      <section aria-busy="true" role="status" className="flex flex-col gap-4 py-8" data-ui-component-content="demo-reading">
+        <h2 className="w-full text-2xl font-extrabold" data-ui-copy="heading" style={{ fontFamily: fontDisplay }}>{readingAnswer ? "Reading your answer" : "Reading your description"}</h2>
+        <p className="w-full" data-ui-copy="body">The AI is identifying details for you to review. No intake is being submitted.</p>
+      </section>
+    </Shell>;
+  }
+
+  if (isDemo && pendingDemoReview && !isReading) {
+    return (
+      <Shell totalScreens={1} currentScreen={0} roundLabel="Check the captured facts" layout={layout} reportHeight={reportEmbeddedHeight} footer={demoReviewFooter}>
+        <DemoFactReview state={state}
+          onConfirm={(corrections) => { setHistory((items) => [...items, state]); setState(confirmDemoFacts(state, corrections)); setPendingDemoReview(false); }}
+          onEditDescription={() => { setPendingDemoReview(false); setState(null); setHistory([]); setExtraction({ status: "not-requested" }); setStage("kickoff"); }}
+        />
+      </Shell>
+    );
+  }
+
+  if (isDemo && state.matter_type === "out_of_scope") {
+    return <Shell totalScreens={1} currentScreen={0} roundLabel="Practice area" onBack={back} backLabel={backLabel} layout={layout} reportHeight={reportEmbeddedHeight}>
+      <section className="flex flex-col gap-4" data-ui-component-content="demo-practice-scope">
+        <h2 className="w-full text-2xl font-extrabold" data-ui-copy="heading">This area is not configured in this demo.</h2>
+        <p className="w-full" data-ui-copy="body">Your description was identified as {state.practice_area.replace(/_/g, " ")}. This sample firm has no intake flow configured for that area. You can edit the description or start another example. No firm was contacted.</p>
+        <button type="button" className="min-h-[48px] border border-[#1E2F58] px-5 py-3" onClick={back}>Edit your inquiry</button>
+      </section>
+    </Shell>;
+  }
+
+  if (stage === "done" || (next?.type === "stop" && (!metaWorkflow || demoContinuation?.contactUsed))) {
     if (next?.type === "stop" && policy.allowsPersistence) void persist(state);
     // "Professional Corporation" is the formal LSO legal-entity suffix
     // on the firm's registered name; strip it for the user-facing
@@ -694,7 +929,7 @@ export function ScreenEnginePublicWidget({
     );
     const doneBody = doneBodyTemplate.replace(/\{firmName\}/g, trimmedFirmName);
     const visibleDoneBody = isDemo
-      ? "The firm review brief is ready beside the intake. Nothing was saved or sent."
+      ? "The fictional intake is complete and the demonstration brief is ready. No firm was contacted."
       : doneBody;
     // Translate the "submitted" sentinel; pass other reason strings
     // through verbatim (they are server-supplied and not user-facing
@@ -706,28 +941,36 @@ export function ScreenEnginePublicWidget({
       <Shell
         totalScreens={1}
         currentScreen={0}
-        roundLabel={ws("shell_round_submitted", "Submitted")}
+        roundLabel={isDemo ? "Demo complete" : ws("shell_round_submitted", "Submitted")}
         onBack={back}
         backLabel={backLabel}
-        layout={layout}
+        layout={layout} reportHeight={reportEmbeddedHeight} footer={demoReviewFooter}
       >
-        <div className="flex flex-col items-center text-center gap-5 py-10">
+        <div className="flex flex-col items-center text-center gap-5 py-10" data-ui-component-content={isDemo ? "demo-complete" : undefined}>
           <div className="w-16 h-16 rounded-full bg-[var(--cls-accent,#1E2F58)] text-[var(--cls-accent-text,#FFFFFF)] flex items-center justify-center">
             <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
               <polyline points="20 6 9 17 4 12" />
             </svg>
           </div>
-          <h2 className="text-[28px] font-extrabold text-balance text-[var(--cls-text,#1E2F58)]" style={{ fontFamily: fontDisplay }}>
+          <h2 data-ui-copy={isDemo ? "heading" : undefined} className="text-[28px] font-extrabold text-balance text-[var(--cls-text,#1E2F58)]" style={{ fontFamily: fontDisplay }}>
             {isDemo
-              ? "The demonstration is complete."
+              ? "Demo complete"
               : ws("done_heading", "Your matter review was submitted.")}
           </h2>
-          <p
+          <p data-ui-copy={isDemo ? "body" : undefined}
             className="max-w-[460px] text-[15px] leading-relaxed text-[color-mix(in_srgb,var(--cls-text,#1E2F58)_70%,transparent)]"
             style={{ fontFamily: fontBody }}
           >
             {visibleDoneBody}
           </p>
+          {isDemo && demoContinuation && <>
+            {demoContinuation.onShowReview && <button type="button" className="min-h-[48px] border border-[#1E2F58] px-5 py-3 text-[#1E2F58]" onClick={demoContinuation.onShowReview}>Review the lawyer brief</button>}
+            {demoContinuation.reply !== null && <section className="w-full text-left" aria-live="polite" data-ui-component-content="demo-reply-receipt">
+              <h3 className="w-full" data-ui-copy="heading">Simulated reply from {trimmedFirmName}</h3>
+              <p className="w-full whitespace-pre-wrap break-words" data-ui-copy="body" data-ui-copy-exception="User-authored simulated message preserved verbatim">{demoContinuation.reply}</p>
+              <p className="w-full" data-ui-copy="supporting">Shown in this demo</p>
+            </section>}
+          </>}
           {statusLabel && (
             <p className="text-[12px] uppercase tracking-[0.12em] text-[color-mix(in_srgb,var(--cls-text,#1E2F58)_45%,transparent)]">{statusLabel}</p>
           )}
@@ -745,7 +988,7 @@ export function ScreenEnginePublicWidget({
         roundLabel={ws("shell_round_review", "Review")}
         onBack={back}
         backLabel={backLabel}
-        layout={layout}
+        layout={layout} reportHeight={reportEmbeddedHeight} footer={demoReviewFooter}
       >
         <div className="flex flex-col gap-5">
           <h2 className="text-[28px] font-extrabold text-balance text-[var(--cls-text,#1E2F58)]" style={{ fontFamily: fontDisplay }}>
@@ -757,7 +1000,15 @@ export function ScreenEnginePublicWidget({
           >
             {summary.intro}
           </p>
-          {summary.points.length > 0 && (
+          {summary.paragraphs?.length ? (
+            <div className="w-full space-y-4 text-left" data-ui-component-content="screen-recap-prose">
+              {summary.paragraphs.map((paragraph, index) => (
+                <p key={`recap-${index}`} className="w-full text-[15px] leading-relaxed text-[color-mix(in_srgb,var(--cls-text,#1E2F58)_70%,transparent)]" style={{ fontFamily: fontBody }} data-ui-copy="body">
+                  {paragraph}
+                </p>
+              ))}
+            </div>
+          ) : summary.points.length > 0 && (
             <ul className="rounded-xl bg-[var(--cls-surface,#FFFFFF)] border border-[color-mix(in_srgb,var(--cls-accent,#1E2F58)_10%,transparent)] p-4 text-left text-[14px] text-[color-mix(in_srgb,var(--cls-text,#1E2F58)_75%,transparent)] space-y-2">
               {summary.points.map((point) => <li key={point}>{point}</li>)}
             </ul>
@@ -771,7 +1022,7 @@ export function ScreenEnginePublicWidget({
             style={{ fontFamily: fontBody }}
           >
             {isDemo
-              ? "Continue to see how the intake collects contact details. Nothing entered here will be saved or sent."
+              ? metaWorkflow && demoContinuation?.contactUsed ? "The sample contact is attached. Finish the demonstration to review the brief." : "See the contact step without entering any personal information."
               : ws(
                   "insight_contact_note",
                   "A lawyer reviews what you share and reaches out directly. Add your contact details below so the firm can get back to you.",
@@ -782,13 +1033,13 @@ export function ScreenEnginePublicWidget({
             onClick={() => {
               const nextState = startContactCapture(markInsightShown(state));
               mutate(nextState);
-              setStage("contact");
+              setStage(metaWorkflow && demoContinuation?.contactUsed ? "done" : "contact");
             }}
             className="min-h-[52px] rounded-full bg-[var(--cls-accent,#1E2F58)] px-8 text-[15px] font-semibold text-[var(--cls-accent-text,#FFFFFF)]"
             style={{ fontFamily: fontBody }}
           >
             {isDemo
-              ? "Continue to contact details"
+              ? metaWorkflow && demoContinuation?.contactUsed ? "Finish demonstration" : "See the contact step"
               : ws("insight_cta", "Share my contact details so the firm can reply")}
           </button>
         </div>
@@ -797,6 +1048,23 @@ export function ScreenEnginePublicWidget({
   }
 
   if (stage === "contact" || next?.type === "capture_contact") {
+    if (isDemo) return (
+      <Shell totalScreens={1} currentScreen={0} roundLabel="Contact step" onBack={back} backLabel={backLabel} layout={layout} reportHeight={reportEmbeddedHeight} footer={demoReviewFooter}>
+        <section className="flex flex-col gap-5" data-ui-component-content="demo-contact-step">
+          <h2 className="w-full text-2xl font-extrabold" data-ui-copy="heading" style={{ fontFamily: fontDisplay }}>Contact details</h2>
+          {demoContinuation ? <>
+            <p className="w-full" data-ui-copy="body">Sample contact. Fictional details used only in this demo.</p>
+            <dl className="w-full" data-ui-component-content="demo-contact-status"><dt>Name</dt><dd className="m-0">Alex Morgan</dd><dt>Email</dt><dd className="m-0">alex.morgan@example.com</dd></dl>
+            <button type="button" className="min-h-[48px] bg-[#1E2F58] px-5 py-3 text-white" onClick={() => { demoContinuation.onUseSampleContact(); setHistory((items) => [...items, state]); setStage(metaWorkflow ? "questions" : "done"); }}>Use sample contact</button>
+          </> : <>
+            <p className="w-full" data-ui-copy="body">A real intake asks for:</p>
+            <ul className="w-full" data-ui-component-content="demo-contact-fields"><li data-ui-copy="body">Name.</li><li data-ui-copy="body">Email address or phone number.</li></ul>
+            <dl className="w-full" data-ui-component-content="demo-contact-status"><dt>Contact details in this demo</dt><dd className="m-0 w-full" data-ui-copy="supporting">Not collected.</dd></dl>
+            <button type="button" className="min-h-[48px] bg-[#1E2F58] px-5 py-3 text-white" onClick={() => { setHistory((items) => [...items, state]); setStage("done"); }}>Finish demonstration</button>
+          </>}
+        </section>
+      </Shell>
+    );
     const contactHeading = isDemo
       ? "How would the firm reach this client?"
       : clarifyFallback
@@ -817,7 +1085,7 @@ export function ScreenEnginePublicWidget({
         roundLabel={ws("shell_round_your_details", "Your details")}
         onBack={back}
         backLabel={backLabel}
-        layout={layout}
+        layout={layout} reportHeight={reportEmbeddedHeight} footer={demoReviewFooter}
       >
         <form action={submitContact} className="flex flex-col gap-5">
           <div>
@@ -910,12 +1178,12 @@ export function ScreenEnginePublicWidget({
         roundLabel={roundLabel}
         onBack={back}
         backLabel={backLabel}
-        layout={layout}
+        layout={layout} reportHeight={reportEmbeddedHeight} footer={demoReviewFooter}
       >
         <div className="flex flex-col items-center justify-center text-center gap-4 py-16">
           <div
             aria-hidden="true"
-            className="w-10 h-10 rounded-full border-2 border-[color-mix(in_srgb,var(--cls-accent,#1E2F58)_20%,transparent)] border-t-[var(--cls-accent,#1E2F58)] animate-spin"
+            className="w-10 h-10 rounded-full motion-reduce:animate-none border-2 border-[color-mix(in_srgb,var(--cls-accent,#1E2F58)_20%,transparent)] border-t-[var(--cls-accent,#1E2F58)] animate-spin"
           />
           <p
             className="text-[13px] uppercase tracking-[0.18em] text-[color-mix(in_srgb,var(--cls-text,#1E2F58)_60%,transparent)]"
@@ -974,10 +1242,17 @@ export function ScreenEnginePublicWidget({
       value: opt.value,
       label: ws(opt.labelKey, CLARIFY_CHIP_FALLBACK_LABELS[opt.labelKey] ?? opt.labelKey),
     }));
+    if (isDemo && configuredPracticeAreas.includes("family")) {
+      clarifyOptions.push({ value: "family_general", label: "Family law" });
+    }
 
     function handleClarifySelect(picked: string | string[]) {
       const value = Array.isArray(picked) ? picked[0] : picked;
       if (!value) return;
+      if (isDemo && value === "family_general" && configuredPracticeAreas.includes("family")) {
+        const augmented = `${description}\n\nPractice area selected by the person: family law.`;
+        setDescription(augmented); void runStart(augmented); return;
+      }
       if (value.startsWith("other:")) {
         const text = value.slice("other:".length).trim();
         if (text.length === 0) return;
@@ -999,7 +1274,7 @@ export function ScreenEnginePublicWidget({
         roundLabel={roundLabel}
         onBack={back}
         backLabel={backLabel}
-        layout={layout}
+        layout={layout} reportHeight={reportEmbeddedHeight} footer={demoReviewFooter}
       >
         <DecisionCard
           contained={layout === "contained"}
@@ -1029,12 +1304,12 @@ export function ScreenEnginePublicWidget({
         roundLabel={roundLabel}
         onBack={back}
         backLabel={backLabel}
-        layout={layout}
+        layout={layout} reportHeight={reportEmbeddedHeight} footer={demoReviewFooter}
       >
         <div className="flex flex-col items-center justify-center text-center gap-4 py-16">
           <div
             aria-hidden="true"
-            className="w-10 h-10 rounded-full border-2 border-[color-mix(in_srgb,var(--cls-accent,#1E2F58)_20%,transparent)] border-t-[var(--cls-accent,#1E2F58)] animate-spin"
+            className="w-10 h-10 rounded-full motion-reduce:animate-none border-2 border-[color-mix(in_srgb,var(--cls-accent,#1E2F58)_20%,transparent)] border-t-[var(--cls-accent,#1E2F58)] animate-spin"
           />
           <p
             className="text-[13px] uppercase tracking-[0.18em] text-[color-mix(in_srgb,var(--cls-text,#1E2F58)_60%,transparent)]"
@@ -1067,8 +1342,9 @@ export function ScreenEnginePublicWidget({
       onSkip={skip}
       backLabel={backLabel}
       skipLabel={skipLabel}
-      layout={layout}
+      layout={layout} reportHeight={reportEmbeddedHeight} footer={demoReviewFooter}
     >
+      {answerFeedback && <p role="status" className="mb-4 w-full" data-ui-copy="body">{answerFeedback}</p>}
       {isPureFreeText ? (
         <FreeTextAnswerCard
           contained={layout === "contained"}

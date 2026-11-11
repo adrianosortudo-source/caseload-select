@@ -4,6 +4,7 @@ export const PROSPECT_DEMO_FORMAT_VERSION = 1 as const;
 
 export type ProspectDemoView = "website" | "review" | "split";
 export type ProspectDemoMode = "guided" | "live-ai";
+export type ProspectDemoSessionResetReason = "sample" | "mode" | "profile" | "start-over";
 
 export interface ProspectDemoScenario {
   id: string;
@@ -50,6 +51,8 @@ export interface ProspectDemoProfile {
   screenshot: ProspectScreenshotReference;
   placement: ScreenshotPlacement;
   theme: ProspectDemoTheme;
+  /** Explicit practice configuration for this fictional demonstration. */
+  practiceAreas?: import("@/lib/screen-engine/types").PracticeArea[];
   scenarios: ProspectDemoScenario[];
   defaultView: ProspectDemoView;
   defaultMode: ProspectDemoMode;
@@ -67,7 +70,9 @@ export interface ProspectDemoSessionContext {
   profile: ProspectDemoProfile;
   scenario: ProspectDemoScenario;
   mode: ProspectDemoMode;
-  /** Changes when a fresh session is requested: profile, scenario, mode, or Restart. */
+  /** Switches to the lawyer brief without resetting the current session. */
+  showReview?: () => void;
+  /** Changes when a fresh session is requested for a new profile, sample, mode, or Start over. */
   sessionKey: number;
 }
 
@@ -78,6 +83,9 @@ export interface ProspectDemoSessionContext {
 export interface ProspectDemoSessionAdapter {
   renderIntake(context: ProspectDemoSessionContext): ReactNode;
   renderReview(context: ProspectDemoSessionContext): ReactNode;
+  renderStatus?(context: ProspectDemoSessionContext): ReactNode;
+  onSessionReset?(context: ProspectDemoSessionContext, reason: ProspectDemoSessionResetReason): void;
+  /** Backward-compatible Start over callback for existing adapters. */
   onRestart?(context: ProspectDemoSessionContext): void;
 }
 

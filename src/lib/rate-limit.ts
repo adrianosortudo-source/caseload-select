@@ -437,6 +437,7 @@ const FAIL_CLOSED_BUCKETS: ReadonlySet<RateLimitBucket> = new Set<RateLimitBucke
  * independent of the legacy RATE_LIMIT_FAIL_CLOSED rollout flag.
  */
 const ALWAYS_FAIL_CLOSED_BUCKETS: ReadonlySet<RateLimitBucket> = new Set<RateLimitBucket>([
+  "extract",
   "whyYourFirmAssist",
   "desiredClientAnalyze",
   "desiredClientDaily",
