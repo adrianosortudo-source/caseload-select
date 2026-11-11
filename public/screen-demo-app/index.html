@@ -10,9 +10,9 @@
   <link rel="preload" href="/screen-demo-app/fonts/dm-sans-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="preload" href="/screen-demo-app/fonts/Oxanium-latin.woff2" as="font" type="font/woff2" crossorigin />
 
-  <script type="module" crossorigin src="/screen-demo-app/assets/main-QCUlby9s.js"></script>
+  <script type="module" crossorigin src="/screen-demo-app/assets/main-caUHRiYX.js"></script>
   <link rel="modulepreload" crossorigin href="/screen-demo-app/assets/modulepreload-polyfill-B5Qt9EMX.js">
-  <link rel="stylesheet" crossorigin href="/screen-demo-app/assets/main-CQm_IwDv.css">
+  <link rel="stylesheet" crossorigin href="/screen-demo-app/assets/main-VApQs_M0.css">
 </head>
 <body>
 
@@ -40,9 +40,6 @@
   <div class="sandbox-header-inner">
     <p class="sandbox-eyebrow">SCREEN · Public demo</p>
     <h1 class="sandbox-title">A fictional inquiry, ready for review</h1>
-    <p class="sandbox-lede">
-      Try a fictional inquiry and explore the report it produces. This demonstration does not save a lead or contact a firm.
-    </p>
     <div class="firm-profile-control">
       <label for="firm-profile-select">Practice area</label>
       <select id="firm-profile-select" aria-label="Practice area">
@@ -55,7 +52,6 @@
       </select>
       <div id="practice-area-notice" class="practice-area-notice" role="status" aria-live="polite" hidden></div>
     </div>
-    <p class="demo-ai-disclosure">When you use live AI, your description is sent to Google Gemini. Use fictional details only. This demo saves no lead and contacts no law firm.</p>
   </div>
 </div>
 
@@ -91,33 +87,22 @@
 <main class="sandbox">
 
   <section class="sandbox-channel" aria-label="Intake view">
-    <p class="sandbox-channel-eyebrow">Intake view</p>
 
     <!-- Widget channel (default active) -->
     <div class="channel-panel" data-channel-panel="widget">
 
-      <div class="channel-blurb">
-        <ul>
-          <li>This view represents a website inquiry form.</li>
-          <li>Choose an example or describe a fictional situation, then follow the prompts.</li>
-          <li>The sample report on the right updates as the fictional inquiry develops.</li>
-        </ul>
-      </div>
 
       <div id="intake-hero" class="hero">
-        <p class="kicker">Website intake</p>
-        <h2 class="hero-title">Your inquiry</h2>
-        <p class="hero-sub">
-          Describe a fictional situation, then answer a few short follow-up questions. Your answers appear in a sample report for review. Nothing is sent to a law firm.
-        </p>
+        <h2 class="hero-title" id="inquiry-heading">Your inquiry</h2>
+        <p class="demo-ai-disclosure">Use fictional details. Your description is sent to Google Gemini. No lead is saved and no firm is contacted.</p>
 
         <textarea
           id="case-input"
-          rows="6"
+          aria-labelledby="inquiry-heading"
+          rows="4"
           placeholder="e.g. My business partner won't show me the books and money is being taken out of the company..."
         ></textarea>
         <button id="screen-btn" class="cta-primary">Create sample report</button>
-        <p class="hero-foot">Fictional demonstration only. Do not enter client or confidential information.</p>
 
         <div class="examples">
           <p class="examples-label">Choose a fictional example</p>
@@ -149,6 +134,7 @@
 
     <!-- WhatsApp channel -->
     <div class="channel-panel hidden" data-channel-panel="whatsapp">
+      <p class="demo-ai-disclosure">Use fictional details. Your description is sent to Google Gemini. No lead is saved and no firm is contacted.</p>
       <div class="channel-blurb">
         <ul>
           <li>This panel represents a WhatsApp-style conversation.</li>
@@ -162,6 +148,7 @@
 
     <!-- SMS channel -->
     <div class="channel-panel hidden" data-channel-panel="sms">
+      <p class="demo-ai-disclosure">Use fictional details. Your description is sent to Google Gemini. No lead is saved and no firm is contacted.</p>
       <div class="channel-blurb">
         <ul>
           <li>This panel represents a text-message intake.</li>
@@ -175,6 +162,7 @@
 
     <!-- Instagram DM channel -->
     <div class="channel-panel hidden" data-channel-panel="instagram">
+      <p class="demo-ai-disclosure">Use fictional details. Your description is sent to Google Gemini. No lead is saved and no firm is contacted.</p>
       <div class="channel-blurb">
         <ul>
           <li>This panel represents an Instagram direct-message conversation.</li>
@@ -188,6 +176,7 @@
 
     <!-- Facebook Messenger channel -->
     <div class="channel-panel hidden" data-channel-panel="facebook">
+      <p class="demo-ai-disclosure">Use fictional details. Your description is sent to Google Gemini. No lead is saved and no firm is contacted.</p>
       <div class="channel-blurb">
         <ul>
           <li>This panel represents a Facebook Messenger conversation.</li>
@@ -201,6 +190,7 @@
 
     <!-- Voice channel -->
     <div class="channel-panel hidden" data-channel-panel="voice">
+      <p class="demo-ai-disclosure">Use fictional details. Your description is sent to Google Gemini. No lead is saved and no firm is contacted.</p>
       <div class="channel-blurb">
         <ul>
           <li>This is a typed transcript simulation. Select a fictional sample transcript to create a sample report.</li>

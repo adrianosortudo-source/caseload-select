@@ -8,6 +8,8 @@ import { computeBand } from '../band';
 import { computeCoreCompleteness, getDecisionGap } from '../selector';
 import { classificationForMatterType, isValidMatterType } from '../extractor';
 import { SLOT_REGISTRY } from '../slotRegistry';
+import { proposePracticeArea } from '../routing';
+import type { DemoRoutingArea } from '../types';
 import { MATTER_TYPE_CLASSIFIER_FIELD, LANGUAGE_DETECTOR_FIELD, LEAD_INTENT_FIELD } from './schema';
 
 const VALID_SUPPORTED_LANGUAGES = new Set<string>(['en', 'fr', 'es', 'pt', 'zh', 'ar']);
@@ -31,7 +33,7 @@ function isValidSupportedLanguage(value: string): boolean {
 
 export interface LlmExtractionResponse {
   extracted: Record<string, string | null>;
-  mode: 'live' | 'disabled' | 'error';
+  mode: 'live' | 'disabled' | 'error' | 'degraded';
   reason?: string;
   mapped_answer?: { slotId: string; value: string };
   mapping_mode?: 'live' | 'disabled' | 'error';
@@ -57,6 +59,7 @@ export async function llmExtract(
         description,
         matter_type: state.matter_type,
         family_enabled: state.family_enabled === true,
+        ...(state.demoRouting ? { routing: { selection: state.demoRouting.selection, active_area: state.practice_area, revision: state.demoRouting.revision } } : {}),
         already_extracted: state.slots,
         ...(followUp ? { pending_slot_id: followUp.pendingSlotId, reply: followUp.reply } : {}),
       }),
@@ -66,6 +69,11 @@ export async function llmExtract(
       return { extracted: {}, mode: 'error', reason: `HTTP ${res.status}` };
     }
     const data = await res.json();
+    if (!data || typeof data !== 'object' || !['live', 'disabled', 'error', 'degraded'].includes(data.mode) ||
+        (data.mode === 'live' && (!data.extracted || typeof data.extracted !== 'object' || Array.isArray(data.extracted))) ||
+        (data.extracted != null && (typeof data.extracted !== 'object' || Array.isArray(data.extracted)))) {
+      return { extracted: {}, mode: 'error', reason: 'invalid_response' };
+    }
     return {
       extracted: data.extracted ?? {},
       mode: data.mode ?? 'live',
@@ -239,8 +247,22 @@ export function mergeLlmResults(
   options?: MergeLlmOptions,
 ): EngineState {
   let working: EngineState = state;
-  if ((state.matter_type === 'unknown' || state.matter_type === 'out_of_scope') && extracted.__family_area === 'family') {
+  if (!state.demoRouting && (state.matter_type === 'unknown' || state.matter_type === 'out_of_scope') && extracted.__family_area === 'family') {
     working = { ...state, practice_area: 'family', matter_type: state.family_enabled === true ? 'family_general' : 'out_of_scope', intent_family: 'unknown', dispute_family: 'unknown', advisory_subtrack: 'unknown', matter_type_provenance: 'llm_inferred' };
+  }
+
+  if (state.demoRouting) {
+    const matter = extracted[MATTER_TYPE_CLASSIFIER_FIELD];
+    if (!extracted.__practice_area && typeof matter === 'string' && isValidMatterType(matter)) {
+      const area = classificationForMatterType(matter).practice_area;
+      if (['corporate', 'real_estate', 'employment', 'estates', 'family'].includes(area)) {
+        working = proposePracticeArea(working, area as DemoRoutingArea);
+      }
+    }
+    const candidate = extracted.__practice_area;
+    if (candidate && ['corporate', 'real_estate', 'employment', 'estates', 'family'].includes(candidate)) {
+      working = proposePracticeArea(working, candidate as DemoRoutingArea);
+    }
   }
 
   // ── Language field (DR-039) ──────────────────────────────────────────
@@ -302,10 +324,14 @@ export function mergeLlmResults(
       typeof llmMatter === 'string' &&
       isValidMatterType(llmMatter) &&
       llmMatter !== 'unknown' &&
+      (llmMatter !== 'family_general' || state.family_enabled === true) &&
       llmMatter !== state.matter_type &&
       !isNonAnswer(llmMatter)
     ) {
       const classification = classificationForMatterType(llmMatter);
+      if (state.demoRouting && (working.demoRouting?.pending || classification.practice_area !== state.practice_area)) {
+        return working;
+      }
       // The promotion is an AI decision the lead never confirmed; stamp
       // the provenance so briefs and triage can render it honestly
       // (DR-069). Note the common benign case: promoting 'unknown' to an
@@ -334,7 +360,7 @@ export function mergeLlmResults(
 
   for (const [slotId, value] of Object.entries(extracted)) {
     // Skip the synthetic classifier field — already handled above.
-    if (slotId === MATTER_TYPE_CLASSIFIER_FIELD || slotId === '__family_area') continue;
+    if (slotId === MATTER_TYPE_CLASSIFIER_FIELD || slotId === '__family_area' || slotId === '__practice_area') continue;
     if (slotId.startsWith('family_') && working.matter_type !== 'family_general') continue;
     // Skip the synthetic language-confirm field — already handled above. Not
     // skipping it here would let mergeLlmResults persist a language code
@@ -346,7 +372,11 @@ export function mergeLlmResults(
     // classifier output, not a user-answered slot.
     if (slotId === LEAD_INTENT_FIELD) continue;
 
-    if (value === null || value === '' || value === undefined) continue;
+    if (typeof value !== 'string' || value === '') continue;
+    if (state.demoRouting && (working.demoRouting?.pending || !SLOT_REGISTRY.some(
+      slot => slot.id === slotId && slot.applies_to.includes(working.matter_type as never) &&
+        (slot.input_type !== 'single_select' || !slot.options || slot.options.some(option => option.value === value)),
+    ))) continue;
     if (working.matter_type === 'family_general' && !familyNegativeIsGrounded(slotId, value, state.input)) continue;
     // Drop non-answer literals — except when BOTH (a) the lead's own
     // text shows uncertainty AND (b) the slot's own option set

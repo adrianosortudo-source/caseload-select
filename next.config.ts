@@ -313,6 +313,9 @@ const nextConfig: NextConfig = {
   // (marketing) route-group root page.tsx). /home 301s to / for any
   // existing bookmarks, backlinks, or cached search results. Permanent
   // (308) so search engines re-index / as canonical, not /home.
+  async rewrites() {
+    return [{ source: "/tools/screen", destination: "/screen-demo-app/index.html" }];
+  },
   async redirects() {
     return [
       {

@@ -46,7 +46,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.checkRateLimit.mockResolvedValue(ALLOWED);
   mocks.llmExtractServer.mockResolvedValue({
-    extracted: { incident_date: "last week" },
+    extracted: { amount_at_stake: "$5,000–$25,000" },
     mode: "live",
   });
 });
@@ -78,12 +78,12 @@ describe("/api/extract rate limiting", () => {
 
   it("passes an allowed request through to the extractor unchanged", async () => {
     const res = await POST(
-      makeRequest({ description: "rear-ended on the 401 last week", matter_type: "pi_mva" }),
+      makeRequest({ description: "A client has not paid our business invoice", matter_type: "corporate_general" }),
     );
     expect(res.status).toBe(200);
     const json = await res.json();
     expect(json.mode).toBe("live");
-    expect(json.extracted).toEqual({ incident_date: "last week" });
+    expect(json.extracted).toEqual({ amount_at_stake: "$5,000–$25,000" });
     expect(mocks.llmExtractServer).toHaveBeenCalledTimes(1);
   });
 

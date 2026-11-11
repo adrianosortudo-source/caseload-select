@@ -1585,6 +1585,9 @@ export function validateReportFacts(state: EngineState): string[] {
 // ─── Main report builder ──────────────────────────────────────────────────
 
 export function buildReport(state: EngineState): LawyerReport {
+  if (state.demoRouting && (state.demoRouting.pending || state.demoRouting.extracting || state.practice_area === 'unknown')) {
+    throw new Error('Practice area confirmation is required before a report can be generated.');
+  }
   if (state.matter_type === 'family_general') {
     // Legacy report fields are required by existing storage readers. These
     // zero values are compatibility sentinels, not scores; renderers must
