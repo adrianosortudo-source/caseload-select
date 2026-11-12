@@ -95,7 +95,7 @@ export function KadishScreenMockup() {
     </div></header>
     <main className={styles.inner}>
       <section className={styles.introduction} data-ui-component-content="kadish-introduction">
-        <h1 data-ui-copy="heading">Try SCREEN on your website.</h1>
+        <h1 data-ui-copy="heading">Try Screen</h1>
         <p data-ui-copy="body">Enter a fictional disability-benefit inquiry and follow the questions.</p>
         <p data-ui-copy="body">Use Lawyer brief to see the information prepared for your firm.</p>
       </section>
