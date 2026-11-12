@@ -11,6 +11,6 @@ html[data-gene-screen-preview="true"] .expand-brief { display: none !important; 
 html[data-gene-screen-preview="true"] .sandbox { padding: 0; }
 html[data-gene-screen-preview="true"] .sandbox-brief-sticky { position: static; }
 html[data-gene-screen-preview="true"] body[data-gene-view="website"] .sandbox,
-html[data-gene-screen-preview="true"] body[data-gene-view="review"] .sandbox { display: block; }
+html[data-gene-screen-preview="true"] body[data-gene-view="review"] .sandbox { display: flow-root; }
 html[data-gene-screen-preview="true"] body[data-gene-view="website"] .sandbox-brief,
 html[data-gene-screen-preview="true"] body[data-gene-view="review"] .sandbox-channel { display: none; }
