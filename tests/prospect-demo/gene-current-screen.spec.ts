@@ -20,7 +20,7 @@ test("Gene share page uses one current widget and preserves its draft at every w
     await page.setViewportSize({ width, height: 1000 });
     for (const view of ["Website preview", "Lawyer brief", "Side by side"]) {
       await page.getByRole("button", { name: view, exact: true }).click();
-      await expect(input).toHaveValue(draft);
+      await expect(widget.locator("#case-input")).toHaveValue(draft);
       expect(await iframe.evaluate((element, original) => element === original, originalFrame)).toBe(true);
       await expect.poll(() => widget.locator("html").evaluate(element => ({
         horizontal: element.scrollWidth <= element.clientWidth + 1,
