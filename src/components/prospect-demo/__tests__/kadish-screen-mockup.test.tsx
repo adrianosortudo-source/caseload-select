@@ -29,7 +29,7 @@ describe('Kadish current SCREEN mockup',()=>{
   fireEvent.click(screen.getByRole('button',{name:'Website preview'}));expect(container.querySelectorAll('iframe')).toHaveLength(1);expect(container.querySelector('iframe')).toBe(frame);expect(input.value).toBe('A fictional benefits enquiry');
  });
  it('resets only through the existing widget control',()=>{
-  const {doc}=setup();const reset=vi.fn();doc.getElementById('reset-btn')!.addEventListener('click',reset);fireEvent.click(screen.getByRole('button',{name:'Start over'}));expect(reset).toHaveBeenCalledOnce();
+  const {doc}=setup();fireEvent.click(screen.getByRole('button',{name:'Lawyer brief'}));const reset=vi.fn(()=>expect(doc.body.dataset.kadishView).toBe('website'));doc.getElementById('reset-btn')!.addEventListener('click',reset);fireEvent.click(screen.getByRole('button',{name:'Start over'}));expect(reset).toHaveBeenCalledOnce();
  });
  it('shows an error if the package does not expose the expected entry',()=>{
   const {container}=render(<KadishScreenMockup/>);fireEvent.load(container.querySelector('iframe')!);expect(screen.getByRole('status').textContent).toContain('could not load');

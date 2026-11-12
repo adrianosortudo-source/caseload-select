@@ -71,8 +71,8 @@ export function KadishScreenMockup() {
   }
 
   function restart() {
-    frame.current?.contentDocument?.getElementById("reset-btn")?.click();
     changeView("website");
+    frame.current?.contentDocument?.getElementById("reset-btn")?.click();
   }
 
   const ratio = profile.screenshot.height / profile.screenshot.width;
