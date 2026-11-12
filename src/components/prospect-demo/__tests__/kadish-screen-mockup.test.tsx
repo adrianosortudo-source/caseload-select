@@ -9,8 +9,9 @@ afterEach(()=>{cleanup();vi.unstubAllGlobals();});
 function setup(){
  const {container}=render(<KadishScreenMockup/>);
  const frame=container.querySelector('iframe')!;
- const doc=frame.contentDocument!;
- doc.body.innerHTML='<main id="public-demo-content"><textarea id="case-input"></textarea><button id="reset-btn">Reset</button></main>';
+ const doc=document.implementation.createHTMLDocument('Screen test frame');
+ Object.defineProperty(frame,'contentDocument',{configurable:true,value:doc});
+ doc.open();doc.write('<!doctype html><html><head></head><body><main id="public-demo-content"><textarea id="case-input"></textarea><button id="reset-btn">Reset</button></main></body></html>');doc.close();
  fireEvent.load(frame);
  fireEvent.load(doc.getElementById('kadish-screen-presentation')!);
  return {container,frame,doc};

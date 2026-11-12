@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
-const profile = {screenshot:{width:1265,height:5353},placement:{x:0.57,y:0.04,width:0.43,height:0.11},scenarios:[{description:""},{description:"Fictional example: I live in Ontario. My long-term disability payments were stopped. I have the insurer’s decision letter and would like to speak with your team."}]};
+const profile = {screenshot:{width:1265,height:712},placement:{x:0.57,y:0.27,width:0.43,height:0.73},scenarios:[{description:""},{description:"Fictional example: I live in Ontario. My long-term disability payments were stopped. I have the insurer’s decision letter and would like to speak with your team."}]};
 import styles from "./KadishScreenMockup.module.css";
 
 type View = "website" | "review" | "split";
@@ -48,7 +48,7 @@ export function KadishScreenMockup() {
   function configureFrame() {
     const doc = frame.current?.contentDocument;
     if (!doc?.getElementById("public-demo-content")) { setFailed(true); return; }
-    doc.documentElement.setAttribute("data-gene-screen-preview", "true");
+    doc.documentElement.setAttribute("data-kadish-screen-preview", "true");
     doc.body.setAttribute("data-kadish-view", viewRef.current);
     const input = doc.getElementById("case-input") as HTMLTextAreaElement | null;
     if (input) input.setAttribute("placeholder", profile.scenarios[1].description);
