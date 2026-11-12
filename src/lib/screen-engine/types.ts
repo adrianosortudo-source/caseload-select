@@ -60,6 +60,7 @@ export type MatterType =
   | 'estates_general'
   // Explicitly configured demonstration only; default family classification remains out of scope.
   | 'family_general'
+  | 'disability_benefits'
   // Out of scope (detected but not yet supported)
   | 'out_of_scope'
   | 'unknown';
@@ -406,6 +407,8 @@ export interface EngineState {
   /** Optional profile flag; omitted by existing firms and stored states. */
   family_enabled?: boolean;
   family_only?: boolean;
+  disability_enabled?: boolean;
+  disability_only?: boolean;
   practice_area: PracticeArea;
   matter_type: MatterType;
   /**

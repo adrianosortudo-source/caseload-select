@@ -702,7 +702,44 @@
       "Multiple owners or directors": "2+ owners/directors",
       "Someone else decides": "Someone else",
       "Not sure": "Not sure yet"
-    }
+    },
+    "disability_benefit": {
+      "Long-term disability insurance": "Long-term disability insurance",
+      "Short-term disability insurance": "Short-term disability insurance",
+      "An individual disability policy": "An individual disability policy",
+      "A government benefit or another program": "A government benefit or another program",
+      "Not sure": "Not sure"
+    },
+    "disability_status": {
+      "Claim denied": "Claim denied",
+      "Payments stopped": "Payments stopped",
+      "A decision is delayed": "A decision is delayed",
+      "No decision yet": "No decision yet",
+      "Not sure": "Not sure"
+    },
+    "disability_dates": {},
+    "disability_letter": {
+      "Yes": "Yes",
+      "No": "No",
+      "Not sure": "Not sure"
+    },
+    "disability_location": {
+      "Ontario": "Ontario",
+      "Outside Ontario": "Outside Ontario",
+      "Not sure": "Not sure"
+    },
+    "disability_counsel": {
+      "No": "No",
+      "Yes": "Yes",
+      "Not sure": "Not sure"
+    },
+    "disability_readiness": {
+      "This week": "This week",
+      "Within the next month": "Within the next month",
+      "Just exploring": "Just exploring",
+      "Not sure": "Not sure"
+    },
+    "disability_other_benefit": {}
   },
   "summary": {
     "out_of_scope": {
@@ -845,6 +882,11 @@
       "prose_detail_hiring_timeline": "About when you'd like a lawyer's help, you told us: “{text}”",
       "prose_detail_other_counsel": "About other legal help, you told us: “{text}”",
       "prose_detail_decision_authority": "About who will decide whether to hire a lawyer, you told us: “{text}”"
+    },
+    "disability_benefits": {
+      "intro": "Your disability-benefit enquiry",
+      "description": "You told us: “{answer}”",
+      "closing": "Please check these details. You can correct or add information before continuing."
     }
   },
   "summary_labels": {
@@ -1106,7 +1148,15 @@
     "family_timing": "Is there an upcoming court date or deadline? If you know the date, please share it.",
     "family_jurisdiction": "Where is this matter located?",
     "corporate_records_available": "Do you have access to the company's financial records or bank accounts?",
-    "dividend_or_money_issue": "Is company money being taken or used in a way you don't agree with?"
+    "dividend_or_money_issue": "Is company money being taken or used in a way you don't agree with?",
+    "disability_benefit": "Which benefit is your enquiry about?",
+    "disability_status": "What has happened with the disability-insurance claim?",
+    "disability_dates": "What date is on the insurer’s decision, and has the insurer mentioned any other date? Say if you do not know. Please leave out medical details.",
+    "disability_letter": "Do you have a written decision from the insurer? Please do not upload it or paste its contents here.",
+    "disability_location": "Where do you live?",
+    "disability_counsel": "Is a lawyer already representing you on this benefits matter?",
+    "disability_readiness": "When would you like to speak with our team?",
+    "disability_other_benefit": "Which benefit or program is involved? Please leave out medical details."
   },
   "widget_strings": {
     "convo_opening": "This is an AI-assisted demo. Use fictional details. Nothing is saved, and no firm is contacted. Tell me what you would like help with, in your own words. You do not need to know the legal terms.",
@@ -1286,7 +1336,15 @@
     "family_timing": "You described upcoming court dates or deadlines this way: “{answer}”.",
     "family_jurisdiction": "You described where the family matter is located this way: “{answer}”.",
     "corporate_records_available": "You answered “{answer}” about your access to company financial records or bank accounts.",
-    "dividend_or_money_issue": "You answered “{answer}” about whether company money is being used in a way you disagree with."
+    "dividend_or_money_issue": "You answered “{answer}” about whether company money is being used in a way you disagree with.",
+    "disability_benefit": "Your enquiry concerns {answer}.",
+    "disability_status": "You described the claim’s position as: {answer}.",
+    "disability_dates": "The dates you mentioned are: {answer}.",
+    "disability_letter": "When asked whether you have a written decision, you said: {answer}.",
+    "disability_location": "You gave your location as: {answer}.",
+    "disability_counsel": "When asked about current legal representation, you said: {answer}.",
+    "disability_readiness": "For a conversation with the team, you chose: {answer}.",
+    "disability_other_benefit": "You described the benefit or program as: {answer}."
   },
   "recap_options": {
     "residential_role": {

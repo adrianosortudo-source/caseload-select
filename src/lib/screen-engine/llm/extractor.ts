@@ -57,6 +57,7 @@ export async function llmExtract(
         description,
         matter_type: state.matter_type,
         family_enabled: state.family_enabled === true,
+        disability_enabled: state.disability_enabled === true,
         already_extracted: state.slots,
         ...(followUp ? { pending_slot_id: followUp.pendingSlotId, reply: followUp.reply } : {}),
       }),
@@ -239,6 +240,7 @@ export function mergeLlmResults(
   options?: MergeLlmOptions,
 ): EngineState {
   let working: EngineState = state;
+  if (state.disability_enabled && ['unknown','out_of_scope'].includes(state.matter_type) && extracted.__disability_area === 'disability') working = {...state,practice_area:'personal_injury',matter_type:'disability_benefits',intent_family:'unknown',dispute_family:'unknown',advisory_subtrack:'unknown',matter_type_provenance:'llm_inferred'};
   if ((state.matter_type === 'unknown' || state.matter_type === 'out_of_scope') && extracted.__family_area === 'family') {
     working = { ...state, practice_area: 'family', matter_type: state.family_enabled === true ? 'family_general' : 'out_of_scope', intent_family: 'unknown', dispute_family: 'unknown', advisory_subtrack: 'unknown', matter_type_provenance: 'llm_inferred' };
   }
@@ -295,7 +297,7 @@ export function mergeLlmResults(
   // classifier for non-English input).
   const promotionAllowed =
     state.matter_type === 'unknown' || options?.allowGeneralPromotion === true;
-  if (extracted.__family_area !== 'family' && ROUTING_CATCH_ALL_MATTER_TYPES.has(state.matter_type) && promotionAllowed) {
+  if (extracted.__disability_area !== 'disability' && extracted.__family_area !== 'family' && ROUTING_CATCH_ALL_MATTER_TYPES.has(state.matter_type) && promotionAllowed) {
     const llmMatter = extracted[MATTER_TYPE_CLASSIFIER_FIELD];
     if (
       llmMatter &&
@@ -334,7 +336,8 @@ export function mergeLlmResults(
 
   for (const [slotId, value] of Object.entries(extracted)) {
     // Skip the synthetic classifier field — already handled above.
-    if (slotId === MATTER_TYPE_CLASSIFIER_FIELD || slotId === '__family_area') continue;
+    if (slotId === MATTER_TYPE_CLASSIFIER_FIELD || slotId === '__family_area' || slotId === '__disability_area') continue;
+    if (slotId.startsWith('disability_') && (working.matter_type !== 'disability_benefits' || !state.disability_enabled)) continue;
     if (slotId.startsWith('family_') && working.matter_type !== 'family_general') continue;
     // Skip the synthetic language-confirm field — already handled above. Not
     // skipping it here would let mergeLlmResults persist a language code

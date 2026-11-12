@@ -11,6 +11,7 @@ interface ExtractRequest {
   description?: string;
   matter_type?: MatterType;
   family_enabled?: boolean;
+  disability_enabled?: boolean;
   already_extracted?: Record<string, string | null>;
   pending_slot_id?: string;
   reply?: string;
@@ -50,6 +51,7 @@ export async function POST(req: Request) {
     ...initialiseState(description),
     matter_type: body.matter_type ?? "unknown",
     family_enabled: body.family_enabled === true,
+    disability_enabled: body.disability_enabled === true,
     slots: body.already_extracted ?? {},
   };
 

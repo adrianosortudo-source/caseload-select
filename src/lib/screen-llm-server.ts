@@ -97,7 +97,7 @@ export async function llmExtractServer(
   }
 
   const matterType: MatterType = state.matter_type ?? 'unknown';
-  const slots = getExtractableSlots(matterType, state.family_enabled === true);
+  const slots = getExtractableSlots(matterType, state.family_enabled === true, state.disability_enabled === true);
   if (slots.length === 0) {
     return { extracted: {}, mode: 'live', reason: 'no_applicable_slots' };
   }

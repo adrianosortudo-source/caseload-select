@@ -159,7 +159,15 @@
     "family_children": "Há crianças ou acordos de parentalidade envolvidos neste assunto?",
     "family_existing_order": "Há um acordo por escrito ou uma ordem judicial?",
     "family_timing": "Há uma data de audiência ou prazo próximo? Se souber, informe a data.",
-    "family_jurisdiction": "Em que cidade ou região está este assunto?"
+    "family_jurisdiction": "Em que cidade ou região está este assunto?",
+    "disability_benefit": "Sobre qual benefício é a sua consulta?",
+    "disability_status": "O que aconteceu com o pedido ao seguro de incapacidade?",
+    "disability_dates": "Qual é a data da decisão da seguradora? A seguradora mencionou outra data? Diga se não souber. Não inclua informações médicas.",
+    "disability_letter": "Você tem uma decisão por escrito da seguradora? Não envie o documento nem copie seu conteúdo aqui.",
+    "disability_location": "Onde você mora?",
+    "disability_counsel": "Um advogado já representa você nesse pedido de benefício?",
+    "disability_readiness": "Quando você gostaria de conversar com a nossa equipe?",
+    "disability_other_benefit": "Qual benefício ou programa está envolvido? Não inclua informações médicas."
   },
   "slot_options": {
     "corporate_help_category": {
@@ -1120,7 +1128,44 @@
       "Internal investigation": "Investigação interna",
       "Report to authorities": "Comunicar às autoridades",
       "Not sure": "Não tenho certeza"
-    }
+    },
+    "disability_benefit": {
+      "Long-term disability insurance": "Seguro de incapacidade de longo prazo",
+      "Short-term disability insurance": "Seguro de incapacidade de curto prazo",
+      "An individual disability policy": "Uma apólice individual de incapacidade",
+      "A government benefit or another program": "Um benefício público ou outro programa",
+      "Not sure": "Não sei"
+    },
+    "disability_status": {
+      "Claim denied": "Pedido negado",
+      "Payments stopped": "Pagamentos interrompidos",
+      "A decision is delayed": "A decisão está atrasada",
+      "No decision yet": "Ainda não houve decisão",
+      "Not sure": "Não sei"
+    },
+    "disability_dates": {},
+    "disability_letter": {
+      "Yes": "Sim",
+      "No": "Não",
+      "Not sure": "Não sei"
+    },
+    "disability_location": {
+      "Ontario": "Ontário",
+      "Outside Ontario": "Fora de Ontário",
+      "Not sure": "Não sei"
+    },
+    "disability_counsel": {
+      "No": "Não",
+      "Yes": "Sim",
+      "Not sure": "Não sei"
+    },
+    "disability_readiness": {
+      "This week": "Esta semana",
+      "Within the next month": "No próximo mês",
+      "Just exploring": "Estou apenas pesquisando",
+      "Not sure": "Não sei"
+    },
+    "disability_other_benefit": {}
   },
   "summary": {
     "business_setup_advisory": {
@@ -1178,6 +1223,11 @@
       "prose_detail_hiring_timeline": "Sobre quando gostaria da ajuda de um advogado, você contou: “{text}”",
       "prose_detail_other_counsel": "Sobre outra ajuda jurídica, você contou: “{text}”",
       "prose_detail_decision_authority": "Sobre quem decidirá a contratação de um advogado, você contou: “{text}”"
+    },
+    "disability_benefits": {
+      "intro": "Sua consulta sobre benefício por incapacidade",
+      "description": "Você nos contou: “{answer}”",
+      "closing": "Confira essas informações. Você pode corrigir ou acrescentar detalhes antes de continuar."
     }
   },
   "summary_labels": {
@@ -1439,7 +1489,15 @@
     "family_timing": "Você descreveu datas de audiência ou prazos próximos assim: “{answer}”.",
     "family_jurisdiction": "Você descreveu onde está o assunto de família assim: “{answer}”.",
     "corporate_records_available": "Você respondeu “{answer}” sobre seu acesso aos registros financeiros ou contas bancárias da empresa.",
-    "dividend_or_money_issue": "Você respondeu “{answer}” sobre se o dinheiro da empresa está sendo usado de uma forma com a qual você discorda."
+    "dividend_or_money_issue": "Você respondeu “{answer}” sobre se o dinheiro da empresa está sendo usado de uma forma com a qual você discorda.",
+    "disability_benefit": "Sua consulta envolve {answer}.",
+    "disability_status": "Você descreveu a situação do pedido assim: {answer}.",
+    "disability_dates": "Você mencionou estas datas: {answer}.",
+    "disability_letter": "Ao perguntar se você tem uma decisão por escrito, sua resposta foi: {answer}.",
+    "disability_location": "Você informou esta localização: {answer}.",
+    "disability_counsel": "Sobre representação jurídica atual, sua resposta foi: {answer}.",
+    "disability_readiness": "Para conversar com a equipe, você escolheu: {answer}.",
+    "disability_other_benefit": "Você descreveu o benefício ou programa assim: {answer}."
   },
   "recap_options": {
     "residential_role": {

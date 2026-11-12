@@ -1,3 +1,4 @@
+import { disabilitySlotApplies } from './disability';
 import type { EngineState, LawyerReport, Band, ResolvedFact } from './types';
 import { computeBand, bandLabel, scoreFourAxes, buildAxisReasoning } from './band';
 import { selectNextSlot, getDecisionGap, isUserAnswered } from './selector';
@@ -798,6 +799,14 @@ function buildBestNextQuestion(state: EngineState): string {
 // SLOT_REGISTRY must have an entry here, or the lawyer brief leaks the raw
 // snake_case id via the `SLOT_LABELS[id] ?? id` fallback.
 export const SLOT_LABELS: Record<string, string> = {
+  disability_benefit: 'Benefit type',
+  disability_status: 'Insurer decision',
+  disability_dates: 'Reported dates; lawyer to verify',
+  disability_letter: 'Written decision available',
+  disability_location: 'Location',
+  disability_counsel: 'Existing representation',
+  disability_readiness: 'Callback readiness',
+  disability_other_benefit: 'Other benefit or program',
   family_help_sought: 'Help sought',
   family_children: 'Children involved',
   family_existing_order: 'Existing agreement or order',
@@ -1585,21 +1594,22 @@ export function validateReportFacts(state: EngineState): string[] {
 // ─── Main report builder ──────────────────────────────────────────────────
 
 export function buildReport(state: EngineState): LawyerReport {
-  if (state.matter_type === 'family_general') {
+  if (state.matter_type === 'family_general' || state.matter_type === 'disability_benefits') {
+    const disability = state.matter_type === 'disability_benefits';
     // Legacy report fields are required by existing storage readers. These
     // zero values are compatibility sentinels, not scores; renderers must
     // suppress them when intake_only is true.
     const blankAxis = () => ({ score: 0, reasons: [] as string[] });
-    const familyQuestions = SLOT_REGISTRY.filter(slot => slot.applies_to.includes('family_general') && slot.tier !== 'contact' && !isUserAnswered(state, slot.id)).map(slot => slot.question);
+    const familyQuestions = SLOT_REGISTRY.filter(slot => slot.applies_to.includes(state.matter_type) && disabilitySlotApplies(state,slot.id) && slot.tier !== 'contact' && !isUserAnswered(state, slot.id)).map(slot => slot.question);
     const next = familyQuestions[0] ?? '';
     return {
       intake_only: true, lead_id: state.lead_id, submitted_at: state.submitted_at,
-      matter_snapshot: `Family law intake. Person's original description: ${state.input}`, lawyer_time_priority: 'Firm review required', band: 'C',
+      matter_snapshot: `${disability ? 'Disability-benefit' : 'Family law'} intake. Person's original description: ${state.input}`, lawyer_time_priority: 'Firm review required', band: 'C',
       band_reasoning_bullets: [], confidence_calibration: 'Not assessed',
       four_axis: { value: 0, complexity: 0, urgency: 0, readiness: 0, readinessAnswered: false },
       axis_reasoning: { value: blankAxis(), complexity: blankAxis(), urgency: blankAxis(), readiness: blankAxis(), readinessAnswered: false },
-      truth_warnings: matterClassificationInferred(state) ? ['Family law classification was inferred and needs confirmation.'] : [],
-      likely_legal_services: [], fee_estimate: 'Not assessed', why_it_matters: 'The firm will review the intake.',
+      truth_warnings: matterClassificationInferred(state) ? [`${disability ? 'Disability-benefit' : 'Family law'} classification was inferred and needs confirmation.`] : [],
+      likely_legal_services: [], fee_estimate: disability ? 'Pending firm fee model; not the benefits or settlement amount.' : 'Not assessed', why_it_matters: disability ? 'The firm confirms scope, dates, evidence, fees and eligibility. No medical assessment is made.' : 'The firm will review the intake.',
       cross_sell_opportunities: [], strategic_considerations: [], what_to_confirm: familyQuestions,
       call_openers: [], best_next_question: next, resolved_facts_v2: buildResolvedFactsV2(state),
       resolved_facts: buildResolvedFacts(state), inferred_signals: [], open_questions: familyQuestions, risk_flags: [],
