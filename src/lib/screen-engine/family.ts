@@ -100,7 +100,15 @@ export function groundFamilyConversationFacts(state: EngineState, input: string)
     if (!noDateSentence && scheduledClauses.length === 0 && !scheduledDate && date && dateSentence) candidates.family_timing = date;
   }
   const slots = { ...state.slots }; const slot_meta = { ...state.slot_meta };
-  for (const [id, value] of Object.entries(candidates)) { slots[id] = value; slot_meta[id] = { source: 'explicit', confidence: 1, evidence: text }; }
+  for (const [id, value] of Object.entries(candidates)) {
+    const previous = state.slot_meta[id];
+    // A later parenting-agreement answer is not a new statement of the help
+    // requested. Retain the person's original supporting words for that fact.
+    if (id === 'family_help_sought' && state.slots[id] === value &&
+        previous && ['explicit', 'answered'].includes(previous.source) && previous.evidence?.trim()) continue;
+    slots[id] = value;
+    slot_meta[id] = { source: 'explicit', confidence: 1, evidence: text };
+  }
   return { ...state, slots, slot_meta };
 }
 

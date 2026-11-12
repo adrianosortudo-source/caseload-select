@@ -337,7 +337,7 @@ test("canonical branding spans the landing, questionnaire, review, failure, repo
   }
   await page.getByRole("button", { name: STAGE_DEFINITIONS[6].label, exact: true }).click();
   await audit("review");
-  await page.getByRole("button", { name: "Create my Best Cases Profile", exact: true }).click();
+  await page.getByRole("button", { name: "Create my Best Case Profile", exact: true }).click();
   await expect(page.getByRole("status").filter({ hasText: "Connecting your answers" })).toBeVisible();
   await audit("loading");
   await expect.poll(() => Boolean(release)).toBe(true);

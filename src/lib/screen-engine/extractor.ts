@@ -532,6 +532,33 @@ const PERSONAL_INJURY_SIGNALS = [
   'concussion from', 'whiplash from',
 ];
 
+const ESTATES_WILL_DRAFTING_SIGNALS = [
+  'make a will', 'need a will', 'write a will', 'update my will',
+  'i need a will', 'i want a will', 'i want to make a will', 'new will',
+  'updating my will', 'revising my will', 'will and estate planning',
+  'who gets what when i', 'leaving things to my', 'leave things to my kids',
+  // First-will phrasing from the public intake prompt. Keep these as full
+  // noun-intent phrases so a modal "will" or property context cannot route
+  // an inquiry to estates on its own.
+  'prepare my first will', 'prepare a first will', 'prepare my will',
+  'prepare our first will', 'prepare our will', 'prepare a will',
+  'prepare a new will', 'draft my first will', 'draft a first will',
+  'prepare wills',
+];
+
+function hasWillDraftingIntent(input: string): boolean {
+  const clauses = lower(input).split(/[.!?;,\n]+/);
+  return clauses.some((clause) => ESTATES_WILL_DRAFTING_SIGNALS.some((signal) => {
+    const index = clause.indexOf(signal);
+    if (index < 0) return false;
+    if ((index > 0 && /[a-z0-9_]/i.test(clause[index - 1])) || /[a-z0-9_]/i.test(clause[index + signal.length] ?? '')) return false;
+    const prefix = clause.slice(0, index);
+    if (/\b(?:do not|don't|dont|never|not|cannot|can't|no longer)\s*$/i.test(prefix)) return false;
+    if (/\b(?:do not|don't|dont|never|not|cannot|can't|no longer)\s+(?:(?:want|need|plan(?:ning)?|intend|wish|look(?:ing)?)\s+)?(?:to\s+)?$/i.test(prefix)) return false;
+    return true;
+  }));
+}
+
 const ESTATES_SIGNALS = [
   'will and estate', 'wills and estates', 'estate planning',
   'probate', 'apply for probate', 'estate trustee', 'executor of an estate',
@@ -550,10 +577,6 @@ const ESTATES_SIGNALS = [
   'estate of my', 'when my mother passed', 'when my father passed',
   'when my parent passed', 'after my father died', 'after my mother died',
   'beneficiary of an estate', 'beneficiary dispute',
-  // Layperson
-  'make a will', 'need a will', 'write a will', 'update my will',
-  'i need a will', 'i want a will', 'i want to make a will',
-  'who gets what when i', 'leaving things to my', 'leave things to my kids',
 ];
 
 interface OutOfScopeMatch {
@@ -604,6 +627,7 @@ function detectInScopeArea(input: string): InScopeAreaMatch | null {
   };
   let m: string | null;
   if ((m = hit(ESTATES_SIGNALS))) return { area: 'estates', signal: m };
+  if (hasWillDraftingIntent(input)) return { area: 'estates', signal: 'will drafting request' };
   if (/\bwills\b/i.test(t)) return { area: 'estates', signal: 'wills' };
   // A pay offer tied to a release from one's employer is employment context,
   // even when the caller has not said whether employment ended.
@@ -667,13 +691,6 @@ function classifyEmploymentSubType(input: string): MatterType {
   return 'employment_general';
 }
 
-const ESTATES_WILL_DRAFTING_SIGNALS = [
-  'make a will', 'need a will', 'write a will', 'update my will',
-  'i need a will', 'i want a will', 'i want to make a will', 'new will',
-  'updating my will', 'revising my will', 'will and estate planning',
-  'who gets what when i', 'leaving things to my', 'leave things to my kids',
-];
-
 const ESTATES_POA_SIGNALS = [
   'power of attorney for property', 'power of attorney for personal care',
   'poa for property', 'poa for personal care',
@@ -706,7 +723,7 @@ function classifyEstatesSubType(input: string): MatterType {
   if (hit(ESTATES_DISPUTE_SIGNALS)) return 'estate_dispute';
   if (hit(ESTATES_PROBATE_SIGNALS)) return 'probate';
   if (hit(ESTATES_POA_SIGNALS)) return 'power_of_attorney';
-  if (hit(ESTATES_WILL_DRAFTING_SIGNALS) || /\bwills\b/i.test(t)) return 'will_drafting';
+  if (hasWillDraftingIntent(input) || /\bwills\b/i.test(t)) return 'will_drafting';
   return 'estates_general';
 }
 

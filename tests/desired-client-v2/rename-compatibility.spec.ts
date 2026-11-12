@@ -9,9 +9,9 @@ test("the new name and legacy address share the same tool and framing policy", a
     expect(response?.status()).toBe(200);
     expect(response?.headers()["x-frame-options"]).toBeUndefined();
     expect(response?.headers()["content-security-policy"]).toContain("https://caseloadselect.ca");
-    await expect(page).toHaveTitle("Best Cases Profile | CaseLoad Select");
+    await expect(page).toHaveTitle("Best Case Profile | CaseLoad Select");
     await expect(page.getByRole("button", { name: "Build my profile", exact: true }).first()).toBeVisible();
-    await expect(page.getByText("What is Best Cases Profile?", { exact: true })).toBeVisible();
+    await expect(page.getByText("What is Best Case Profile?", { exact: true })).toBeVisible();
   }
 });
 
@@ -39,7 +39,7 @@ test("a reviewed saved report survives navigation from the old address to the ne
   await page.goto("/tools/best-cases-profile");
   await expect(page.getByRole("button", { name: "Continue my saved draft", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Continue my saved draft", exact: true }).click();
-  await expect(page.locator(".dc-brief")).toContainText("BEST CASES PROFILE");
+  await expect(page.locator(".dc-brief")).toContainText("BEST CASE PROFILE");
   const restored = await page.evaluate(() => JSON.parse(localStorage.getItem("cls-desired-client-v2")!));
   expect(restored.answers).toEqual(draft.answers);
   expect(restored.savedBrief).toEqual(draft.savedBrief);
