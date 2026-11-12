@@ -19,7 +19,7 @@
 .screenshot { position: absolute; left: 0; display: block; width: 100%; height: auto; }
 .formRegion { position: relative; width: 100%; }
 .backdrop { position: absolute; inset: 0 0 auto; overflow: hidden; }
-.intake { position: relative; min-width: 0; background: #fff; }
+.intake { position: relative; min-width: 0; background: #0a2140; }
 .frame { display: block; width: 100%; border: 0; scroll-margin-top: 6rem; }
 .loading { width: 100%; margin: 0; padding: 24px; box-sizing: border-box; font-size: 16px; line-height: 1.6; }
 @media (max-width: 640px) {
