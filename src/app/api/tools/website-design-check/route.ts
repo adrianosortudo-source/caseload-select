@@ -1,3 +1,4 @@
+import { prepareCapture, buildVisualReview, removeCapture, enforceVisualEvidence } from "@/lib/design-check/visual-evidence";
 import { NextRequest, NextResponse } from "next/server";
 import {
   fetchRenderResult,
@@ -96,8 +97,15 @@ export async function POST(request: NextRequest) {
     const result = await fetchRenderResult(url);
     const desktopCapture = result.captures.find((c) => c.viewport === "desktop");
     const mobileCapture = result.captures.find((c) => c.viewport === "mobile");
-    if (!desktopCapture || !mobileCapture) {
-      return NextResponse.json({ error: "Could not render this site. Try again or check the domain." }, { status: 502 });
+    const captures = await Promise.all([prepareCapture("desktop", desktopCapture), prepareCapture("mobile", mobileCapture)]);
+    if (!desktopCapture) {
+      let rawVisual: unknown;
+      if (mobileCapture && captures[1].available) { try { rawVisual = (await judgeScreenshot(mobileCapture.screenshotPng, [], captures)).visual; } catch { /* Explicit unavailable visual review below. */ } }
+      const visualReview = enforceVisualEvidence(buildVisualReview(captures, rawVisual), { ...(mobileCapture ? { mobile: mobileCapture.domSnapshot } : {}) });
+      const payload = { domain, checkedAt: new Date().toISOString(), visualReview, legacyUnavailable: true };
+      for (const c of [...visualReview.captures].sort((a,b) => (b.base64?.length ?? 0) - (a.base64?.length ?? 0))) { if (Buffer.byteLength(JSON.stringify(payload)) <= 3 * 1024 * 1024) break; if (c.available) removeCapture(visualReview, c.id); }
+      if (Buffer.byteLength(JSON.stringify(payload)) > 3 * 1024 * 1024) return NextResponse.json({ error: "The report was too large to return." }, { status: 502, headers: { "Cache-Control": "no-store" } });
+      return NextResponse.json(payload, { headers: { ...rateLimitHeaders(decision), "Cache-Control": "no-store" } });
     }
 
     let authorityJudgments: AuthorityJudgmentScore[] | undefined;
@@ -126,7 +134,7 @@ export async function POST(request: NextRequest) {
       scorePerformance(desktopCapture.domSnapshot, desktopCapture.webVitals),
       scoreSpacing(desktopCapture.domSnapshot),
     ];
-    const mobileDimension = scoreMobile(mobileCapture.domSnapshot);
+    const mobileDimension = mobileCapture ? scoreMobile(mobileCapture.domSnapshot) : undefined;
     const authorityResult = scoreAuthority(desktopCapture.domSnapshot, desktopCapture.finalUrl, authorityJudgments);
 
     // Authority carries its checks under subScores, not a flat `items`
@@ -144,31 +152,33 @@ export async function POST(request: NextRequest) {
     };
 
     let generalJudgments;
+    let rawVisual: unknown;
     try {
-      const visionResult = await judgeScreenshot(desktopCapture.screenshotPng, [...desktopDimensions, mobileDimension, authorityAsDimension]);
-      generalJudgments = visionResult.judgments;
+      if (!captures.some(c => c.available)) throw new Error("No prepared images available.");
+      const visionResult = await judgeScreenshot(desktopCapture.screenshotPng, [...desktopDimensions, ...(mobileDimension ? [mobileDimension] : []), authorityAsDimension], captures);
+      generalJudgments = visionResult.judgments.length ? visionResult.judgments : undefined;
+      rawVisual = visionResult.visual;
     } catch (err) {
       console.error("[design-check] design-quality vision judgment failed, degrading to deterministic-only:", err instanceof Error ? err.message : String(err));
       generalJudgments = undefined;
     }
 
-    const track1Report = buildTrack1Report([...desktopDimensions, mobileDimension], authorityResult, generalJudgments, desktopCapture.domSnapshot.darkPatterns);
+    const track1Report = buildTrack1Report([...desktopDimensions, ...(mobileDimension ? [mobileDimension] : [])], authorityResult, generalJudgments, desktopCapture.domSnapshot.darkPatterns);
 
-    return NextResponse.json(
-      {
+    const visualReview = enforceVisualEvidence(buildVisualReview(captures, rawVisual), { desktop: desktopCapture.domSnapshot, ...(mobileCapture ? { mobile: mobileCapture.domSnapshot } : {}) });
+    const payload = {
         domain,
+        visualReview,
         checkedAt: new Date().toISOString(),
         score: track1Report.score,
         // The uncapped weighted average, before any red-flag ceiling.
-        // Named on the report as "the underlying measured craft" when a
-        // disqualifying flag is capping the visible score. Not itself the
-        // grade shown; see letterGrade below and attainable further down.
+        // Retained with the combined rubric in supporting details;
+        // authority and content signals remain part of this calculation.
         uncappedScore: track1Report.uncappedScore,
         letterGrade: track1Report.letterGrade,
         // The grade within reach if every item in the path (the findings
         // carrying inAttainablePath: true, see rankedFindings) were
-        // fixed. Leads the report per Phase 4 of
-        // docs/BUILD_PLAN_design_check_calibration_v1.md.
+        // fixed. Retained in supporting details with the combined rubric.
         attainable: track1Report.attainable,
         dimensionBar: track1Report.dimensionBar,
         notMeasuredDimensions: track1Report.notMeasuredDimensions,
@@ -184,12 +194,13 @@ export async function POST(request: NextRequest) {
             ? { wholePage: true }
             : {
                 wholePage: false,
-                judgedTopPx: 7800,
+                judgedTopPx: captures[0].height ?? 7800,
                 actualPageHeightPx: desktopCapture.screenshotClippedFromPx,
               },
-      },
-      { headers: rateLimitHeaders(decision) }
-    );
+      };
+    for (const c of [...visualReview.captures].sort((a,b) => (b.base64?.length ?? 0) - (a.base64?.length ?? 0))) { if (Buffer.byteLength(JSON.stringify(payload)) <= 3 * 1024 * 1024) break; if (c.available) removeCapture(visualReview, c.id); }
+    if (Buffer.byteLength(JSON.stringify(payload)) > 3 * 1024 * 1024) return NextResponse.json({ error: "The report was too large to return." }, { status: 502, headers: { "Cache-Control": "no-store" } });
+    return NextResponse.json(payload, { headers: { ...rateLimitHeaders(decision), "Cache-Control": "no-store" } });
   } catch (err) {
     // Logged, not swallowed: the visitor-facing message is deliberately
     // vague, so without this an operator has nothing to debug a failing

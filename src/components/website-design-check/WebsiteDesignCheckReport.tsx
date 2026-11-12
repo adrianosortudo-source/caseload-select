@@ -1,5 +1,6 @@
+import type { VisualReview } from "@/lib/design-check/visual-review-types";
 import { useRef, useState } from "react";
-import { assessment, copyPlan, coverageText, groupAction, groups, presentFinding } from "./report-presentation";
+import { coverageText, presentFinding } from "./report-presentation";
 
 export interface DimensionBarEntry {
   name: string;
@@ -45,6 +46,8 @@ export interface AttainableScore {
 
 export interface DesignCheckResult {
   domain: string;
+  visualReview?: VisualReview;
+  legacyUnavailable?: boolean;
   judgmentCoverage?: { wholePage: true } | { wholePage: false; judgedTopPx: number; actualPageHeightPx: number };
   checkedAt: string;
   score: number;
@@ -68,12 +71,29 @@ export interface DesignCheckResult {
 }
 
 export default function WebsiteDesignCheckReport({ result, onReset }: { result: DesignCheckResult; onReset: () => void }) {
+  const [failedCaptures, setFailedCaptures] = useState<string[]>([]);
   const [copyState, setCopyState] = useState<"idle" | "success" | "manual">("idle");
   const detailsRef = useRef<HTMLDetailsElement>(null);
   const fallbackRef = useRef<HTMLTextAreaElement>(null);
-  const priorities = groups(result).slice(0, 3);
-  const plan = copyPlan(result, priorities);
-  const flags = result.redFlagPanel.activeFlags.filter(f => f.classification === "disqualifying");
+  const review = result.visualReview;
+  const count = review?.findings.length ?? 0;
+  const changes = `${count} visual ${count === 1 ? "change" : "changes"} identified`;
+  const verdict = !review || review.status === "unavailable" ? "Visual assessment unavailable." : review.status === "partial" ? `Visual assessment is incomplete. ${changes} in the available evidence.` : count ? `Desktop and mobile screenshots reviewed. ${changes}.` : "No specific visual issues identified in these captures.";
+  const limitations = (review?.captures ?? []).map(c => {
+    const r = review?.viewportReviews.find(x => x.captureId === c.id);
+    const label = c.id === "desktop" ? "Desktop" : "Mobile";
+    if (!c.available) {
+      const why = c.reason === "image_too_large" ? "The image exceeded the size limit." : c.reason === "image_invalid" ? "The captured image could not be prepared." : c.reason === "payload_limit" ? "The image was removed to keep the report within its size limit." : "The capture was not available.";
+      return [`${label} capture unavailable. ${why}`];
+    }
+    if (!r) return [`${label}: Captured, not visually assessed. ${review?.reasonCodes.includes("invalid_visual_response") ? "The visual assessment could not be validated." : "The visual assessment was unavailable."}`];
+    if (r.pageKind !== "homepage") return [`${label}: ${r.pageKind} page shown; normal homepage visual assessment was not possible.`];
+    const clipped = c.totalHeight ? [`Capture: top ${c.height} pixels of ${c.totalHeight}.`] : [];
+    const unassessed = Object.entries(r.areas).filter(([, value]) => value === "not_assessable").map(([area]) => r.areaReasons[area as keyof typeof r.areaReasons] || "Not assessed.");
+    return [...clipped, ...Object.entries(r.areas).filter(([, value]) => value === "not_assessable").map(([area]) => `${area.replaceAll("_", " ")}: ${r.areaReasons[area as keyof typeof r.areaReasons]}`), ...(unassessed.length ? [] : ["Homepage capture reviewed."])];
+  });
+  const coverage = (review?.viewportReviews ?? []).filter(r => r.pageKind === "homepage").map(r => `${r.captureId} areas assessed: ${Object.entries(r.areas).filter(([, status]) => status === "assessed").map(([area]) => area.replaceAll("_", " ")).join(", ") || "none"}.`);
+  const plan = [result.domain, verdict, ...limitations.flatMap((lines, i) => [`${review!.captures[i].id} screenshot:`, ...lines]), ...coverage, ...failedCaptures.map(id => `${id} screenshot could not be displayed; findings cannot be visually checked here.`), ...(review?.findings ?? []).flatMap(f => [`${f.captureId}: ${f.section}, ${f.element}`, f.visibleText ? `Visible text: ${f.visibleText}` : "", `Observed: ${f.observation}`, `Possible consequence: ${f.consequence}`, `Change: ${f.change}`, `Priority: ${f.priority}`, f.limitation ? `Limitation: ${f.limitation}` : ""]), ...(review?.strengths ?? []).map(s => `${s.captureId} strength, ${s.section}, ${s.element}${s.visibleText && !s.observation.includes(s.visibleText) ? ` (visible text: ${s.visibleText})` : ""}: ${s.observation}`)].filter(Boolean).join("\n");
   async function copy() {
     try {
       if (!navigator.clipboard?.writeText) throw new Error("Clipboard unavailable");
@@ -81,54 +101,38 @@ export default function WebsiteDesignCheckReport({ result, onReset }: { result: 
       setCopyState("success");
     } catch { setCopyState("manual"); requestAnimationFrame(() => fallbackRef.current?.focus()); }
   }
-  function reveal(id: string) {
-    if (detailsRef.current) detailsRef.current.open = true;
-    requestAnimationFrame(() => document.getElementById(id)?.focus());
-  }
   return <div className="dc-report">
     <header className="dc-report-header" data-ui-component-content="report-summary">
-      <div className="dc-report-identity"><div className="dc-report-meta">
-        <p className="dc-report-domain">{result.domain}</p>
-        <p className="dc-report-date">Checked {new Date(result.checkedAt).toLocaleDateString()}</p>
-      </div><button type="button" className="dc-reset-btn" onClick={onReset}>Check another site</button></div>
-      <p data-ui-copy="supporting">Automated homepage check · Mobile and desktop.</p>
-      <p data-ui-copy="body">{assessment(result, priorities)}</p>
+      <div className="dc-report-identity"><div className="dc-report-meta"><p className="dc-report-domain">{result.domain}</p><p className="dc-report-date">Checked {new Date(result.checkedAt).toLocaleDateString()}</p></div><button type="button" className="dc-reset-btn" onClick={onReset}>Check another site</button></div>
+      <h2 data-ui-copy="heading">Visual assessment</h2><p data-ui-copy="body">{verdict}</p>
+      {!review && <p data-ui-copy="supporting">Visual assessment was not supplied with this report.</p>}
     </header>
-    {priorities.length > 0 && <section className="dc-path-section" data-ui-component-content="priority-findings">
-      <h2 className="dc-section-title" data-ui-copy="heading">Priorities</h2>
-      <ol className="dc-findings-list">{priorities.map((g,i) => <li className="dc-finding-item" key={i} data-ui-component-content="report-finding">
-        <h3 data-ui-copy="heading">{g.copy.title}</h3>
-        <p data-ui-copy="body"><strong>Found:</strong> {g.findings[0].evidence.length <= 170 ? g.findings[0].evidence : <a href={`#dc-finding-${result.rankedFindings.indexOf(g.findings[0].source)}`} onClick={() => reveal(`dc-finding-${result.rankedFindings.indexOf(g.findings[0].source)}`)}>See the full observation in details</a>}</p>
-        <p data-ui-copy="body"><strong>Why:</strong> {g.copy.why}</p>
-        <p data-ui-copy="body"><strong>Change:</strong> {groupAction(g)}</p>
-        {g.findings.length > 1 && <p data-ui-copy="supporting">Combines related findings. See each observation in the details.</p>}
-        <p data-ui-copy="supporting"><strong>Suggested owner:</strong> {g.copy.owner}</p><p data-ui-copy="supporting">{g.status}</p>
-      </li>)}</ol>
-    </section>}
-    {flags.length > 0 && <section className="dc-redflag-panel" data-ui-component-content="grade-limitations">
-      <h2 className="dc-redflag-title" data-ui-copy="heading">Review these flagged items</h2>
-      <ul className="dc-redflag-list">{flags.map(f => <li key={f.key}><a href={`#dc-flag-${f.key}`} onClick={() => reveal(`dc-flag-${f.key}`)}>{f.label}</a> · {f.confidence === "best_effort" ? "Needs confirmation" : f.confidence === "proven" ? "Confirmed" : "Confidence not supplied"}</li>)}</ul>
-    </section>}
-    <p className="dc-report-current">Current score: <strong>{result.letterGrade} · {result.score}/100</strong></p>
-    <div className="dc-report-actions"><button type="button" className="dc-reset-btn" onClick={copy}>Copy action plan</button>
-      <p role="status" aria-live="polite">{copyState === "success" ? "Action plan copied." : copyState === "manual" ? "Copy the action plan from the text below." : ""}</p>
-      {copyState === "manual" && <label>Action plan for manual copy<textarea ref={fallbackRef} readOnly value={plan} rows={10} onFocus={e => e.currentTarget.select()} /></label>}
-    </div>
-    <details ref={detailsRef} className="dc-report-details" id="dc-finding-details"><summary>See all findings and scoring details</summary>
+    <section className="dc-visual-captures" data-ui-component-content="visual-captures"><h2 data-ui-copy="heading">Screenshots</h2>
+      {(review?.captures ?? []).map((c, i) => <Capture key={c.id} capture={c} limitation={limitations[i]} assessment={review?.viewportReviews.find(r => r.captureId === c.id)} failed={failedCaptures.includes(c.id)} onFailure={() => setFailedCaptures(xs => xs.includes(c.id) ? xs : [...xs, c.id])} />)}
+    </section>
+    {!!review?.findings.length && <section className="dc-path-section" data-ui-component-content="visual-findings"><h2 data-ui-copy="heading">Visual changes</h2><ol className="dc-findings-list">{review.findings.map(f => <li key={f.id} className="dc-finding-item" data-ui-component-content="visual-finding"><h3 data-ui-copy="heading">{f.section}: {f.element}</h3><p data-ui-copy="supporting">{f.captureId} · {f.priority} priority</p>{f.visibleText && <p data-ui-copy="body"><strong>Visible text:</strong> {f.visibleText}</p>}{failedCaptures.includes(f.captureId) && <p data-ui-copy="body" role="alert">This screenshot could not be displayed. Its visual evidence is unavailable here.</p>}<p data-ui-copy="body"><strong>Observed:</strong> {f.observation}</p><p data-ui-copy="body"><strong>Possible consequence:</strong> {f.consequence}</p><p data-ui-copy="body"><strong>Change:</strong> {f.change}</p>{f.limitation && <p data-ui-copy="supporting">{f.limitation}</p>}</li>)}</ol></section>}
+    {!!review?.strengths.length && <section data-ui-component-content="visual-strengths"><h2 data-ui-copy="heading">Observed strengths</h2><ul>{review.strengths.map((s,i) => <li key={i} data-ui-component-content="visual-strength"><p data-ui-copy="body">{s.captureId}, {s.section}, {s.element}{s.visibleText && !s.observation.includes(s.visibleText) ? ` (${s.visibleText})` : ""}: {s.observation}</p></li>)}</ul></section>}
+    <div className="dc-report-actions"><button type="button" className="dc-reset-btn" onClick={copy}>Copy action plan</button><p role="status" aria-live="polite">{copyState === "success" ? "Action plan copied." : copyState === "manual" ? "Copy the action plan from the text below." : ""}</p>{copyState === "manual" && <label>Action plan for manual copy<textarea ref={fallbackRef} readOnly value={plan} rows={10} onFocus={e => e.currentTarget.select()} /></label>}</div>
+    {result.legacyUnavailable ? <div data-ui-component-content="unavailable-checks"><p data-ui-copy="body">Other automated checks were unavailable because the desktop capture was unavailable.</p></div> :
+    <details ref={detailsRef} className="dc-report-details" id="dc-finding-details" data-ui-component-content="automated-checks"><summary>Other automated checks</summary>
       <section data-ui-component-content="all-findings"><h2 data-ui-copy="heading">All findings</h2>
-        <ol className="dc-findings-list">{result.rankedFindings.map((f,i) => { const item = presentFinding(f,result.redFlagPanel.activeFlags); return <li id={`dc-finding-${i}`} tabIndex={-1} key={i} className="dc-finding-item" data-ui-component-content="detail-finding">
-          <h3 data-ui-copy="heading">{f.label}</h3><p data-ui-copy="body"><strong>Observed:</strong> {item.evidence}</p><p data-ui-copy="body"><strong>Recommended action:</strong> {item.copy.action}</p><p data-ui-copy="supporting">{f.dimension}</p><p data-ui-copy="supporting">{item.status}</p><p data-ui-copy="supporting">{item.copy.owner}</p>
+        <ol className="dc-findings-list">{result.rankedFindings.map((f,i) => { const item = presentFinding(f,result.redFlagPanel.activeFlags); return <li id={`dc-finding-${i}`} tabIndex={-1} key={i} className="dc-finding-item" data-finding-label={f.label} data-ui-component-content="detail-finding">
+          <h3 data-ui-copy="heading">{f.label === "Testimonial attribution" ? f.label : item.copy.title}</h3>{["Tap target size", "Naked self-designation claims"].includes(f.label) ? <><p data-ui-copy="supporting"><strong>Observed</strong></p><p data-ui-copy="body">{item.evidence}</p></> : <p data-ui-copy="body"><strong>Observed:</strong> {item.evidence}</p>}<p data-ui-copy="body"><strong>Recommended action:</strong> {item.copy.action}</p><p data-ui-copy="supporting">{f.dimension}</p><p data-ui-copy="supporting">{item.status}</p><p data-ui-copy="supporting">{item.copy.owner}</p>
         </li>; })}</ol>
         <h3 data-ui-copy="heading">All detected flags</h3><ul>{result.redFlagPanel.activeFlags.map(f => {
           const item = presentFinding({dimension:"",label:f.label,severity:"flag",flagKey:f.key,evidence:f.detail,opportunity:"",estimatedEffort:"low"},result.redFlagPanel.activeFlags);
           return <li id={`dc-flag-${f.key}`} tabIndex={-1} key={f.key} data-ui-component-content="detail-flag"><p data-ui-copy="body"><strong>{f.label}</strong></p><p data-ui-copy="supporting">{f.classification}</p><p data-ui-copy="supporting">{item.status}</p><p data-ui-copy="body"><strong>Observed:</strong> {item.evidence}</p><p data-ui-copy="body"><strong>Recommended action:</strong> {item.copy.action}</p></li>;
         })}</ul>
       </section>
-      <section data-ui-component-content="scoring-details"><h2 data-ui-copy="heading">Scoring details</h2><p data-ui-copy="body">Current: {result.letterGrade}, {result.score}/100.</p><p data-ui-copy="body">Uncapped score: {result.uncappedScore}/100.</p><p data-ui-copy="body">Calculated scenario: {result.attainable.letterGrade}, {result.attainable.score}/100.</p><p data-ui-copy="body"><strong>Scenario note:</strong> This is a calculation, not a promised result.</p>
+      <section data-ui-component-content="scoring-details"><h2 data-ui-copy="heading">Combined automated score</h2><p data-ui-copy="body">Content and authority checks contribute to this score.</p><p data-ui-copy="body">Current: {result.letterGrade}, {result.score}/100.</p><p data-ui-copy="body">Uncapped score: {result.uncappedScore}/100.</p><p data-ui-copy="body">Calculated scenario: {result.attainable.letterGrade}, {result.attainable.score}/100.</p><p data-ui-copy="body"><strong>Scenario note:</strong> This is a calculation, not a promised result.</p>
         <dl className="dc-detail-scores">{result.dimensionBar.map(d => <div key={d.name}><dt>{d.name}</dt><dd>{d.score === null ? "Not applicable on this page" : `${d.score}/100`}</dd></div>)}</dl>
         <dl className="dc-detail-records"><div><dt>Not applicable</dt><dd>{result.notApplicableDimensions.join(", ") || "None reported"}</dd></div><div><dt>Not measured</dt><dd>{result.notMeasuredDimensions.join(", ") || "None reported"}</dd></div></dl><p data-ui-copy="body">{coverageText(result)}</p>
         <h3 data-ui-copy="heading">Not checked in this version</h3><ul>{result.redFlagPanel.notCheckableInV1.map(n => <li key={n.key} data-ui-component-content="detail-unchecked"><dl className="dc-detail-unchecked"><dt>{n.label}</dt><dd data-ui-copy="body">{n.reason}</dd></dl></li>)}</ul>
       </section>
-    </details>
+    </details>}
   </div>;
+}
+
+function Capture({ capture: c, limitation, assessment, failed, onFailure }: { capture: NonNullable<DesignCheckResult["visualReview"]>["captures"][number]; limitation: string[]; assessment?: NonNullable<DesignCheckResult["visualReview"]>["viewportReviews"][number]; failed: boolean; onFailure: () => void }) {
+  return <div className="dc-capture" data-ui-component-content="capture"><h3 data-ui-copy="heading">{c.id === "desktop" ? "Desktop" : "Mobile"} screenshot</h3>{limitation.map((line, i) => { const separator = line.indexOf(": "); const area = separator > 0 && ["colour contrast", "mobile contact", "hierarchy", "typography readability", "spacing alignment"].includes(line.slice(0, separator)); return area ? <div key={i} data-ui-component-content="capture-limitation"><strong>{line.slice(0, separator)}</strong><p data-ui-copy="supporting">{line.slice(separator + 2)}</p></div> : <p key={i} data-ui-copy="supporting">{line}</p>; })}{assessment?.pageKind === "homepage" && <dl className="dc-capture-areas"><dt>Areas assessed</dt><dd>{Object.entries(assessment.areas).filter(([,status]) => status === "assessed").map(([area]) => area.replaceAll("_", " ")).join(", ") || "None"}</dd></dl>}{c.available && c.base64 && c.mimeType && !failed ? <><div className="dc-capture-preview"><img src={`data:${c.mimeType};base64,${c.base64}`} alt={`${c.id} screenshot preview`} onError={onFailure} /></div><p data-ui-copy="supporting">Top of screenshot preview</p><details><summary>View readable screenshot</summary><div className="dc-capture-scroll" tabIndex={0} aria-label={`${c.id} screenshot, scroll to inspect`}><img src={`data:${c.mimeType};base64,${c.base64}`} alt={`${c.id} captured page`} onError={onFailure} /></div></details></> : failed ? <p data-ui-copy="body" role="alert">This screenshot could not be displayed. Its visual evidence is unavailable here.</p> : null}</div>;
 }
