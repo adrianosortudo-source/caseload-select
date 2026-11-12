@@ -325,7 +325,11 @@ function buildFamilyLeadSummary(state: EngineState, i18n: I18nBundle): LeadSumma
       ? meta.evidence.trim()
       : i18n.slot_options?.[id]?.[value] || value;
     points.push(`${labels[id] || label}: ${answer}`);
-    if (answer !== state.input.trim()) facts.push({ id, value, answer });
+    // An opener remains quoted after more detail is appended. Keep its facts in
+    // the structured report without repeating that whole opener for every field.
+    const alreadyQuoted = answer === state.input.trim() ||
+      (meta?.source === 'explicit' && answer.includes(' ') && state.input.trim().startsWith(answer + ' '));
+    if (!alreadyQuoted) facts.push({ id, value, answer });
   }
   const paragraphs = buildFamilyRecapParagraphs(state.input, facts, i18n);
   const knownIds = new Set<string>(FAMILY_RECAP_FIELDS.map(([id]) => id));

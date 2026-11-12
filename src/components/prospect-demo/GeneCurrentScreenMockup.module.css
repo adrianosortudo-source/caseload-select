@@ -1,0 +1,32 @@
+.shell { min-height: 100vh; background: #f4f3ef; color: #1e2f58; font-family: "DM Sans Variable", var(--font-dm-sans, "DM Sans"), sans-serif; }
+.inner { width: 100%; max-width: 1280px; margin-inline: auto; padding-inline: 24px; box-sizing: border-box; }
+.header { background: #0d1520; color: #fff; border-bottom: 1px solid #c1b196; }
+.header .inner { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; padding-block: 18px; }
+.logo { display: block; width: 240px; height: auto; }
+.eyebrow { color: #c1b196; font: 600 12px var(--font-oxanium, Oxanium), sans-serif; letter-spacing: .1em; text-transform: uppercase; }
+.introduction { padding-block: 24px 16px; }
+.introduction h1 { width: 100%; margin: 0 0 12px; font: 800 36px var(--font-manrope, Manrope), sans-serif; }
+.introduction p { width: 100%; margin: 8px 0 0; font-size: 16px; line-height: 1.6; }
+.toolbar { position: sticky; top: 0; z-index: 5; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding-block: 12px; background: #f4f3ef; border-block: 1px solid #d2cfc7; }
+.views { display: flex; flex-wrap: wrap; gap: 8px; }
+.toolbar button { min-height: 44px; padding: 10px 14px; border: 1px solid #1e2f58; border-radius: 0; background: #fff; color: #1e2f58; font: 600 14px "DM Sans Variable", var(--font-dm-sans, "DM Sans"), sans-serif; cursor: pointer; }
+.toolbar button[aria-pressed="true"] { background: #1e2f58; color: #fff; }
+.toolbar button:disabled { opacity: .6; cursor: wait; }
+.toolbar button:focus-visible { outline: 2px solid #1e2f58; outline-offset: 3px; }
+.disclosure { width: 100%; margin: 16px 0; font-size: 14px; line-height: 1.6; }
+.canvas { width: 100%; min-width: 0; background: #fff; }
+.slice { position: relative; overflow: hidden; width: 100%; }
+.screenshot { position: absolute; left: 0; display: block; width: 100%; height: auto; }
+.formRegion { position: relative; width: 100%; }
+.backdrop { position: absolute; inset: 0 0 auto; overflow: hidden; }
+.intake { position: relative; min-width: 0; min-height: inherit; background: #fff; }
+.frame { display: block; width: 100%; border: 0; scroll-margin-top: 6rem; }
+.loading { width: 100%; margin: 0; padding: 24px; box-sizing: border-box; font-size: 16px; line-height: 1.6; }
+@media (max-width: 640px) {
+  .inner { padding-inline: 16px; }
+  .logo { width: 190px; }
+  .header .inner { padding-block: 14px; }
+  .introduction { padding-block: 18px 12px; }
+  .introduction h1 { font-size: 30px; }
+  .toolbar { gap: 8px; }
+}

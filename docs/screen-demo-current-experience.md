@@ -1,6 +1,6 @@
 # Current SCREEN demonstration
 
-Status: the public SCREEN tool is published. The November 11, 2026 single-scroll, client-widget copy parity and relocated-example update is preview only and held for Adriano to review before publication.
+Status: the November 11 public SCREEN and Tools update is published. The focused Gene public-mockup integration below is a review candidate until its exact PRs are approved.
 
 ## Entry points
 
@@ -62,3 +62,15 @@ The inquiry, follow-ups, conversational recap, edits and fictional contact step 
 The earlier preview routed a fictional first-will inquiry mentioning the family home to `residential_purchase_sale`. The original failed inquiry, provider response and source revision are preserved in the local SCREEN_Widget_Parity_2026-11-11 evidence folder.
 
 Adriano approved a focused deterministic routing correction, mirrored from pushed SCREEN source `d90815a5b046d185f3b317a652f532173a33780b`. It recognizes an explicit will-preparation request in the original narrative while preserving ordinary modal uses of “will,” negated requests and the selected practice area’s existing non-forcing behavior. The source regression suite covers the original example, existing plural wills and non-estates counterexamples. This is preview only; final integrated verification and review are required before any publication approval.
+
+## Gene public mockup: current-widget integration
+
+`/tools/screen/gene-colman` uses `GeneCurrentScreenMockup` with the same canonical `/screen-demo-app/index.html` package used by `/tools/screen`. The fixed public Gene profile, screenshot, placement and family-only configuration are retained. It never reads the private browser profile library. The protected builder and operator presentation remain unchanged.
+
+One iframe owns all screening state, conversational recap, contact validation and the exact current report. Website, Lawyer brief and Side by side only change presentation; they do not mount another engine or restart extraction. The owned same-origin iframe receives the scoped `current-screen-frame.css` presentation and the existing family sample as a placeholder. Widget reset invokes its existing reset control. Height messages require both the exact iframe window and the same origin, with finite bounded heights. No authentication or frame policy changes.
+
+A free-text agreement reply exposed an existing evidence error: the word parenting could replace the supporting quote for an already-confirmed help request. Pushed source `8ba851b1685eb8be37e012d11f5d1be79586f997` preserves answered/explicit request evidence when the value is unchanged. Four regressions and all 535 source tests pass. Scoring, routing, questions and confirmation policy are unchanged. The app mirror and 19-file manifest remain exact.
+
+Only fictional test cases and contacts are allowed. Live AI uses the existing server extraction route. The demo saves no lead and contacts no firm. The public share URL is the tools route above; the operator `/demo/prospect/...` URL requires sign-in and local profile data and must not be shared with Gene.
+
+Gene acceptance includes an anonymous public-route browser check across 1440, 1024, 768, 640, 375 and 320 CSS pixels. It verifies one mounted canonical widget, retained drafts across all three views, the existing screenshot asset, no horizontal overflow or internal scrolling, and saves desktop/phone screenshots. Live-provider family testing uses fictional free-text parenting and separation/support cases through recap, added details, current report and fictional contact completion. The family recap preserves original request evidence and avoids re-quoting the opener after details are appended; structured facts remain intact. The canonical source suite passes all 536 tests.
