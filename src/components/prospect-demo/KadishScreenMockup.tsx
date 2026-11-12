@@ -113,7 +113,7 @@ export function KadishScreenMockup() {
             <Image src="/prospect-demos/kadish-dsouza/kadish-homepage.jpg" alt="" width={profile.screenshot.width} height={profile.screenshot.height}
               unoptimized loading="eager" className={styles.screenshot} style={{ top: -width * formStart }} onError={() => setImageFailed(true)} />
           </div>}
-          <section className={styles.intake} style={{ marginLeft: focused ? 0 : `${profile.placement.x * 100}%`, width: focused ? "100%" : `${profile.placement.width * 100}%` }} aria-label="Kadish’s SCREEN preview">
+          <section className={styles.intake} style={{ minHeight: focused ? undefined : width * formHeight, marginLeft: focused ? 0 : `${profile.placement.x * 100}%`, width: focused ? "100%" : `${profile.placement.width * 100}%` }} aria-label="Kadish’s SCREEN preview">
             <p role="status" className={styles.loading} hidden={ready && !failed}>{failed ? "The preview could not load. Reload the page to try again." : "Opening SCREEN."}</p>
             <iframe ref={frame} title="Kadish disability-benefit SCREEN demonstration" onLoad={configureFrame} onError={() => setFailed(true)}
               style={{ height, visibility: ready ? "visible" : "hidden" }} className={styles.frame} referrerPolicy="same-origin" />
