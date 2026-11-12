@@ -150,3 +150,5 @@
   .dc-page .dc-main { padding-inline: 12px; }
   .dc-input-card, .dc-page .dc-report-details { padding-inline: 16px; }
 }
+
+@media(max-width:360px){.dc-page .dc-hero-title{font-size:26px}}

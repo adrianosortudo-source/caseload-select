@@ -85,7 +85,7 @@ for(const width of WIDTHS){
   test(`brand and flow at ${width}px`,async({page})=>{
     await page.setViewportSize({width,height:900});
     await page.goto("/tools/website-design-check");
-    await expect(page.getByRole("heading",{level:1})).toHaveText("Website Design & Conversion Check");
+    await expect(page.getByRole("heading",{level:1})).toHaveText("Website Design Review");
     await brandGates(page);
     await page.getByRole("button",{name:"Check my site",exact:true}).click();
     await expect(page.locator("#dc-domain-error")).toHaveText("Enter a domain to check.");

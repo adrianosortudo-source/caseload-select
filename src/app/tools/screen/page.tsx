@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { PublicScreenSandboxFrame } from "@/components/intake-v2/PublicScreenSandboxFrame";
 
 export const metadata: Metadata = {
-  title: "SCREEN Demo · CaseLoad Select",
+  title: "SCREEN Intake Demo · CaseLoad Select",
   description: "Try a fictional inquiry across the available practice areas and channels, then inspect the lawyer report. No firm is contacted.",
   robots: { index: false, follow: false },
 };

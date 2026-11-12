@@ -166,8 +166,8 @@ describe("SYSTEM_PROMPT", () => {
     });
 
     it("addresses the model, not the lawyer, as the prompt's author", () => {
-      expect(instructionLayer).not.toMatch(/\byour Firm Voice Builder\b/i);
-      expect(SYSTEM_PROMPT).toMatch(/^You are the Firm Voice Builder/);
+      expect(instructionLayer).not.toMatch(/\byour Tone of Voice Guide\b/i);
+      expect(SYSTEM_PROMPT).toMatch(/^You are the Tone of Voice Guide/);
     });
 
     it("asks questions of the lawyer in the third person", () => {

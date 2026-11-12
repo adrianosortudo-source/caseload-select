@@ -75,7 +75,7 @@ test("a reviewed six-section draft becomes a synthesized blueprint and HTML repo
   await page.goto("/tools/best-cases-profile");
   await page.getByRole("button", { name: "Continue my saved draft", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Review your direction", exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Create my Best Cases Profile", exact: true }).click();
+  await page.getByRole("button", { name: "Create my Best Case Profile", exact: true }).click();
 
   const blueprintTitle = page.getByRole("heading", { level: 1 });
   await expect(blueprintTitle).toBeVisible();
@@ -112,7 +112,7 @@ test("a reviewed six-section draft becomes a synthesized blueprint and HTML repo
   });
   expect(printPdf.byteLength).toBeGreaterThan(0);
   await printPage.close();
-  expect(html).toContain("Best Cases Profile");
+  expect(html).toContain("Best Case Profile");
   expect(html).toContain(REPORT_FOOTNOTE_COPY);
   const progressReview = html.match(/<section class="progress"><h2>Progress review<\/h2>[\s\S]*?<\/section>/)?.[0];
   expect(progressReview).toBeDefined();
@@ -200,7 +200,7 @@ test("a reviewed six-section draft becomes a synthesized blueprint and HTML repo
     }
     await page.getByRole("button", { name: STAGE_DEFINITIONS[6].label, exact: true }).click();
     await expect(page.getByRole("heading", { name: "Review your direction", exact: true })).toBeVisible();
-    await page.getByRole("button", { name: "Create my Best Cases Profile", exact: true }).click();
+    await page.getByRole("button", { name: "Create my Best Case Profile", exact: true }).click();
     await expect(blueprintTitle).toBeVisible();
   }
 });
@@ -270,7 +270,7 @@ test("the actual offline analysis HTTP route recovers mixed payment and survives
     await page.setViewportSize({ width: 1280, height: 1000 });
     await page.goto("/tools/best-cases-profile");
     await page.getByRole("button", { name: "Continue my saved draft", exact: true }).click();
-    await page.getByRole("button", { name: "Create my Best Cases Profile", exact: true }).click();
+    await page.getByRole("button", { name: "Create my Best Case Profile", exact: true }).click();
     const recovery = page.locator('[data-ui-component-content="desired-client-recovery-disclosure"]');
     await expect(recovery).toContainText("Built from your answers");
     await expect(recovery).toContainText("This section was rebuilt from your answers because the AI combined different evidence types.");

@@ -53,10 +53,10 @@ export function PublicScreenSandboxFrame({ query = "" }: { query?: string }) {
   }, [query]);
 
   return (
-    <main aria-label="SCREEN demonstration" style={{ width: "100%" }}>
+    <main aria-label="SCREEN Intake Demo" style={{ width: "100%" }}>
       <iframe
         ref={frameRef}
-        title="SCREEN practice-area and channel demonstration"
+        title="SCREEN Intake Demo: practice-area and channel demonstration"
         allow="clipboard-write"
         referrerPolicy="same-origin"
         style={{ display: "block", width: "100%", height: height === null ? "100dvh" : `${height}px`, border: 0 }}

@@ -15,7 +15,7 @@ describe("PublicScreenSandboxFrame", () => {
     const postMessage = vi.fn();
     Object.defineProperty(window, "parent", { configurable: true, value: { postMessage } });
     render(<PublicScreenSandboxFrame query="embed=1&channel=sms" />);
-    const frame = screen.getByTitle("SCREEN practice-area and channel demonstration") as HTMLIFrameElement;
+    const frame = screen.getByTitle("SCREEN Intake Demo: practice-area and channel demonstration") as HTMLIFrameElement;
     expect(frame.getAttribute("src")).toBe("/screen-demo-app/index.html?embed=1&channel=sms");
     const send = (height: unknown, origin = window.location.origin, source: MessageEventSource | null = frame.contentWindow) => {
       act(() => window.dispatchEvent(new MessageEvent("message", { origin, source, data: { type: "caseload-widget-resize", height } })));
@@ -40,7 +40,7 @@ describe("PublicScreenSandboxFrame", () => {
     const postMessage = vi.fn();
     Object.defineProperty(window, "parent", { configurable: true, value: { postMessage } });
     render(<PublicScreenSandboxFrame />);
-    const frame = screen.getByTitle("SCREEN practice-area and channel demonstration") as HTMLIFrameElement;
+    const frame = screen.getByTitle("SCREEN Intake Demo: practice-area and channel demonstration") as HTMLIFrameElement;
     act(() => window.dispatchEvent(new MessageEvent("message", {
       origin: window.location.origin,
       source: frame.contentWindow,

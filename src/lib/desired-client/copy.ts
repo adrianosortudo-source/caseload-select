@@ -1,7 +1,7 @@
 export const WELCOME_COPY = {
-  heading: "Best Cases Profile",
+  heading: "Best Case Profile",
   description: "A firm can have a full calendar and still be building the wrong practice. This guided exercise helps you choose the client situation and matter you would want more of, explain why it suits your firm, and set a direction you can use in marketing.",
-  definition: "Best Cases Profile is a working definition of the clients, legal work and conditions a firm wants to attract, based on its priorities, experience, commercial value and capacity.",
+  definition: "Best Case Profile is a working definition of the clients, legal work and conditions a firm wants to attract, based on its priorities, experience, commercial value and capacity.",
   ambition: [
     "That must be an ambitious target, not whatever is easiest to deliver today.",
     "Capacity constraints identify what must change; they shouldn't automatically lower the ambition.",
@@ -11,11 +11,11 @@ export const WELCOME_COPY = {
   time: "Plan for about 10 minutes for a first draft. Comparing two types of work or adding detail will take longer.",
   process: "Six guided sections take you from the practice you want to build to the client situation, matter, value, fit signals, opportunity and measure of success. Choose from examples, write your own answer, or mark something as not yet known.",
   preparation: "Think about work you would gladly handle again, what the team put into it, and what made it worthwhile. Records are not required. You can share estimates or leave figures unknown.",
-  outcome: "A Best Cases Profile that defines the client, specific legal work and practical benefit; explains why the firm wants the work; keeps constraints and evidence gaps visible; and gives a separate progress measure, target and review period. Review and correct the draft before using it in marketing.",
+  outcome: "A Best Case Profile that defines the client, specific legal work and practical benefit; explains why the firm wants the work; keeps constraints and evidence gaps visible; and gives a separate progress measure, target and review period. Review and correct the draft before using it in marketing.",
   supporting: "One type of work at a time. No account or email required.",
   privacy: "Describe patterns of work, not individual clients. Do not enter names, identifying details or confidential information.",
-  aiDisclosure: "AI can turn your answers into a Best Cases Profile. If AI is unavailable, you can continue with a clearly labelled structured draft, and your answers remain saved.",
-  legacyBriefReplaced: "Your answers are saved. Review them below to create your Best Cases Profile.",
+  aiDisclosure: "AI can turn your answers into a Best Case Profile. If AI is unavailable, you can continue with a clearly labelled structured draft, and your answers remain saved.",
+  legacyBriefReplaced: "Your answers are saved. Review them below to create your Best Case Profile.",
   draftNotice: "Your draft is saved in this browser for seven days after your last change. You can clear it at any time.",
   startButton: "Build my profile",
 } as const;
@@ -62,7 +62,7 @@ export const COMMON_COPY = {
 export const REVIEW_COPY = {
   heading: "Review your direction",
   note: "Check the six parts of your profile. “Not sure yet” is a valid answer; the profile will identify what still needs evidence.",
-  prepareAI: "Create my Best Cases Profile",
+  prepareAI: "Create my Best Case Profile",
   creatingAI: "Connecting your answers into a client-and-matter profile…",
   tryAgain: "Try again",
   loadingNote: "The tool is checking how your choices fit together and where the evidence is still open.",
@@ -72,8 +72,8 @@ export const REVIEW_COPY = {
   separateDrafts: "Drafts may be separate in the embedded tool and its own window.",
 } as const;
 export const BRIEF_COPY = {
-  title: "Best Cases Profile",
-  profileTitle: "Best Cases Profile",
+  title: "Best Case Profile",
+  profileTitle: "Best Case Profile",
   summaryTitle: "Answers and sources",
   reviewed: "I have reviewed this wording and the proposed inquiry checks.",
   reviewedStatus: "Wording reviewed",

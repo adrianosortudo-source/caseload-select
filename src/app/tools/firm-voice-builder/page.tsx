@@ -3,7 +3,7 @@ import FirmVoiceBuilder from "@/components/firm-voice-builder/FirmVoiceBuilder";
 import ToolHeader from "@/components/firm-voice-builder/ToolHeader";
 
 export const metadata: Metadata = {
-  title: "The Firm Voice Builder · CaseLoad Select",
+  title: "Tone of Voice Guide · CaseLoad Select",
   description:
     "A free, guided interview that builds a Firm Voice Profile you paste into any AI so its drafts finally sound like you. Ontario advertising rails and an AI-tell blocklist built in.",
   robots: { index: false, follow: false },
@@ -12,7 +12,7 @@ export const metadata: Metadata = {
 /**
  * /tools/firm-voice-builder
  *
- * Interactive Firm Voice Builder (BUILD_PLAN_firm_voice_builder_tool_v1.md).
+ * Interactive Tone of Voice Guide (BUILD_PLAN_firm_voice_builder_tool_v1.md).
  * Deliberately noindex per plan S8: not promoted or linked anywhere until
  * the email gate and consent wiring land in a later build. Outside the
  * frozen (marketing)/ route group by necessity (check-website-boundary.mjs

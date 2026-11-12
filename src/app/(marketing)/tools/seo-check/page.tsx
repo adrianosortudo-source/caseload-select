@@ -9,11 +9,11 @@ import SeoCheckTool from "@/components/seo-check/SeoCheckTool";
 
 export const metadata: Metadata = {
   robots: { index: false, follow: false },
-  title: "Free Law Firm SEO and AEO Check · CaseLoad Select",
+  title: "Free Website SEO Check · CaseLoad Select",
   description:
     "Review public SEO signals and unscored AEO observations across up to 25 pages. See affected-page evidence and next steps. The scan does not grade AI visibility or predict citations.",
   openGraph: {
-    title: "Free Law Firm SEO and AEO Check · CaseLoad Select",
+    title: "Free Website SEO Check · CaseLoad Select",
     description:
       "Review public SEO signals and unscored AEO observations across up to 25 pages, with affected-page evidence and next steps. The scan does not grade AI visibility or predict citations.",
     type: "website",
@@ -48,7 +48,7 @@ export default async function SeoCheckPage({ searchParams }: PageProps) {
         <section className="seo-hero">
           <div className="seo-hero-eyebrow">Free tool · Multi-page scan · No account</div>
           <h1 className="seo-hero-title">
-            Law Firm SEO and AEO Check<span className="ts" />
+            Website SEO Check<span className="ts" />
           </h1>
           <p className="seo-hero-sub">
             Review public website signals across up to 25 pages. Findings show affected pages, why they may matter, and general next steps. AI observations are not a visibility grade or citation prediction.
@@ -179,7 +179,7 @@ export default async function SeoCheckPage({ searchParams }: PageProps) {
         .seo-hero-title {
           width: 100%;
           max-width: none;
-          font-family: var(--font-display);
+          font-family: var(--font-manrope), sans-serif;
           font-size: var(--fs-hero);
           font-weight: 800;
           color: var(--navy);
@@ -187,6 +187,7 @@ export default async function SeoCheckPage({ searchParams }: PageProps) {
           letter-spacing: var(--ls-headline);
           margin: 0 0 var(--sp-5);
         }
+        @media (max-width: 400px) { .seo-hero-title { font-size: clamp(26px, 8vw, 32px); } }
         .seo-hero-sub {
           width: 100%;
           max-width: none;
