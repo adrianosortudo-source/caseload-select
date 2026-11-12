@@ -40,3 +40,15 @@ describe('family request evidence across follow-up answers', () => {
     expect(next.slots.family_timing).toContain('December 15, 2026');
   });
 });
+
+it('quotes the original opener once after details are appended while keeping its structured facts', () => {
+  const grounded = groundFamilyConversationFacts(initial(), opening);
+  const next = { ...grounded, input: opening + ' I would also like to discuss holiday parenting arrangements.' };
+  const summary = buildLeadSummary(next, getI18n('en'));
+  const prose = summary.paragraphs!.join(' ');
+  expect(prose.split(opening)).toHaveLength(2);
+  expect(prose).toContain('holiday parenting arrangements');
+  expect(prose).not.toContain('About the help you need, you told us:');
+  expect(summary.points!.some(point => /Help requested:/i.test(point))).toBe(true);
+  expect(summary.points!.join(' ')).toContain(opening);
+});
