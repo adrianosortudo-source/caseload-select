@@ -16,7 +16,7 @@ function ready() {
   Object.defineProperty(frame, "contentDocument", { configurable: true, value: doc });
   fireEvent.load(frame);
   const link = doc.getElementById("gene-screen-presentation")!;
-  fireEvent.load(link);
+  act(() => link.dispatchEvent(new Event("load")));
   return { frame, doc };
 }
 describe("Gene uses the current canonical SCREEN", () => {
@@ -32,7 +32,7 @@ describe("Gene uses the current canonical SCREEN", () => {
     const input = doc.getElementById("case-input") as HTMLTextAreaElement;
     input.value = "An answer already supplied";
     for (const name of ["Lawyer brief", "Side by side", "Website preview"]) {
-      fireEvent.click(screen.getByRole("button", { name, exact: true }));
+      fireEvent.click(screen.getByRole("button", { name }));
       expect(screen.getByTitle("Gene family-law SCREEN demonstration")).toBe(frame);
       expect(input.value).toBe("An answer already supplied");
     }
@@ -51,8 +51,8 @@ describe("Gene uses the current canonical SCREEN", () => {
   it("uses the canonical reset without replacing the iframe or the saved screenshot", () => {
     const { frame, doc } = ready();
     const reset = vi.fn(); doc.getElementById("reset-btn")!.addEventListener("click", reset);
-    fireEvent.click(screen.getByRole("button", { name: "Lawyer brief", exact: true }));
-    fireEvent.click(screen.getByRole("button", { name: "Start over", exact: true }));
+    fireEvent.click(screen.getByRole("button", { name: "Lawyer brief" }));
+    fireEvent.click(screen.getByRole("button", { name: "Start over" }));
     expect(reset).toHaveBeenCalledOnce();
     expect(doc.body.dataset.geneView).toBe("website");
     expect(screen.getByTitle("Gene family-law SCREEN demonstration")).toBe(frame);

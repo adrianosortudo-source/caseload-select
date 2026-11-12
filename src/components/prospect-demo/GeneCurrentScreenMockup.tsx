@@ -48,10 +48,10 @@ export function GeneCurrentScreenMockup() {
   function configureFrame() {
     const doc = frame.current?.contentDocument;
     if (!doc?.getElementById("public-demo-content")) return;
-    doc.documentElement.dataset.geneScreenPreview = "true";
-    doc.body.dataset.geneView = viewRef.current;
+    doc.documentElement.setAttribute("data-gene-screen-preview", "true");
+    doc.body.setAttribute("data-gene-view", viewRef.current);
     const input = doc.getElementById("case-input") as HTMLTextAreaElement | null;
-    if (input) input.placeholder = profile.scenarios[1].description;
+    if (input) input.setAttribute("placeholder", profile.scenarios[1].description);
     const existing = doc.getElementById("gene-screen-presentation") as HTMLLinkElement | null;
     if (existing) return;
     const link = doc.createElement("link");
@@ -67,7 +67,7 @@ export function GeneCurrentScreenMockup() {
     viewRef.current = next;
     setView(next);
     const body = frame.current?.contentDocument?.body;
-    if (body) body.dataset.geneView = next;
+    if (body) body.setAttribute("data-gene-view", next);
   }
 
   function restart() {
