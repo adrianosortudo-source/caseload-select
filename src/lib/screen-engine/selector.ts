@@ -1,3 +1,4 @@
+import { DISABILITY_SLOT_ORDER, disabilitySlotApplies } from './disability';
 import type { EngineState, SlotDefinition, DecisionGap } from './types';
 import { SLOT_REGISTRY } from './slotRegistry';
 
@@ -615,6 +616,7 @@ function scoreSlot(slot: SlotDefinition, currentGap: DecisionGap): number {
 //      below the unanswered default).
 
 const MATTER_SPECIFIC_SLOT_ORDER: Record<string, readonly string[]> = {
+  disability_benefits: DISABILITY_SLOT_ORDER,
   family_general: ['family_help_sought', 'family_children', 'family_existing_order', 'family_timing', 'family_jurisdiction', 'hiring_timeline', 'other_counsel', 'decision_authority'],
   // BUSINESS SETUP ADVISORY (DR-121). Order: routing/subtrack, then the
   // urgency inputs, then the readiness triple (DR-083 precedent), then
@@ -729,6 +731,7 @@ function pickByExplicitOrder(state: EngineState): SlotDefinition | null {
     if (!slot) continue;
     if (slot.tier === 'contact') continue;
     if (!slot.applies_to.includes(state.matter_type as never)) continue;
+    if (!disabilitySlotApplies(state, slot.id)) continue;
     if (!slotApplicableToSubtrack(state, slot)) continue;
     // DR-072: the GC contract-detail free-text applies only when the lead
     // chose the contract-review engagement shape. Keeps the GC intake tight
@@ -763,10 +766,11 @@ export function selectNextSlot(state: EngineState): SlotDefinition | null {
   const candidates = SLOT_REGISTRY.filter(slot => {
     if (slot.tier === 'contact') return false;
     if (!slot.applies_to.includes(state.matter_type as never)) return false;
+    if (!disabilitySlotApplies(state, slot.id)) return false;
     if (!slotApplicableToSubtrack(state, slot)) return false;
     if (!slotApplicableToCorporateRouting(state, slot)) return false;
     if (slotIsAnswered(state, slot)) return false;
-    if (state.matter_type !== 'family_general' && groupAlreadyAnswered(state, slot)) return false;
+    if (!['family_general','disability_benefits'].includes(state.matter_type) && groupAlreadyAnswered(state, slot)) return false;
 
     if (state.advisory_subtrack === 'solo_setup' && slot.id === 'ownership_split_discussed') return false;
 

@@ -49,6 +49,7 @@ const ALL_MATTER_TYPES: readonly MatterType[] = [
   "estate_dispute",
   "estates_general",
   "family_general",
+  "disability_benefits",
   "out_of_scope",
   "unknown",
 ];

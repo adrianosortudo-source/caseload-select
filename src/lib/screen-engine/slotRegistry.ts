@@ -1,4 +1,5 @@
 import type { MatterType, SlotDefinition } from './types';
+import { DISABILITY_SLOTS } from './disability';
 
 /**
  * Every contact slot (client_name / client_phone / client_email /
@@ -63,6 +64,7 @@ const ALL_MATTER_TYPES_RECORD: Record<MatterType, true> = {
   estates_general: true,
   // Family is available only through an explicitly configured demo adapter.
   family_general: true,
+  disability_benefits: true,
   // Routing states (contact still applies — we want to capture lead info
   // even before classification and even on OOS matters that the firm
   // may forward elsewhere).
@@ -100,7 +102,7 @@ export type DisqualifierMatterType = Extract<MatterType, 'out_of_scope' | 'unkno
  * into the lawyer's queue.
  */
 // Demo-only family is intentionally outside production scoring-coverage enumeration.
-export type InScopeMatterType = Exclude<MatterType, DisqualifierMatterType | 'family_general'>;
+export type InScopeMatterType = Exclude<MatterType, DisqualifierMatterType | 'family_general' | 'disability_benefits'>;
 
 /**
  * Production in-scope matters (excludes disqualifiers and the demo-only family lane).
@@ -119,13 +121,14 @@ export type InScopeMatterType = Exclude<MatterType, DisqualifierMatterType | 'fa
  */
 export const IN_SCOPE_MATTER_TYPES: readonly InScopeMatterType[] =
   ALL_MATTER_TYPES.filter(
-    (t): t is InScopeMatterType => t !== 'out_of_scope' && t !== 'unknown' && t !== 'family_general',
+    (t): t is InScopeMatterType => t !== 'out_of_scope' && t !== 'unknown' && t !== 'family_general' && t !== 'disability_benefits',
   );
 
 /** Concrete `applies_to` array for the universal contact slots. */
 const CONTACT_APPLIES_TO: MatterType[] = [...ALL_MATTER_TYPES];
 
 export const SLOT_REGISTRY: SlotDefinition[] = [
+  ...DISABILITY_SLOTS,
 
   // ─── CONTACT ──────────────────────────────────────────────────────────────
 

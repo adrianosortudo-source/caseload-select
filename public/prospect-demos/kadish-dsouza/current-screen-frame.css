@@ -1,0 +1,16 @@
+/* Presentation only. The canonical SCREEN package owns every intake, recap and report. */
+html[data-kadish-screen-preview="true"],
+html[data-kadish-screen-preview="true"] body { min-height: 0; height: auto; background: #fff; }
+html[data-kadish-screen-preview="true"] .topbar,
+html[data-kadish-screen-preview="true"] .sandbox-header,
+html[data-kadish-screen-preview="true"] .sandbox-column-heading,
+html[data-kadish-screen-preview="true"] .sandbox-channel-eyebrow,
+html[data-kadish-screen-preview="true"] .channel-tabs,
+html[data-kadish-screen-preview="true"] .demo-ai-disclosure,
+html[data-kadish-screen-preview="true"] .expand-brief { display: none !important; }
+html[data-kadish-screen-preview="true"] .sandbox { padding: 0; }
+html[data-kadish-screen-preview="true"] .sandbox-brief-sticky { position: static; }
+html[data-kadish-screen-preview="true"] body[data-kadish-view="website"] .sandbox,
+html[data-kadish-screen-preview="true"] body[data-kadish-view="review"] .sandbox { display: block; }
+html[data-kadish-screen-preview="true"] body[data-kadish-view="website"] .sandbox-brief,
+html[data-kadish-screen-preview="true"] body[data-kadish-view="review"] .sandbox-channel { display: none; }

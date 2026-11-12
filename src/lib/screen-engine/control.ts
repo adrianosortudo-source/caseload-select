@@ -1,3 +1,4 @@
+import { buildDisabilityRecap } from './disability';
 import type { EngineState, NextStep, Band, LeadSummary, ClarifyOption, MatterType } from './types';
 import { getI18n } from './i18n/loader';
 import type { I18nBundle } from './i18n/loader';
@@ -144,6 +145,7 @@ function getBridgeText(state: EngineState): string {
 }
 
 function getBridgeTextEn(state: EngineState): string {
+  if (state.matter_type === 'disability_benefits') { const recap=buildDisabilityRecap(state);return [recap.intro,...(recap.paragraphs??[]),recap.closing].join('\n\n'); }
   if (state.matter_type === 'family_general') return familyBridgeText(state, getI18n(state.language));
   if (state.matter_type === 'out_of_scope') {
     const areaLabels: Record<string, string> = {
@@ -194,6 +196,7 @@ function getBridgeTextEn(state: EngineState): string {
 }
 
 export function getBridgeTextI18n(state: EngineState, i18n: I18nBundle): string {
+  if (state.matter_type === 'disability_benefits') return getBridgeTextEn(state);
   if (isConversationalPractice(state) && i18n.recap_templates) return conversationalBridgeText(state, i18n);
   if (state.matter_type === 'family_general') return familyBridgeText(state, i18n);
   const bt = i18n.bridge_text ?? {};
@@ -225,6 +228,7 @@ function slot(state: EngineState, id: string): string | null {
  * the English flow.
  */
 export function buildLeadSummary(state: EngineState, i18n: I18nBundle): LeadSummary {
+  if (state.matter_type === 'disability_benefits') return buildDisabilityRecap(state);
   if (state.matter_type === 'family_general') return buildFamilyLeadSummary(state, i18n);
   const legacy = state.language === 'en'
     ? buildLeadSummaryEn(state)

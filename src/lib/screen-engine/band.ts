@@ -767,6 +767,7 @@ function bandRoutingLane(label: string, state: EngineState, hasRouted: boolean):
 // ─── Main band computation ────────────────────────────────────────────────
 
 export function computeBand(state: EngineState): BandResult {
+  if (state.matter_type === 'disability_benefits') return {band:'C',confidence:0,reasoning:'Disability-benefit intake for firm review; fees, eligibility and suitability are not assessed.',coreCompleteness:state.coreCompleteness};
   if (state.matter_type === 'family_general') {
     return { band: 'C', confidence: 0, reasoning: 'Family inquiry for manual review; no suitability score is assigned.', coreCompleteness: state.coreCompleteness };
   }
