@@ -39,6 +39,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { CRM_AGENT_COOKIE, isCrmAgentRead, isCrmAgentExchange } from "@/lib/crm-agent-policy";
 import { verifyCrmAgentCookie } from "@/lib/crm-agent-registry";
+import { CRM_TASK_COOKIE, CRM_SYNTHETIC_COOKIE, CRM_TASK_EXCHANGE, CRM_TASK_HEADERS, hasCrmTaskCookie } from "@/lib/crm-task-policy";
+import { getCrmTaskSession } from "@/lib/crm-task-store";
 import {
   appOrigin,
   isAppHost,
@@ -185,6 +187,13 @@ export async function middleware(req: NextRequest): Promise<NextResponse> {
   const { pathname, search } = req.nextUrl;
   const isLocalAgencyFollowupProbe = pathname === "/api/admin/agency-crm/follow-up"
     && hostname === "127.0.0.1" && req.nextUrl.port === "55435";
+  const taskPrincipal = hasCrmTaskCookie(req.headers.get("cookie"));
+  if (taskPrincipal) {
+    const mixed = [CRM_TASK_COOKIE, CRM_SYNTHETIC_COOKIE, CRM_AGENT_COOKIE, PREVIEW_QA_COOKIE_NAME, "portal_session"].filter(name => req.cookies.has(name)).length !== 1;
+    if (mixed || (pathname === CRM_TASK_EXCHANGE ? req.method !== "POST" : !await getCrmTaskSession(req))) {
+      return new NextResponse("Forbidden", { status: 403, headers: CRM_TASK_HEADERS });
+    }
+  }
   if (req.cookies.has(CRM_AGENT_COOKIE) && !isCrmAgentExchange(pathname, req.method)) {
     if (!isCrmAgentRead(pathname, req.method) || !await verifyCrmAgentCookie(req.cookies.get(CRM_AGENT_COOKIE)!.value, req.nextUrl.origin)) {
       return new NextResponse("Forbidden", { status: 403, headers: { "Cache-Control": "private, no-store" } });
@@ -229,7 +238,7 @@ export async function middleware(req: NextRequest): Promise<NextResponse> {
 
   // Preserve the existing recovery and preview-principal gates above before
   // passing an independently verified CRM agent to its narrow read surface.
-  if (req.cookies.has(CRM_AGENT_COOKIE) && !isCrmAgentExchange(pathname, req.method)) {
+  if (taskPrincipal || (req.cookies.has(CRM_AGENT_COOKIE) && !isCrmAgentExchange(pathname, req.method))) {
     const response = nextWithTrustedRequestContext(req);
     response.headers.set("Cache-Control", "private, no-store");
     response.headers.set("X-Robots-Tag", "noindex, nofollow, noarchive");
