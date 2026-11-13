@@ -1194,7 +1194,18 @@
     "numbered_reply_hint": "Responda com um número, ou escreva com suas próprias palavras.",
     "multi_pick_ack": "Certo, registrei sua primeira escolha. Pode acrescentar o resto com suas próprias palavras quando quiser."
   },
-  "bridge_text": {},
+  "bridge_text": {
+    "out_of_scope_prefix": "Obrigado por explicar sua situação. Parece envolver ",
+    "out_of_scope_suffix": ". O escritório pode confirmar se atua nessa área.",
+    "out_of_scope_area_family": "direito de família",
+    "out_of_scope_area_immigration": "imigração",
+    "out_of_scope_area_employment": "direito trabalhista",
+    "out_of_scope_area_criminal": "direito criminal",
+    "out_of_scope_area_personal_injury": "danos pessoais",
+    "out_of_scope_area_estates": "testamentos e sucessões",
+    "out_of_scope_area_default": "essa área",
+    "default": "Obrigado por explicar sua situação."
+  },
   "chips": {},
   "widget_strings": {
     "kickoff_heading": "Conte como um advogado pode ajudar você hoje.",

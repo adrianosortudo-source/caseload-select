@@ -905,19 +905,19 @@
     "unpaid_invoice": "Thank you. The firm will receive a brief on the payment matter, along with notes on documents and amounts a lawyer would typically review next.",
     "contract_dispute": "Thank you. The firm will receive a brief on the contract matter, along with the open questions a lawyer would normally clarify before advising.",
     "vendor_supplier_dispute": "Thank you. The firm will receive a brief on the billing dispute and the documents a lawyer would normally request next.",
-    "corporate_money_control": "Thank you. The firm will receive a brief on the financial concern with the next-step questions a lawyer would normally ask. Given the nature of the matter, the firm may follow up promptly.",
+    "corporate_money_control": "Thank you. The firm will receive a brief on the financial concern with the next-step questions a lawyer would normally ask.",
     "business_setup_advisory": "Thank you. The firm will receive a brief on what you are setting up so the team can prepare for a productive first call.",
     "corporate_general": "Thank you. The firm will receive a brief on what you described so the team can route the matter and follow up.",
     "commercial_real_estate": "Thank you. The firm will receive a brief on the commercial transaction with the documents and timing a lawyer would normally review.",
     "residential_purchase_sale": "Thank you. The firm will receive a brief on the residential transaction so the team can prepare for the next step.",
     "real_estate_litigation": "Thank you. The firm will receive a brief on the real estate dispute and the documents a lawyer would normally request next.",
     "landlord_tenant": "Thank you. The firm will receive a brief on the tenancy matter so the team can decide how best to follow up.",
-    "construction_lien": "Thank you. The firm will receive a brief on the unpaid construction work, including the timing details that matter under the Construction Act. The firm may follow up promptly given how time-sensitive lien matters can be.",
+    "construction_lien": "Thank you. The firm will receive a brief on the unpaid construction work, including the timing details that matter under the Construction Act.",
     "preconstruction_condo": "Thank you. The firm will receive a brief on the builder matter so the team can decide how to follow up.",
-    "mortgage_dispute": "Thank you. The firm will receive a brief on the mortgage matter. Given the nature of these matters, the firm may follow up promptly.",
+    "mortgage_dispute": "Thank you. The firm will receive a brief on the mortgage matter.",
     "real_estate_general": "Thank you. The firm will receive a brief on what you described so the team can follow up.",
-    "out_of_scope_prefix": "Thank you. Your information has been sent to the firm. Your matter looks like it sits in ",
-    "out_of_scope_suffix": ", which the firm will review and respond on directly.",
+    "out_of_scope_prefix": "Thank you for explaining your situation. It appears to involve ",
+    "out_of_scope_suffix": ". The firm can confirm whether it handles this area.",
     "out_of_scope_area_family": "family law",
     "out_of_scope_area_immigration": "immigration",
     "out_of_scope_area_employment": "employment",
@@ -925,7 +925,7 @@
     "out_of_scope_area_personal_injury": "personal injury",
     "out_of_scope_area_estates": "wills and estates",
     "out_of_scope_area_default": "this area",
-    "default": "Thank you. Your information has been sent to the firm."
+    "default": "Thank you for explaining your situation."
   },
   "chips": {
     "whatsapp": {

@@ -244,9 +244,9 @@ describe('processChannelInbound — closing message dispatch', () => {
     // No follow-up question was sent because discovery is exhausted.
     expect(mocks.sendChannelMessage).toHaveBeenCalledTimes(1);
     const sentText = mocks.sendChannelMessage.mock.calls[0][0].text as string;
-    expect(sentText).toMatch(/^Thanks Adriano,/);
-    expect(sentText).toMatch(/a lawyer is reviewing your /);
-    expect(sentText).toMatch(/will be in touch using the contact details you shared/);
+    expect(sentText).toContain("Thank you Adriano for sharing this information.");
+    expect(sentText).not.toMatch(/reviewing|forwarded/);
+    expect(sentText).not.toMatch(/will be in touch/);
     // Voice rule (DR-038): no time-relative reply promises in firm-voiced copy.
     // See feedback_no_time_relative_reply_promises memory.
     expect(sentText).not.toMatch(/\b(shortly|promptly|soon)\b/i);
@@ -272,7 +272,7 @@ describe('processChannelInbound — closing message dispatch', () => {
     expect(r.persisted).toBe(true);
     expect(mocks.sendChannelMessage).toHaveBeenCalledTimes(1);
     const sentText = mocks.sendChannelMessage.mock.calls[0][0].text as string;
-    expect(sentText).toMatch(/^Thanks Adriano,/);
+    expect(sentText).toContain("Thank you Adriano for sharing this information.");
   });
 
   it('does not unwind the persist when the closing-message send fails', async () => {
@@ -353,3 +353,4 @@ describe('processChannelInbound — closing message dispatch', () => {
     expect(sentText).not.toMatch(/reviewing your matter/);
   });
 });
+

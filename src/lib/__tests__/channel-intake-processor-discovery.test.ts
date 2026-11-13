@@ -297,7 +297,7 @@ describe('processChannelInbound — discovery follow-up phase', () => {
     // Closing acknowledgment was sent on the same channel.
     expect(mocks.sendChannelMessage).toHaveBeenCalledTimes(1);
     const sentText = mocks.sendChannelMessage.mock.calls[0][0].text as string;
-    expect(sentText).toMatch(/^Thanks Adriano,/);
+    expect(sentText).toContain("Thank you Adriano for sharing this information.");
   });
 
   it('out-of-scope on whatsapp skips the discovery phase and persists directly', async () => {
