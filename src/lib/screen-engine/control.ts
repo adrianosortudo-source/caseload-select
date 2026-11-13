@@ -155,7 +155,7 @@ function getBridgeTextEn(state: EngineState): string {
       estates: 'wills and estates',
     };
     const area = areaLabels[state.practice_area] ?? 'this area';
-    return `Thank you. Your information has been sent to the firm. Your matter looks like it sits in ${area}, which the firm will review and respond on directly.`;
+    return `Thank you for explaining your situation. It appears to involve ${area}. The firm can confirm whether it handles this area.`;
   }
   switch (state.matter_type) {
     case 'shareholder_dispute':
@@ -167,7 +167,7 @@ function getBridgeTextEn(state: EngineState): string {
     case 'vendor_supplier_dispute':
       return 'Thank you. The firm will receive a brief on the billing dispute and the documents a lawyer would normally request next.';
     case 'corporate_money_control':
-      return 'Thank you. The firm will receive a brief on the financial concern with the next-step questions a lawyer would normally ask. Given the nature of the matter, the firm may follow up promptly.';
+      return 'Thank you. The firm will receive a brief on the financial concern with the next-step questions a lawyer would normally ask.';
     case 'business_setup_advisory':
       return 'Thank you. The firm will receive a brief on what you are setting up so the team can prepare for a productive first call.';
     case 'corporate_general':
@@ -181,15 +181,15 @@ function getBridgeTextEn(state: EngineState): string {
     case 'landlord_tenant':
       return 'Thank you. The firm will receive a brief on the tenancy matter so the team can decide how best to follow up.';
     case 'construction_lien':
-      return 'Thank you. The firm will receive a brief on the unpaid construction work, including the timing details that matter under the Construction Act. The firm may follow up promptly given how time-sensitive lien matters can be.';
+      return 'Thank you. The firm will receive a brief on the unpaid construction work, including the timing details that matter under the Construction Act.';
     case 'preconstruction_condo':
       return 'Thank you. The firm will receive a brief on the builder matter so the team can decide how to follow up.';
     case 'mortgage_dispute':
-      return 'Thank you. The firm will receive a brief on the mortgage matter. Given the nature of these matters, the firm may follow up promptly.';
+      return 'Thank you. The firm will receive a brief on the mortgage matter.';
     case 'real_estate_general':
       return 'Thank you. The firm will receive a brief on what you described so the team can follow up.';
     default:
-      return 'Thank you. Your information has been sent to the firm.';
+      return 'Thank you for explaining your situation.';
   }
 }
 
@@ -199,13 +199,13 @@ export function getBridgeTextI18n(state: EngineState, i18n: I18nBundle): string 
   const bt = i18n.bridge_text ?? {};
   if (state.matter_type === 'out_of_scope') {
     const prefix = bt['out_of_scope_prefix']
-      || 'Thank you. Your information has been sent to the firm. Your matter looks like it sits in ';
-    const suffix = bt['out_of_scope_suffix'] || ', which the firm will review and respond on directly.';
+      || 'Thank you for explaining your situation. It appears to involve ';
+    const suffix = bt['out_of_scope_suffix'] || '. The firm can confirm whether it handles this area.';
     const areaKey = `out_of_scope_area_${state.practice_area}`;
     const area = bt[areaKey] || bt['out_of_scope_area_default'] || 'this area';
     return `${prefix}${area}${suffix}`;
   }
-  return bt[state.matter_type] || bt['default'] || 'Thank you. Your information has been sent to the firm.';
+  return bt[state.matter_type] || bt['default'] || 'Thank you for explaining your situation.';
 }
 
 // ─── Lead-facing summary ──────────────────────────────────────────────────
@@ -1452,3 +1452,4 @@ export function applyClarifyChoice(state: EngineState, choice: MatterType): Engi
 
   return updated;
 }
+

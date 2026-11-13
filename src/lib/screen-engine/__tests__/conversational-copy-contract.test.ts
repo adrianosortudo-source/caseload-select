@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { SLOT_REGISTRY } from '../slotRegistry';
 import { getI18n } from '../i18n/loader';
 import { getOptionDisplayLabel, getQuestionDisplayText, resolveDisplayedOption } from '../i18n/display';
-import { buildLeadSummary, applyAnswer } from '../control';
+import { buildLeadSummary, applyAnswer, getBridgeTextI18n } from '../control';
 import { initialiseState } from '../extractor';
 import type { EngineState } from '../types';
 
@@ -43,3 +43,18 @@ describe('complete conversational presentation contract', () => {
     expect(summary.paragraphs?.join(' ')).not.toMatch(/will win|is reviewing your|was sent to the firm/i);
   });
 });
+
+it.each(['en', 'pt'] as const)('keeps the out-of-scope bridge grounded in %s', language => {
+  const state = { ...initialiseState('A family matter'), language, practice_area: 'family' as const, matter_type: 'out_of_scope' as const };
+  const text = getBridgeTextI18n(state, getI18n(language));
+  expect(text).not.toMatch(/has been sent|will review and respond|enviad[oa]|encaminhad[oa]/i);
+  expect(text).toMatch(language === 'pt' ? /família/ : /family/);
+});
+
+it.each(['corporate_money_control', 'construction_lien', 'mortgage_dispute'] as const)(
+  'does not promise prompt follow-up in the %s fallback bridge', matter_type => {
+    const state = { ...initialiseState('A matter'), matter_type };
+    const bundle = { ...getI18n('en'), recap_templates: undefined };
+    expect(getBridgeTextI18n(state, bundle)).not.toMatch(/follow up promptly/i);
+  },
+);
