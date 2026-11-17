@@ -30,6 +30,8 @@
  */
 
 import { useEffect, useRef, useState } from "react";
+import type { AiProvider } from "@/lib/ai/openai";
+import { providerName } from "@/lib/ai/writing-provider-policy";
 import { copy } from "@/lib/why-your-firm/compliance";
 import { GATE_MODE } from "@/lib/why-your-firm/config";
 import { watchEmbedHeight, announceStepChange } from "@/lib/why-your-firm/embed";
@@ -124,7 +126,7 @@ function resolveActiveIndex(screens: WizardScreen[], data: WizardData): number {
 
 type Phase = "loading" | "intro" | "resume-prompt" | "wizard";
 
-export default function WhyYourFirm() {
+export default function WhyYourFirm({ provider }: { provider: AiProvider }) {
   const [phase, setPhase] = useState<Phase>("loading");
   const [data, setData] = useState<WizardData>(defaultData());
   const [savedSnapshot, setSavedSnapshot] = useState<WizardData | null>(null);
@@ -229,7 +231,7 @@ export default function WhyYourFirm() {
     setPhase("wizard");
   }
 
-  const privacyLine = GATE_MODE === "no_gate" ? copy.tool.privacyNoGateAssist : copy.tool.privacy;
+  const privacyLine = GATE_MODE === "no_gate" ? copy.tool.privacyNoGateAssist(providerName(provider)) : copy.tool.privacy;
 
   if (phase === "loading") return null;
 
@@ -276,6 +278,7 @@ export default function WhyYourFirm() {
           // empty-claim warning) belongs to one category and does not follow
           // the lawyer into the next group.
           <PassOneStep
+            provider={provider}
             key={screen.key}
             category={screen.category}
             data={data}

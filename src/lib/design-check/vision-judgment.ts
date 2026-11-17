@@ -1,5 +1,7 @@
 import { createHash } from "node:crypto";
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { requestDesignJudgments } from "./vision-provider";
+import { websiteReviewProvider } from "@/lib/ai/website-review-rollout";
+import type { AiProvider } from "@/lib/ai/openai";
 import type { DimensionResult } from "./dimension-types";
 
 /**
@@ -7,16 +9,6 @@ import type { DimensionResult } from "./dimension-types";
  * parser structurally cannot verify (Gestalt hierarchy, whitespace
  * confidence, whether a layout "reads as designed"), using the
  * framework's fixed 7-item rubric verbatim, one cited reason per score.
- * Runs on Gemini, matching every other AI call site in this app (screen
- * engine extraction, Firm Assist embeddings, voice transcription): the
- * SDK's native JSON-schema constrained decoding (responseMimeType +
- * responseSchema), the same mechanism screen-llm-server.ts already uses,
- * combined with an inline base64 image part the same way
- * /api/transcribe/route.ts already sends inline audio. Originally built
- * on Anthropic (Content Studio's call pattern); migrated 2026-08-06 for
- * vendor consistency, per the operator's standing rule that this stack
- * runs on Gemini.
- *
  * Caching note: the build plan commits to caching on screenshot hash so
  * a re-scan of an unchanged page does not re-spend tokens. There is
  * nowhere to cache TO in v1 (no Supabase persistence, per the operator's
@@ -24,8 +16,6 @@ import type { DimensionResult } from "./dimension-types";
  * mechanism is ready to wire to a real cache later; it does not fabricate
  * caching against no store.
  */
-
-const MODEL = "gemini-2.5-flash";
 
 export const JUDGMENT_RUBRIC_ITEMS = [
   {
@@ -145,66 +135,52 @@ export function hashScreenshot(screenshotPng: Buffer): string {
  * 2 real calls against sakurabalaw.ca hit it. The same enum-uniqueness
  * gap exists regardless of vendor (no JSON-schema-shaped mechanism can
  * express "each of these keys appears exactly once"), so the retry
- * stays. Not retried: no Gemini API key configured, network failure, or
+ * stays. Not retried: missing provider configuration, network failure, or
  * a thrown SDK error, none of which a same-input retry is likely to fix.
  */
 export async function judgeScreenshot(
   screenshotPng: Buffer,
-  deterministicFindings: DimensionResult[]
+  deterministicFindings: DimensionResult[],
+  deadline: number = Date.now() + 60000,
+  provider = websiteReviewProvider("WEBSITE_DESIGN_CHECK"),
 ): Promise<VisionJudgmentResult> {
   try {
-    return await judgeScreenshotOnce(screenshotPng, deterministicFindings);
+    return await judgeScreenshotOnce(screenshotPng, deterministicFindings, deadline, provider);
   } catch (err) {
     const isValidationFailure = err instanceof Error && /duplicate entries|missing entries|out of range/.test(err.message);
     if (!isValidationFailure) throw err;
-    return await judgeScreenshotOnce(screenshotPng, deterministicFindings);
+    return await judgeScreenshotOnce(screenshotPng, deterministicFindings, deadline, provider);
   }
 }
 
 async function judgeScreenshotOnce(
   screenshotPng: Buffer,
-  deterministicFindings: DimensionResult[]
+  deterministicFindings: DimensionResult[],
+  deadline: number,
+  provider: AiProvider,
 ): Promise<VisionJudgmentResult> {
-  // GOOGLE_AI_API_KEY first (operator standard, matches screen-llm-server.ts
-  // and /api/transcribe), GEMINI_API_KEY accepted as a fallback.
-  const apiKey = process.env.GOOGLE_AI_API_KEY ?? process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    throw new Error("No Gemini API key configured (set GOOGLE_AI_API_KEY or GEMINI_API_KEY).");
-  }
-
-  const screenshotHash = hashScreenshot(screenshotPng);
-  const screenshotBase64 = screenshotPng.toString("base64");
-
-  const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({
-    model: MODEL,
-    systemInstruction: buildSystemPrompt(),
-    generationConfig: {
-      responseMimeType: "application/json",
-      responseSchema: JUDGMENT_RESPONSE_SCHEMA as never,
-    },
+  const result = await requestDesignJudgments({
+    provider,
+    instructions: buildSystemPrompt(),
+    prompt: buildUserPrompt(deterministicFindings),
+    screenshot: screenshotPng,
+    schemaName: "design_quality_rubric",
+    schema: JUDGMENT_RESPONSE_SCHEMA,
+    deadline,
   });
-
-  const result = await model.generateContent([
-    { inlineData: { mimeType: "image/png", data: screenshotBase64 } },
-    { text: buildUserPrompt(deterministicFindings) },
-  ]);
-
-  const raw = result.response.text();
   let parsed: { judgments: JudgmentScore[] };
   try {
-    parsed = JSON.parse(raw) as { judgments: JudgmentScore[] };
+    parsed = JSON.parse(result.text) as { judgments: JudgmentScore[] };
   } catch {
-    throw new Error(`Gemini response was not valid JSON: ${raw.slice(0, 500)}`);
+    throw new Error("The vision provider returned invalid JSON.");
   }
 
   const judgments = validateJudgments(parsed.judgments);
-  const usage = result.response.usageMetadata;
 
   return {
-    screenshotHash,
+    screenshotHash: hashScreenshot(screenshotPng),
     judgments,
-    usage: { inputTokens: usage?.promptTokenCount ?? 0, outputTokens: usage?.candidatesTokenCount ?? 0 },
+    usage: { inputTokens: result.inputTokens, outputTokens: result.outputTokens },
   };
 }
 
@@ -230,7 +206,7 @@ function validateJudgments(judgments: JudgmentScore[]): JudgmentScore[] {
     seen.set(j.item, j);
   }
   if (duplicates.length > 0) {
-    throw new Error(`Vision judgment returned duplicate entries for: ${duplicates.join(", ")}. Full response: ${JSON.stringify(judgments)}`);
+    throw new Error(`Vision judgment returned duplicate entries for: ${duplicates.join(", ")}.`);
   }
   const missing = JUDGMENT_RUBRIC_ITEMS.map((r) => r.key).filter((key) => !seen.has(key));
   if (missing.length > 0) {

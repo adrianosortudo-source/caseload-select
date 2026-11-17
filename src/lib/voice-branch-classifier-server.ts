@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { createIntakeJsonGenerator, hasGenerationKey, intakeModel, operationalIntakeProvider } from './ai/intake-generation';
 import {
   classifyVoiceBranchHeuristic,
   type VoiceFineBranch,
@@ -59,22 +59,27 @@ export async function classifyVoiceBranchServer(
   transcript: string,
 ): Promise<VoiceBranchClassifierResult> {
   const heuristic = classifyVoiceBranchHeuristic(transcript);
-  const apiKey = process.env.GOOGLE_AI_API_KEY ?? process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    return { branch: heuristic, mode: 'disabled', reason: 'No Gemini API key configured' };
+  const provider = operationalIntakeProvider();
+  if (!hasGenerationKey(provider)) {
+    return { branch: heuristic, mode: 'disabled', reason: 'No intake API key configured' };
   }
 
   try {
-    const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({
-      model: MODEL,
-      generationConfig: {
-        temperature: 0,
-        responseMimeType: 'application/json',
+    const generate = createIntakeJsonGenerator({
+      provider,
+      model: provider === 'openai' ? intakeModel() : MODEL,
+      name: 'screen_voice_branch',
+      schema: {
+        type: 'object',
+        properties: { branch: { type: 'string', enum: [...VALID_BRANCHES] } },
+        required: ['branch'],
       },
+      geminiJsonOnly: true,
+      temperature: 0,
+      maxOutputTokens: 256,
+      timeoutMs: 6000,
     });
-    const result = await model.generateContent(buildPrompt(transcript ?? ''));
-    const raw = result.response.text();
+    const { text: raw } = await generate(buildPrompt(transcript ?? ''));
     const parsed = JSON.parse(raw) as { branch?: unknown };
     if (!isValidBranch(parsed.branch)) {
       return { branch: heuristic, mode: 'error', reason: `invalid branch: ${String(parsed.branch)}` };

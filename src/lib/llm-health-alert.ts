@@ -1,8 +1,7 @@
 /**
  * LLM-extraction-disabled operator alert (#128).
  *
- * `llmExtractServer` returns mode='disabled' when GEMINI_API_KEY is missing or
- * invalid. In that state the screen engine falls back to regex-only extraction:
+ * `llmExtractServer` returns mode='disabled' when the selected provider key is missing. In that state the screen engine falls back to regex-only extraction:
  * briefs are shallower, fields get missed, and on contact-sparse transcripts the
  * contact-capture gate can fail outright. None of that is visible to the
  * operator without an explicit signal, so the intake routes emit one.
@@ -43,6 +42,7 @@ export function shouldAlertLlmDisabled(
 }
 
 export interface LlmDisabledAlertArgs {
+  provider?: 'gemini' | 'openai';
   firmId: string;
   firmName: string | null;
   /** The mode llmExtractServer returned. Alerts fire for 'disabled'. */
@@ -58,6 +58,7 @@ export function buildLlmDisabledAlertEmail(args: LlmDisabledAlertArgs): {
   subject: string;
   html: string;
 } {
+  const keyName = args.provider === 'openai' ? 'CASELOAD_OPENAI_API_KEY' : 'GOOGLE_AI_API_KEY or GEMINI_API_KEY';
   const firmLabel = args.firmName ?? `Firm ${args.firmId}`;
   const subject = `Screen engine LLM is disabled — briefs degraded (${firmLabel})`;
 
@@ -80,8 +81,8 @@ export function buildLlmDisabledAlertEmail(args: LlmDisabledAlertArgs): {
   const html = `
     <div style="font-family:Arial,sans-serif;line-height:1.5;color:#111;">
       <h2 style="margin:0 0 12px;">${htmlEscape(subject)}</h2>
-      <p style="margin:0 0 12px;">The screen engine tried to run LLM extraction and got back <strong>mode=disabled</strong>. This means GEMINI_API_KEY is missing or invalid on the server. While it stays disabled, every brief falls back to regex-only extraction: shallower briefs, missed fields, and on contact-sparse calls the contact-capture gate can reject otherwise-valid leads.</p>
-      <p style="margin:0 0 12px;font-weight:bold;color:#1E2F58;">Set or rotate GEMINI_API_KEY in Vercel and redeploy, then run a test intake to confirm mode returns to live.</p>
+      <p style="margin:0 0 12px;">The screen engine tried to run LLM extraction and got back <strong>mode=disabled</strong>. The server is missing its configured key (${keyName}). While it stays disabled, every brief falls back to regex-only extraction: shallower briefs, missed fields, and on contact-sparse calls the contact-capture gate can reject otherwise-valid leads.</p>
+      <p style="margin:0 0 12px;font-weight:bold;color:#1E2F58;">Configure ${keyName} in Vercel and redeploy, then run a test intake to confirm mode returns to live.</p>
       <table style="border-collapse:collapse;margin:0 0 16px;">${rowHtml}</table>
       <p style="margin:0;color:#666;font-size:13px;">Repeat alerts are suppressed for ${LLM_DISABLED_ALERT_SUPPRESSION_HOURS} hours so a sustained outage does not email once per call.</p>
     </div>

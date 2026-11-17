@@ -31,10 +31,10 @@ describe("Why Your Firm shipping hardening", () => {
     expect(decision.remaining).toBe(0);
   });
 
-  it("names Gemini, the exact opt-in payload, and the confidential-data warning", () => {
-    expect(copy.tool.privacyNoGateAssist).toContain("Google Gemini");
-    expect(copy.tool.privacyNoGateAssist).toContain("only that claim and any proof line");
-    expect(copy.tool.privacyNoGateAssist).toContain(
+  it.each(["OpenAI", "Google Gemini"])("names %s, the opt-in payload, and the confidential-data warning", (vendor) => {
+    expect(copy.tool.privacyNoGateAssist(vendor)).toContain(vendor);
+    expect(copy.tool.privacyNoGateAssist(vendor)).toContain("only that claim and any proof line");
+    expect(copy.tool.privacyNoGateAssist(vendor)).toContain(
       "Do not enter client names, matter details, or confidential information.",
     );
   });

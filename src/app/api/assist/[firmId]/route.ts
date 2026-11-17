@@ -7,7 +7,7 @@
  * relying on the iframe-embed pattern the rest of the app uses.
  *
  * Pipeline: CORS check -> validate -> rate limit -> embed question ->
- * retrieve top-k chunks -> single Gemini call -> map intent to a fixed-copy
+ * retrieve top-k chunks -> configured answer provider -> map intent to a fixed-copy
  * exit shape -> log to assist_queries (best-effort) -> respond.
  *
  * DR-100: never answers outside the retrieved chunks. DR-102: never writes
@@ -171,7 +171,7 @@ export async function POST(
       source_page_ids: exitResponse.exit === 'answered' ? loggedPageIds : [],
       exit_type: exitResponse.exit,
       latency_ms: latencyMs,
-      model: 'gemini-2.5-flash',
+      model: genResult.model,
       visitor_hash: visitorHash,
     });
   } catch (err) {

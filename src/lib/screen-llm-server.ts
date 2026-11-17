@@ -1,31 +1,4 @@
-/**
- * Server-side LLM extractor for the screen engine.
- *
- * Lives OUTSIDE `src/lib/screen-engine/` so the engine port can stay a
- * byte-for-byte mirror of the sandbox (the sandbox's `llm/extractor.ts`
- * does `fetch('/api/extract')` because it runs in the browser; this file
- * is the server-side equivalent that talks to Gemini directly).
- *
- * Public shape mirrors the sandbox's `llmExtract` return so the consumer
- * (voice-intake endpoint) can pipe the result into the engine's
- * `mergeLlmResults` without adapter glue.
- *
- * Mirrors `CaseLoadScreen_2.0_2026-05-03/api/extract.ts` request shape:
- *   { description, matter_type, already_extracted } → { extracted, mode }
- *
- * Graceful degradation: if no Gemini API key is configured, returns
- * `{ extracted: {}, mode: 'disabled' }`. The caller proceeds with
- * regex-only extraction and the brief is best-effort.
- *
- * Env var resolution: accepts either GOOGLE_AI_API_KEY (the existing
- * operator standard, also used by lib/openrouter.ts for the web channel)
- * or GEMINI_API_KEY (legacy name from the sandbox). GOOGLE_AI_API_KEY
- * wins when both are set. Field-detected 2026-06-01 — voice-intake had
- * been silently regex-only since 2026-05-21 because this file read
- * GEMINI_API_KEY while the operator had only set GOOGLE_AI_API_KEY.
- */
-
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { createIntakeJsonGenerator, isTransientGenerationError, hasGenerationKey, intakeModel, operationalIntakeProvider } from './ai/intake-generation';
 import type { EngineState, MatterType } from './screen-engine/types';
 import { getExtractableSlots, buildResponseSchema } from './screen-engine/llm/schema';
 import { buildSystemPrompt, buildUserPrompt } from './screen-engine/llm/prompt';
@@ -34,7 +7,7 @@ const MODEL = 'gemini-2.5-flash';
 const TEMPERATURE = 0.1;
 const MAX_DESCRIPTION_LENGTH = 4000;
 
-// Retry policy for transient Gemini failures (429 rate limit, 5xx server,
+// Retry policy for transient provider failures (429 rate limit, 5xx server,
 // network errors). Bounded so a sustained outage degrades to regex-only
 // extraction rather than blocking intake indefinitely.
 const MAX_LLM_ATTEMPTS = 3;
@@ -50,21 +23,6 @@ export interface LlmExtractionResponse {
   attempts?: number;
 }
 
-/**
- * True for errors that are worth retrying. Gemini SDK errors include the
- * HTTP status in the message ("[GoogleGenerativeAI Error]: 429 Too Many
- * Requests" etc.) or surface as fetch-style network errors. Treat 429
- * (rate limit / quota), 408 (timeout), 5xx (server), and ECONN errors as
- * transient. 400 / 401 / 403 / 404 are caller / config bugs, do not retry.
- */
-function isTransientLlmError(err: unknown): boolean {
-  const msg = err instanceof Error ? err.message : String(err);
-  if (/\b(429|408|500|502|503|504)\b/.test(msg)) return true;
-  if (/(ECONN|ETIMEDOUT|fetch failed|network)/i.test(msg)) return true;
-  if (/quota/i.test(msg)) return true;
-  return false;
-}
-
 async function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -78,16 +36,13 @@ export async function llmExtractServer(
   description: string,
   state: EngineState,
   maxDescriptionLength = MAX_DESCRIPTION_LENGTH,
+  provider = operationalIntakeProvider(),
 ): Promise<LlmExtractionResponse> {
-  // GOOGLE_AI_API_KEY first (operator standard, also used by openrouter.ts
-  // for the web channel /api/screen). GEMINI_API_KEY accepted as a
-  // fallback for backward compatibility with the sandbox naming.
-  const apiKey = process.env.GOOGLE_AI_API_KEY ?? process.env.GEMINI_API_KEY;
-  if (!apiKey) {
+  if (!hasGenerationKey(provider)) {
     return {
       extracted: {},
       mode: 'disabled',
-      reason: 'No Gemini API key configured (set GOOGLE_AI_API_KEY or GEMINI_API_KEY)',
+      reason: provider === 'openai' ? 'OpenAI API key missing' : 'No Gemini API key configured (set GOOGLE_AI_API_KEY or GEMINI_API_KEY)',
     };
   }
 
@@ -103,40 +58,38 @@ export async function llmExtractServer(
   }
 
   const responseSchema = buildResponseSchema(slots);
-  const systemPrompt = buildSystemPrompt();
+  const basePrompt = buildSystemPrompt();
+  const systemPrompt = provider === 'openai'
+    ? basePrompt + '\nFor legal status, report only what the caller expressly confirms. Plans to sign or file later do not establish whether anything was previously signed or filed. Leave signed_release null unless the caller explicitly reports signing or not signing. An absence answer covering multiple documents requires explicit confirmation for every document. A missing court order alone leaves the agreement status unknown.'
+    : basePrompt;
   const userPrompt = buildUserPrompt(trimmed, matterType, slots);
 
-  const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({
-    model: MODEL,
-    systemInstruction: systemPrompt,
-    generationConfig: {
-      temperature: TEMPERATURE,
-      responseMimeType: 'application/json',
-      responseSchema: responseSchema as never,
-    },
+  const generate = createIntakeJsonGenerator({
+    provider,
+    model: provider === 'openai' ? intakeModel() : MODEL,
+    name: 'screen_extraction',
+    instructions: systemPrompt,
+    schema: responseSchema,
+    temperature: TEMPERATURE,
+    maxOutputTokens: 4096,
+    timeoutMs: 12000,
   });
-
-  // Bounded retry on transient Gemini failures. The previous implementation
-  // ran a single generateContent() and any 429/5xx surfaced as mode='error',
-  // which left the caller running regex-only extraction even when a quick
-  // retry would have succeeded.
-  let result: Awaited<ReturnType<typeof model.generateContent>> | null = null;
+  let result: Awaited<ReturnType<typeof generate>> | null = null;
   let lastErr: unknown = null;
   let attempt = 0;
 
   try {
     for (attempt = 1; attempt <= MAX_LLM_ATTEMPTS; attempt++) {
       try {
-        result = await model.generateContent(userPrompt);
+        result = await generate(userPrompt);
         lastErr = null;
         break;
       } catch (err) {
         lastErr = err;
-        if (attempt < MAX_LLM_ATTEMPTS && isTransientLlmError(err)) {
+        if (attempt < MAX_LLM_ATTEMPTS && isTransientGenerationError(err)) {
           const wait = RETRY_BACKOFF_MS[attempt - 1] ?? 1200;
           console.warn(
-            `[screen-llm-server] transient Gemini error on attempt ${attempt}, retrying in ${wait}ms:`,
+            `[screen-llm-server] transient provider error on attempt ${attempt}, retrying in ${wait}ms:`,
             err instanceof Error ? err.message : String(err),
           );
           await sleep(wait);
@@ -148,7 +101,7 @@ export async function llmExtractServer(
 
     if (!result) {
       const reason = lastErr instanceof Error ? lastErr.message : String(lastErr);
-      const transient = lastErr ? isTransientLlmError(lastErr) : false;
+      const transient = lastErr ? isTransientGenerationError(lastErr) : false;
       return {
         extracted: {},
         mode: transient ? 'degraded' : 'error',
@@ -157,7 +110,7 @@ export async function llmExtractServer(
       };
     }
 
-    const raw = result.response.text();
+    const raw = result.text;
 
     let parsed: Record<string, string | null> = {};
     try {
@@ -194,20 +147,19 @@ export async function llmExtractServer(
       cleaned[k] = value;
     }
 
-    const usage = result.response.usageMetadata;
     return {
       extracted: cleaned,
       dropped,
       mode: 'live',
       attempts: attempt,
       tokens: {
-        prompt: usage?.promptTokenCount,
-        completion: usage?.candidatesTokenCount,
+        prompt: result.inputTokens,
+        completion: result.outputTokens,
       },
     };
   } catch (err) {
     // Unexpected post-LLM error (json shape, response normalization). Not
-    // a Gemini transport failure; do not retry.
+    // a transport failure; do not retry.
     return {
       extracted: {},
       mode: 'error',

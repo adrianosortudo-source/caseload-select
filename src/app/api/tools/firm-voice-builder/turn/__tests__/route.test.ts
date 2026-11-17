@@ -11,9 +11,13 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { OPENING_MESSAGE, PROFILE_START_MARKER, PROFILE_END_MARKER } from "@/lib/firm-voice-builder/system-prompt";
 
 const mocks = vi.hoisted(() => ({
+  metricAttempt: vi.fn(), metricFinish: vi.fn(),
   checkRateLimit: vi.fn(),
   ipFromRequest: vi.fn(() => "203.0.113.9"),
   runFirmVoiceBuilderTurn: vi.fn(),
+}));
+vi.mock("@/lib/ai/public-pilot-metrics", () => ({
+  startPilotMetrics: () => ({ attempt: mocks.metricAttempt, finish: mocks.metricFinish }),
 }));
 
 vi.mock("@/lib/rate-limit", () => ({
@@ -110,6 +114,12 @@ describe("POST /api/tools/firm-voice-builder/turn", () => {
     expect(json.message).toContain("What feels off?");
     expect(json.raw).toBe(modelOutput);
     expect(json.raw).toContain(PROFILE_START_MARKER);
+    expect(mocks.metricAttempt).toHaveBeenLastCalledWith("gemini", true);
+    expect(mocks.metricFinish).toHaveBeenLastCalledWith("completed", "voice_profile");
+    await POST(makeRequest({ transcript: [...VALID_TRANSCRIPT.transcript,
+      { role: "interviewer", text: modelOutput }, { role: "lawyer", text: "Please revise the guide." }] }));
+    expect(mocks.metricAttempt).toHaveBeenLastCalledWith("gemini", false);
+    expect(mocks.metricFinish).toHaveBeenLastCalledWith("completed", "voice_revision");
   });
 
   it("passes the mapped Gemini contents through, starting with a user kickoff turn", async () => {

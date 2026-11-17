@@ -329,8 +329,8 @@ export const copy = {
      * the exception is the whole point: a privacy claim that overstates by
      * one clause is exactly what this tool teaches lawyers not to write.
      */
-    privacyNoGateAssist:
-      "Your answers stay in this browser until you clear them. If you choose Tighten this claim, only that claim and any proof line you entered are sent to Google Gemini for processing. CaseLoad Select does not store that text. Do not enter client names, matter details, or confidential information. Use your browser's print option if you want a copy to keep.",
+    privacyNoGateAssist: (vendor: string) =>
+      `Your answers stay in this browser until you clear them. If you choose Tighten this claim, only that claim and any proof line you entered are sent to ${vendor} for processing. CaseLoad Select does not store that text. Do not enter client names, matter details, or confidential information. Use your browser's print option if you want a copy to keep.`,
     start: "Start",
     resumeEyebrow: "Welcome back",
     resume: "You have a brief in progress in this browser.",

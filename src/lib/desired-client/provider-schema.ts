@@ -60,7 +60,11 @@ function decodeStatement(value: unknown, slot: DesiredClientEvidenceSlot, answer
 }
 
 /** Decode only registered group IDs. Source IDs, kind and basis are never provider decisions. */
-export function decodeProviderEvidenceGroups(value: unknown, answers: DesiredClientAnswers): unknown {
+export function decodeProviderEvidenceGroups(
+  value: unknown,
+  answers: DesiredClientAnswers,
+  groundedValueCard?: ReturnType<typeof buildStructuredBlueprintV4>["why_firm_wants_work"],
+): unknown {
   if (!value || typeof value !== "object" || Array.isArray(value)) return value;
   const root = value as Record<string, unknown>;
   if (!root.brief || typeof root.brief !== "object" || Array.isArray(root.brief)) return value;
@@ -89,10 +93,12 @@ export function decodeProviderEvidenceGroups(value: unknown, answers: DesiredCli
     }
     brief.decision_pathway = decodedPathway;
   }
+  // OpenAI supplies the narrative cards. The application supplies the firm's financial/capacity facts.
+  if (groundedValueCard) brief.why_firm_wants_work = groundedValueCard;
   return { ...root, brief, ...(Object.hasOwn(root, "clarification_code") ? {} : { clarification_code: null }) };
 }
 
-export function providerBlueprintSchema(answers: DesiredClientAnswers): unknown {
+export function providerBlueprintSchema(answers: DesiredClientAnswers, useGroundedFirmValue = false): unknown {
   const schema = providerStructureSchema(BLUEPRINT_RESPONSE_SCHEMA) as unknown as {
     properties: { clarification_code?: unknown; brief: { properties: Record<string, unknown>; required: string[] } };
     required: string[];
@@ -145,5 +151,9 @@ export function providerBlueprintSchema(answers: DesiredClientAnswers): unknown 
       description: "Copy the complete ordered grounded_target_claim_ids list. The application resolves each reference to its confirmed claim and citations." } },
     required: ["claim_ids"],
   };
+  if (useGroundedFirmValue) {
+    delete sections.why_firm_wants_work;
+    schema.properties.brief.required = schema.properties.brief.required.filter(key => key !== "why_firm_wants_work");
+  }
   return schema;
 }

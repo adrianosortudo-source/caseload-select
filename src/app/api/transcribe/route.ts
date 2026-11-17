@@ -1,28 +1,12 @@
 /**
  * POST /api/transcribe
  *
- * Receives an audio blob, transcribes it via Google Gemini, returns the
- * transcript text. Used by the IntakeControllerV2 kickoff screen so prospects
- * can record their situation by voice instead of typing.
- *
- * Body: multipart/form-data with field "audio" (Blob)
- * Returns: { ok: true; text: string } | { ok: false; error: string }
- *
- * Notes:
- *  - Uses GOOGLE_AI_API_KEY (falls back to GEMINI_API_KEY), the same key the
- *    screen engine already runs on. OpenAI is no longer in this path.
- *  - Model: gemini-2.5-flash. Gemini transcribes audio natively.
- *  - Gemini accepts audio/wav, audio/mp3, audio/aiff, audio/aac, audio/ogg,
- *    audio/flac. It does NOT accept the audio/webm or audio/mp4 that browsers
- *    record, so VoiceInput.tsx transcodes the recording to WAV (16 kHz mono)
- *    client-side before upload. The blob that reaches this route is already
- *    Gemini-compatible; we still normalise the declared MIME defensively.
- *  - Max blob size: 25 MB. A 16 kHz mono WAV is ~1 MB per minute, so a
- *    60-second kickoff clip lands around 1-2 MB.
- *  - Multi-lingual: no language is forced. Gemini returns the transcript in
- *    the spoken language; the screen engine handles detection downstream.
+ * Transcribes the browser recorder's WAV upload in its spoken language.
+ * Body: multipart/form-data, "audio" (up to 25 MB).
+ * Returns: { ok: true, text } or { ok: false, error }.
  */
 
+import { getProvider } from "@/lib/ai/openai";
 import { NextResponse } from "next/server";
 import { checkRateLimit, ipFromRequest, rateLimitHeaders } from "@/lib/rate-limit";
 
@@ -61,6 +45,74 @@ const TRANSCRIBE_PROMPT =
   "plain text, with no preamble, labels, quotation marks, or commentary. If " +
   "the audio contains no discernible speech, return an empty string.";
 
+class TranscriptionError extends Error {
+  constructor(status: number) {
+    super(`Transcription failed (HTTP ${status})`);
+  }
+}
+
+const OPENAI_AUDIO_EXTENSIONS: Record<string, string> = {
+  "audio/mp4": "m4a",
+  "audio/x-m4a": "m4a",
+  "audio/webm": "webm",
+  "video/webm": "webm",
+};
+
+async function transcribeOpenAI(audio: Blob, apiKey: string): Promise<string> {
+  const body = new FormData();
+  const mime = audio.type.split(";")[0].trim().toLowerCase();
+  const ext = OPENAI_AUDIO_EXTENSIONS[mime]
+    ?? normaliseAudioMime(mime).slice("audio/".length);
+  body.append("file", audio, `recording.${ext}`);
+  body.append("model", process.env.SCREEN_OPENAI_TRANSCRIPTION_MODEL?.trim() || "gpt-transcribe");
+  const response = await fetch("https://api.openai.com/v1/audio/transcriptions", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${apiKey}` },
+    cache: "no-store",
+    redirect: "error",
+    body,
+    signal: AbortSignal.timeout(45_000),
+  });
+  if (!response.ok) throw new TranscriptionError(response.status);
+  const result: { text?: unknown } = await response.json();
+  return typeof result.text === "string" ? result.text.trim() : "";
+}
+
+async function transcribeGemini(audio: Blob, apiKey: string): Promise<string> {
+  const mimeType = normaliseAudioMime(audio.type);
+  const base64 = Buffer.from(await audio.arrayBuffer()).toString("base64");
+
+  const endpoint =
+    `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent` +
+    `?key=${encodeURIComponent(apiKey)}`;
+
+  const res = await fetch(endpoint, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      contents: [
+        {
+          parts: [
+            { text: TRANSCRIBE_PROMPT },
+            { inline_data: { mime_type: mimeType, data: base64 } },
+          ],
+        },
+      ],
+      generationConfig: { temperature: 0 },
+    }),
+  });
+
+  if (!res.ok) throw new TranscriptionError(res.status);
+
+  const data = (await res.json()) as {
+    candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+  };
+  return (data.candidates?.[0]?.content?.parts ?? [])
+    .map((p) => p.text ?? "")
+    .join("")
+    .trim();
+}
+
 export async function POST(req: Request) {
   // Public route (the kickoff recorder calls it from the browser); the
   // per-IP bucket is the only gate in front of the model spend (H6).
@@ -78,7 +130,10 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: "audio exceeds 25 MB limit" }, { status: 413 });
   }
 
-  const apiKey = process.env.GOOGLE_AI_API_KEY ?? process.env.GEMINI_API_KEY;
+  const provider = getProvider("SCREEN_TRANSCRIPTION_AI_PROVIDER");
+  const apiKey = provider === "openai"
+    ? process.env.CASELOAD_OPENAI_API_KEY?.trim()
+    : process.env.GOOGLE_AI_API_KEY ?? process.env.GEMINI_API_KEY;
   if (!apiKey) {
     return NextResponse.json(
       { ok: false, error: "Server not configured for transcription." },
@@ -100,44 +155,9 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: "audio exceeds 25 MB limit" }, { status: 413 });
     }
 
-    const mimeType = normaliseAudioMime(audio.type);
-    const base64 = Buffer.from(await audio.arrayBuffer()).toString("base64");
-
-    const endpoint =
-      `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent` +
-      `?key=${encodeURIComponent(apiKey)}`;
-
-    const res = await fetch(endpoint, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [
-          {
-            parts: [
-              { text: TRANSCRIBE_PROMPT },
-              { inline_data: { mime_type: mimeType, data: base64 } },
-            ],
-          },
-        ],
-        generationConfig: { temperature: 0 },
-      }),
-    });
-
-    if (!res.ok) {
-      const errBody = await res.text();
-      return NextResponse.json(
-        { ok: false, error: `Transcription failed (HTTP ${res.status}): ${errBody.slice(0, 200)}` },
-        { status: 502 }
-      );
-    }
-
-    const data = (await res.json()) as {
-      candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
-    };
-    const text = (data.candidates?.[0]?.content?.parts ?? [])
-      .map((p) => p.text ?? "")
-      .join("")
-      .trim();
+    const text = provider === "openai"
+      ? await transcribeOpenAI(audio, apiKey)
+      : await transcribeGemini(audio, apiKey);
 
     if (!text) {
       return NextResponse.json({ ok: false, error: "Transcript came back empty." }, { status: 502 });
@@ -146,8 +166,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true, text });
   } catch (err) {
     return NextResponse.json(
-      { ok: false, error: err instanceof Error ? err.message : String(err) },
-      { status: 500 }
+      { ok: false, error: err instanceof TranscriptionError ? err.message : "Could not process the recording." },
+      { status: err instanceof TranscriptionError ? 502 : 500 }
     );
   }
 }

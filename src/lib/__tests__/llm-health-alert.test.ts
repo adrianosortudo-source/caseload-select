@@ -86,6 +86,12 @@ describe('buildLlmDisabledAlertEmail', () => {
     expect(html).toContain('Vercel');
   });
 
+  it('names the project credential when OpenAI extraction is disabled', () => {
+    const { html } = buildLlmDisabledAlertEmail(args({ provider: 'openai' }));
+    expect(html).toContain('CASELOAD_OPENAI_API_KEY');
+    expect(html).not.toContain('GEMINI_API_KEY');
+  });
+
   it('surfaces the channel, mode, and call id', () => {
     const { html } = buildLlmDisabledAlertEmail(args());
     expect(html).toContain('voice');

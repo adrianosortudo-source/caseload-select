@@ -3,7 +3,7 @@
  *
  * Cheap pre-flight the frontend module calls before rendering itself.
  * Returns 200 { enabled: true } only when the firm has at least one
- * included corpus page AND a Gemini key is configured; every other case
+ * included corpus page AND both retrieval and answer credentials are configured; every other case
  * (firm not found, no included pages, key missing, origin not allowed)
  * returns a non-200 so the module renders nothing (capability-gated UX,
  * same rule as the embedded widget's voice-capability check: no apology
@@ -12,6 +12,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
+import { hasAnswerKey } from '@/lib/assist/generate-answer';
 import { resolveAllowedOrigin } from '@/lib/assist/answer-route-pure';
 import { loadFirmAssistConfig } from '@/lib/assist/firm-config';
 
@@ -50,8 +51,8 @@ export async function GET(
   }
   const headers = corsHeaders(allowedOrigin);
 
-  const hasApiKey = Boolean(process.env.GOOGLE_AI_API_KEY ?? process.env.GEMINI_API_KEY);
-  if (!hasApiKey) {
+  const hasEmbeddingKey = Boolean(process.env.GOOGLE_AI_API_KEY ?? process.env.GEMINI_API_KEY);
+  if (!hasEmbeddingKey || !hasAnswerKey()) {
     return NextResponse.json({ ok: true, enabled: false }, { status: 200, headers });
   }
 

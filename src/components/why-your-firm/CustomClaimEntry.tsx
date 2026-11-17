@@ -35,7 +35,11 @@ import { customIdFor, evaluateFreeText } from "@/lib/why-your-firm/engine";
 import type { WizardData } from "@/lib/why-your-firm/screens";
 import ComplianceNote from "./ComplianceNote";
 
+import type { AiProvider } from "@/lib/ai/openai";
+import { providerName, WRITING_PROVIDER_HEADER } from "@/lib/ai/writing-provider-policy";
+
 interface Props {
+  provider: AiProvider;
   category: Category;
   data: WizardData;
   onPatch: (updater: Partial<WizardData> | ((prev: WizardData) => Partial<WizardData>)) => void;
@@ -62,7 +66,7 @@ function isCategory(value: unknown): value is Category {
   return typeof value === "string" && CATEGORIES.some((c) => c.id === value);
 }
 
-export default function CustomClaimEntry({ category, data, onPatch }: Props) {
+export default function CustomClaimEntry({ provider, category, data, onPatch }: Props) {
   const customId = customIdFor(category);
   const text = data.customClaims[category] ?? "";
   const selected = data.passOneIds.includes(customId);
@@ -120,7 +124,7 @@ export default function CustomClaimEntry({ category, data, onPatch }: Props) {
       const proof = data.cardEntries[customId]?.proof?.trim();
       const res = await fetch("/api/tools/why-your-firm/assist", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", [WRITING_PROVIDER_HEADER]: provider },
         body: JSON.stringify({ claim: text.trim(), proof: proof || undefined }),
       });
       if (!res.ok) {
@@ -199,6 +203,7 @@ export default function CustomClaimEntry({ category, data, onPatch }: Props) {
         )}
 
         <div className="mt-3">
+          <p className="text-xs text-muted mb-2">Tightening a claim sends that claim and its proof line to {providerName(provider)}.</p>
           <button
             type="button"
             className="btn-ghost text-sm"

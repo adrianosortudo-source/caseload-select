@@ -73,7 +73,7 @@ export default function TermsPage() {
 
         <Section title="Service availability">
           <p>
-            CaseLoad Select runs on third-party infrastructure: Supabase (database), Vercel (application hosting), Resend (transactional email), Google LLC (Gemini 2.5 Flash for AI screening), OpenAI (legacy widget screening), GoHighLevel (CRM, SMS, voice, Google Business Profile chat), and Meta Platforms (Facebook Messenger, Instagram Direct, and WhatsApp Cloud API). The service inherits the availability of these providers. We do not promise specific uptime numbers and do not warrant that the service will be free of interruption or error. Maintenance windows and provider incidents may briefly affect intake form availability.
+            CaseLoad Select runs on third-party infrastructure: Supabase (database), Vercel (application hosting), Resend (transactional email), Google LLC and OpenAI (AI-assisted tools, website reviews, intake screening, transcription and Firm Assist), GoHighLevel (CRM, SMS, voice, Google Business Profile chat), and Meta Platforms (Facebook Messenger, Instagram Direct, and WhatsApp Cloud API). The service inherits the availability of these providers. We do not promise specific uptime numbers and do not warrant that the service will be free of interruption or error. Maintenance windows and provider incidents may briefly affect intake form availability.
           </p>
         </Section>
 

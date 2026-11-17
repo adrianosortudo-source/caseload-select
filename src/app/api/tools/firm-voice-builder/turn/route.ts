@@ -19,6 +19,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { checkRateLimit, ipFromRequest, rateLimitHeaders } from "@/lib/rate-limit";
 import { validateTranscript, transcriptToGeminiContents } from "@/lib/firm-voice-builder/turn";
 import { runFirmVoiceBuilderTurn } from "@/lib/firm-voice-builder/gemini";
+import { startPilotMetrics } from "@/lib/ai/public-pilot-metrics";
+import { voiceTurnProvider } from "@/lib/ai/voice-rollout";
+import { runOpenAIVoiceTurn } from "@/lib/firm-voice-builder/openai";
 import {
   parseSectionTag,
   extractProfile,
@@ -69,6 +72,7 @@ interface TurnResponseBody {
 }
 
 export async function POST(req: NextRequest) {
+  const start = Date.now();
   let body: unknown;
   try {
     body = await req.json();
@@ -81,6 +85,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json<TurnResponseBody>({ ok: false, error: validation.error }, { status: 400 });
   }
 
+  const provider = voiceTurnProvider(req.headers);
+  if (!provider) {
+    return NextResponse.json<TurnResponseBody>(
+      { ok: false, error: "The interview provider changed. Reload the guide to review the new provider and resume." },
+      { status: 409 },
+    );
+  }
   const ip = ipFromRequest(req);
   const decision = await checkRateLimit("firmVoiceBuilder", ip);
   if (!decision.ok) {
@@ -90,16 +101,31 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const contents = transcriptToGeminiContents(validation.transcript);
-  const result = await runFirmVoiceBuilderTurn(contents);
+  const metrics = startPilotMetrics("voice", provider, start);
+  metrics.attempt(provider, validation.transcript.length === 2);
+  const generation = provider === "openai"
+    ? runOpenAIVoiceTurn(validation.transcript)
+    : runFirmVoiceBuilderTurn(transcriptToGeminiContents(validation.transcript));
+  const result = await generation.catch(error => {
+    metrics.finish("failed");
+    throw error;
+  });
 
   if (result.mode === "disabled") {
+    metrics.finish("failed");
     return NextResponse.json<TurnResponseBody>(
       { ok: false, error: "the tool is not configured for this deployment" },
       { status: 503 },
     );
   }
   if (result.mode === "error" || !result.text) {
+    metrics.finish("failed", result.reason === "pilot_capacity" ? "voice_capacity" : undefined);
+    if (provider === "openai" && result.reason === "pilot_capacity") {
+      return NextResponse.json<TurnResponseBody>(
+        { ok: false, error: "GPT interview capacity is currently unavailable. Your previous answers are still in this browser. Please try again later." },
+        { status: 503 },
+      );
+    }
     return NextResponse.json<TurnResponseBody>(
       { ok: false, error: "could not generate the next question, try again" },
       { status: 502 },
@@ -108,6 +134,12 @@ export async function POST(req: NextRequest) {
 
   const { section, text: displayText } = parseSectionTag(result.text);
   const profile = extractProfile(result.text);
+  if (profile) {
+    const revised = validation.transcript.some(entry => entry.role === "interviewer" && extractProfile(entry.text));
+    metrics.finish("completed", revised ? "voice_revision" : "voice_profile");
+  } else {
+    metrics.finish("completed");
+  }
 
   return NextResponse.json<TurnResponseBody>({
     ok: true,

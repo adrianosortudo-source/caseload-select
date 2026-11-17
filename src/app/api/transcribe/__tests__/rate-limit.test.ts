@@ -113,3 +113,37 @@ describe("/api/transcribe rate limiting", () => {
     );
   });
 });
+
+describe("/api/transcribe direct OpenAI project", () => {
+  afterEach(() => vi.unstubAllEnvs());
+
+  it("submits the audio bytes in their original language and trims the returned text", async () => {
+    vi.stubEnv("SCREEN_TRANSCRIPTION_AI_PROVIDER", "openai");
+    vi.stubEnv("CASELOAD_OPENAI_API_KEY", "fixture-project-key");
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) =>
+      Response.json({ text: "  Bonjour  " }),
+    );
+    global.fetch = fetchMock;
+    const res = await POST(makeAudioRequest());
+    expect(await res.json()).toEqual({ ok: true, text: "Bonjour" });
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("https://api.openai.com/v1/audio/transcriptions");
+    expect(init?.headers).toEqual({ Authorization: "Bearer fixture-project-key" });
+    const sent = init?.body as FormData;
+    const file = sent.get("file") as File;
+    expect(file.name).toBe("recording.wav");
+    expect(file.size).toBe(2048);
+    expect(sent.get("model")).toBe("gpt-transcribe");
+    expect(sent.has("language")).toBe(false);
+  });
+
+  it("stops before any upload when the selected project's key is missing", async () => {
+    vi.stubEnv("SCREEN_TRANSCRIPTION_AI_PROVIDER", "openai");
+    vi.stubEnv("CASELOAD_OPENAI_API_KEY", "");
+    const fetchMock = vi.fn();
+    global.fetch = fetchMock;
+    const res = await POST(makeAudioRequest());
+    expect(res.status).toBe(500);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+});

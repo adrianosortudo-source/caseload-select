@@ -124,8 +124,8 @@ export default function PrivacyPage() {
             <li>Adriano Domingues, in the role of CaseLoad Select operator, for system administration, support, and quality control.</li>
             <li>The firm&rsquo;s CRM and communication service provider (GoHighLevel) and transactional email provider (Resend), which deliver the firm&rsquo;s automated replies. GoHighLevel handles SMS, voice, and Google Business Profile chat channels on the firm&rsquo;s behalf. WhatsApp, Facebook Messenger, and Instagram DM intakes are received directly by CaseLoad Select from Meta&rsquo;s APIs; the platform does not route those channels through the firm&rsquo;s GoHighLevel&nbsp;account.</li>
             <li>Supabase Inc. (database hosting, Toronto region) and Vercel Inc. (application hosting), under written service agreements limited to processing on our instructions.</li>
-            <li>Google LLC (intake screening via Gemini 2.5 Flash for Screen 2.0 and the voice channel), under Google&rsquo;s data processing terms.</li>
-            <li>OpenAI, L.L.C. (intake screening assistance for legacy web widget sessions), under OpenAI&rsquo;s data processing terms.</li>
+            <li>Google LLC (Gemini for selected writing tools, website reviews, intake, audio transcription and Firm Assist search and answers), under Google&rsquo;s data processing terms.</li>
+            <li>OpenAI, L.L.C. (writing assistance, website reviews, intake screening, audio transcription and Firm Assist answers when those features use OpenAI), under OpenAI&rsquo;s data processing terms.</li>
             <li>Meta Platforms, Inc., for intake that arrives via Facebook Messenger, Instagram Direct, or WhatsApp Cloud API. Meta processes the conversation before it reaches our systems and stores its own copy under Meta&rsquo;s own retention rules. Our policy applies from the point of receipt into the CaseLoad Select webhook. We use Meta&rsquo;s Page Send API and Cloud API messages endpoint to reply within the standard 24-hour customer-service window only.</li>
           </ul>
           <p>

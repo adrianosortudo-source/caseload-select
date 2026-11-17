@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { OPENING_MESSAGE, parseSectionTag } from "@/lib/firm-voice-builder/system-prompt";
+import type { AiProvider } from "@/lib/ai/openai";
+import { providerName, WRITING_PROVIDER_HEADER } from "@/lib/ai/writing-provider-policy";
 import ProgressRail from "./ProgressRail";
 import ProfileReveal from "./ProfileReveal";
 
@@ -15,9 +17,17 @@ export interface ChatMessage {
   section: number | null;
 }
 
+interface VoiceAssignment {
+  provider: AiProvider;
+  token: string;
+  generation: string;
+}
+
 interface SavedSession {
+  assignment?: VoiceAssignment;
   messages: ChatMessage[];
   profile: string | null;
+  provider?: AiProvider;
 }
 
 const STORAGE_KEY = "fvb-transcript-v1";
@@ -59,7 +69,9 @@ function clearSavedSession() {
 
 type Phase = "loading" | "intro" | "resume-prompt" | "chat";
 
-export default function FirmVoiceBuilder() {
+export default function FirmVoiceBuilder({ assignment }: { assignment: VoiceAssignment }) {
+  const [active, setActive] = useState(assignment);
+  const { provider } = active;
   const [phase, setPhase] = useState<Phase>("loading");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [profile, setProfile] = useState<string | null>(null);
@@ -74,11 +86,16 @@ export default function FirmVoiceBuilder() {
     const saved = loadSavedSession();
     if (saved) {
       savedSessionRef.current = saved;
+      if ((saved.provider ?? "gemini") === "gemini") {
+        setActive({ ...assignment, provider: "gemini", token: "" });
+      } else if (saved.assignment?.token && saved.assignment.generation === assignment.generation) {
+        setActive(saved.assignment);
+      }
       setPhase("resume-prompt");
     } else {
       setPhase("intro");
     }
-  }, []);
+  }, [assignment]);
 
   // Move the view only when a NEW interviewer question arrives, and anchor it
   // to the top of that message so it reads from its first line.
@@ -123,7 +140,8 @@ export default function FirmVoiceBuilder() {
     setError(null);
     savedSessionRef.current = null;
     clearSavedSession();
-    saveSession({ messages: [first], profile: null });
+    setActive(assignment);
+    saveSession({ messages: [first], profile: null, provider: assignment.provider, assignment });
     setPhase("chat");
   }
 
@@ -144,7 +162,7 @@ export default function FirmVoiceBuilder() {
     try {
       const response = await fetch("/api/tools/firm-voice-builder/turn", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", [WRITING_PROVIDER_HEADER]: provider, "X-CaseLoad-Voice-Assignment": active.token },
         body: JSON.stringify({
           transcript: nextMessages.map((m) => ({ role: m.role, text: m.raw })),
         }),
@@ -164,7 +182,7 @@ export default function FirmVoiceBuilder() {
       setMessages(updated);
       const nextProfile: string | null = json.profile ?? profile;
       if (json.profile) setProfile(json.profile);
-      saveSession({ messages: updated, profile: nextProfile });
+      saveSession({ messages: updated, profile: nextProfile, provider, assignment: active });
     } catch {
       setError("We could not reach the server. Check your connection and try again.");
     } finally {
@@ -197,6 +215,7 @@ export default function FirmVoiceBuilder() {
   if (phase === "loading") return null;
 
   if (phase === "resume-prompt") {
+    const previousProvider = savedSessionRef.current?.provider ?? "gemini";
     return (
       <div className="card p-6 max-w-xl mx-auto text-center">
         <p className="label mb-2">Welcome back</p>
@@ -205,11 +224,17 @@ export default function FirmVoiceBuilder() {
           You have an interview in progress in this browser. Nothing was ever sent to our servers between
           visits; this is stored on your device only.
         </p>
+        {previousProvider !== provider && (
+          <p className="text-sm text-body mb-5">
+            This interview began with {providerName(previousProvider)}. If you resume and send another answer,
+            {providerName(provider)} will receive the saved interview and your new answer.
+          </p>
+        )}
         <div className="flex gap-2 justify-center">
           <button type="button" className="btn-gold" onClick={resumeSaved}>
-            Resume
+            {previousProvider === provider ? "Resume" : `Resume with ${providerName(provider)}`}
           </button>
-          <button type="button" className="btn-ghost" onClick={startFresh}>
+          <button type="button" className="btn-ghost" onClick={() => { clearSavedSession(); savedSessionRef.current = null; setActive(assignment); setPhase("intro"); }}>
             Start over
           </button>
         </div>
@@ -232,9 +257,8 @@ export default function FirmVoiceBuilder() {
           and nothing to upload; every answer you type back is itself a writing sample.
         </p>
         <p className="text-sm text-body leading-relaxed mb-3">
-          Nothing you type here is stored on our servers; the conversation lives in your browser for this
-          session only. Describe situations in general terms rather than naming real clients; the tool does
-          not need a real name to learn how you write.
+          Each time you send an answer, {providerName(provider)} processes the interview so far.
+          Your draft is saved in this browser. Describe situations in general terms and leave out real client names.
         </p>
         <p className="text-sm text-body leading-relaxed mb-3">
           The finished profile also carries two things quietly built in: the Law Society&apos;s advertising
