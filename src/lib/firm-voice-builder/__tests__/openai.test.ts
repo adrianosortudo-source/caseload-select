@@ -1,6 +1,6 @@
 import { afterEach, expect, it, vi } from "vitest";
 import { requestOpenAI } from "@/lib/ai/openai";
-import { runOpenAIVoiceTurn } from "../openai";
+import { normalizeOpenAIVoiceProfile, runOpenAIVoiceTurn } from "../openai";
 import { OPENING_MESSAGE, PROFILE_START_MARKER, PROFILE_END_MARKER, SYSTEM_PROMPT } from "../system-prompt";
 
 vi.mock("@/lib/ai/openai", async (original) => ({
@@ -30,4 +30,13 @@ it("uses only the dedicated project key", async () => {
   vi.stubEnv("GOOGLE_AI_API_KEY", "fictional-other-provider-key");
   expect(await runOpenAIVoiceTurn([])).toEqual({mode:"disabled"});
   expect(requestOpenAI).not.toHaveBeenCalled();
+});
+
+
+it("removes a redundant opening marker before the quick card without dropping profile or proof text", () => {
+  const raw = [ "[SECTION:7]", PROFILE_START_MARKER, "My rules", PROFILE_START_MARKER,
+    "Quick reference card", PROFILE_END_MARKER, "Proof pieces" ].join("\n");
+  expect(normalizeOpenAIVoiceProfile(raw)).toBe([
+    "[SECTION:7]", PROFILE_START_MARKER, "My rules", "Quick reference card", PROFILE_END_MARKER, "Proof pieces",
+  ].join("\n"));
 });

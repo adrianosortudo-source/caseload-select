@@ -110,6 +110,12 @@ export async function POST(req: NextRequest) {
     );
   }
   if (result.mode === "error" || !result.text) {
+    if (provider === "openai" && result.reason === "pilot_capacity") {
+      return NextResponse.json<TurnResponseBody>(
+        { ok: false, error: "GPT interview capacity is currently unavailable. Your previous answers are still in this browser. Please try again later." },
+        { status: 503 },
+      );
+    }
     return NextResponse.json<TurnResponseBody>(
       { ok: false, error: "could not generate the next question, try again" },
       { status: 502 },

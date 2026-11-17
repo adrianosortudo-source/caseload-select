@@ -15,12 +15,21 @@ describe("direct OpenAI responses", () => {
     fetchMock.mockResolvedValue(Response.json({ status: "completed", output: [
       { type: "reasoning" }, { type: "message", content: [{ type: "output_text", text: "OK" }] }
     ], usage: { input_tokens: 8, output_tokens: 2 } }));
-    expect(await requestOpenAI(input)).toEqual({ text: "OK", inputTokens: 8, outputTokens: 2 });
+    expect(await requestOpenAI({ ...input, serviceTier: "default" })).toEqual({ text: "OK", inputTokens: 8, outputTokens: 2 });
     const [url, init] = fetchMock.mock.calls[0];
     expect(url).toBe("https://api.openai.com/v1/responses");
     expect(init.headers.Authorization).toBe("Bearer test-secret");
     expect(init.redirect).toBe("error");
     expect(JSON.parse(init.body).store).toBe(false);
+    expect(JSON.parse(init.body).service_tier).toBe("default");
+  });
+  it("returns only the final answer when the model emits multiple message items", async () => {
+    const message = (phase: string, pieces: string[]) => ({ type: "message", phase, status: "completed",
+      content: pieces.map(text => ({ type: "output_text", text })) });
+    fetchMock.mockResolvedValue(Response.json({ status: "completed", output: [
+      message("commentary", ['{"draft":true}']), message("final_answer", ['{"ok":', 'true}'])
+    ] }));
+    expect((await requestOpenAI(input)).text).toBe('{"ok":true}');
   });
   it.each([
     { status: "incomplete" },

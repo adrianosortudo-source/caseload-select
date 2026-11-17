@@ -1,9 +1,10 @@
 import "server-only";
 import { createHmac, randomInt, randomUUID, timingSafeEqual } from "node:crypto";
 import { getProvider, type AiProvider } from "./openai";
+import { publicPilotGrantExpired } from "./public-tool-pilot-budget";
 
 function openAIKey(): string | undefined {
-  if (getProvider("FIRM_VOICE_BUILDER_PROVIDER") !== "openai") return;
+  if (getProvider("FIRM_VOICE_BUILDER_PROVIDER") !== "openai" || publicPilotGrantExpired()) return;
   return process.env.CASELOAD_OPENAI_API_KEY?.trim() || undefined;
 }
 

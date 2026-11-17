@@ -17,6 +17,7 @@ type InputPart =
 type Message = { role: "user" | "assistant" | "system"; content: string | InputPart[] };
 
 interface GenerationRequest {
+  serviceTier?: "default";
   model: string;
   instructions?: string;
   input: string | Message[];
@@ -33,7 +34,7 @@ interface GenerationResult {
 
 interface ResponsesPayload {
   status?: string;
-  output?: Array<{ type: string; content?: Array<{ type: string; text?: string }> }>;
+  output?: Array<{ type: string; phase?: string; status?: string; content?: Array<{ type: string; text?: string }> }>;
   usage?: { input_tokens?: number; output_tokens?: number };
 }
 
@@ -59,6 +60,7 @@ export async function requestOpenAI(request: GenerationRequest): Promise<Generat
     body: JSON.stringify({
       model: request.model,
       store: false,
+      ...(request.serviceTier && { service_tier: request.serviceTier }),
       instructions: request.instructions,
       input: request.input,
       max_output_tokens: request.maxOutputTokens,
@@ -71,9 +73,11 @@ export async function requestOpenAI(request: GenerationRequest): Promise<Generat
   if (!res.ok) throw new OpenAIRequestError(`OpenAI request failed (${res.status})`, res.status);
   const data: ResponsesPayload = await res.json();
   if (data.status !== "completed") throw new OpenAIRequestError("Incomplete OpenAI response", 422);
-  const parts = (data.output ?? []).filter(item => item.type === "message")
-    .flatMap(item => item.content ?? []);
-  if (parts.some(part => part.type === "refusal")) throw new OpenAIRequestError("OpenAI declined the request", 422);
+  const messages = (data.output ?? []).filter(item => item.type === "message");
+  if (messages.some(message => message.content?.some(part => part.type === "refusal"))) throw new OpenAIRequestError("OpenAI declined the request", 422);
+  const completed = messages.filter(message => !message.status || message.status === "completed");
+  const final = completed.filter(message => message.phase === "final_answer").at(-1) ?? completed.at(-1);
+  const parts = final?.content ?? [];
   const text = parts.filter(part => part.type === "output_text").map(part => part.text ?? "").join("").trim();
   if (!text) throw new OpenAIRequestError("Empty OpenAI response", 422);
   return { text, inputTokens: data.usage?.input_tokens ?? 0, outputTokens: data.usage?.output_tokens ?? 0 };

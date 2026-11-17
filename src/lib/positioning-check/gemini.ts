@@ -1,6 +1,7 @@
 import "server-only";
-import { hasOpenAIKey, requestOpenAI } from "@/lib/ai/openai";
+import { hasOpenAIKey } from "@/lib/ai/openai";
 import { websiteReviewProvider } from "@/lib/ai/website-review-rollout";
+import { requestWebsiteOpenAI } from "@/lib/ai/public-tool-pilot-budget";
 import { toOpenAIJsonSchema } from "@/lib/ai/openai-schema";
 import { ELEMENT_KEYS, type Evidence } from "./types";
 import { normalizeAuthoredCopy } from "./normalize";
@@ -42,7 +43,7 @@ async function requestGemini(key: string, draft: string, images: ImageInput[], s
 }
 
 function requestOpenAIAnalysis(model: string, draft: string, images: ImageInput[], signal: AbortSignal) {
-  return requestOpenAI({
+  return requestWebsiteOpenAI({
     model, instructions: system, signal, maxOutputTokens: 8192,
     input: [{ role: "user", content: [
       { type: "input_text", text: draft },

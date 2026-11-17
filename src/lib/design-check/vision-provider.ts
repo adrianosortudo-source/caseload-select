@@ -1,6 +1,7 @@
 import "server-only";
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import { requestOpenAI, type AiProvider } from "@/lib/ai/openai";
+import { type AiProvider } from "@/lib/ai/openai";
+import { requestWebsiteOpenAI } from "@/lib/ai/public-tool-pilot-budget";
 import { toOpenAIJsonSchema } from "@/lib/ai/openai-schema";
 
 interface VisionInput {
@@ -30,7 +31,7 @@ async function generate(input: VisionInput, modelId: string) {
   if (input.provider === "openai") {
     const remaining = input.deadline - Date.now();
     if (remaining <= 0) throw new Error("Design review timed out");
-    return requestOpenAI({
+    return requestWebsiteOpenAI({
       model: modelId,
       instructions: input.instructions,
       input: [{ role: "user", content: [

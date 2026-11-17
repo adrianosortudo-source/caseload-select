@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ipFromRequest } from "@/lib/rate-limit";
+import { withWebsiteReviewBudget } from "@/lib/ai/public-tool-pilot-budget";
 import { websiteReviewProvider } from "@/lib/ai/website-review-rollout";
 import { validateOutboundUrl } from "@/lib/ssrf";
 import { normalizeWebsiteUrl } from "@/lib/positioning-check/website-url";
@@ -41,14 +42,17 @@ export async function POST(req:NextRequest){
   let url:URL;try{const body=await readRequest(req,deadline) as {url?:unknown};if(typeof body.url!=="string"||body.url.length>2048)throw new Error();url=normalized(body.url.trim());}catch{return failure("invalid_url","Enter a valid public HTTPS website address.",400,false);}
   const identity=ipFromRequest(req);
   const reservation=await reserveAnalysis(identity);if(reservation.status==="unavailable")return failure("provider_unavailable","The tool is temporarily unavailable. Please try again later.",503,true);if(reservation.status!=="ok")return failure("rate_limited",reservation.reason==="daily"?"The daily review capacity has been reached. Please try again later.":reservation.reason==="active"?"A review is already in progress from this network. Please try again shortly.":"This network has reached its hourly review limit. Shared offices may share a limit. Please try again later.",429,true);
-  const provider=websiteReviewProvider("POSITIONING_CHECK",identity);
+  let provider=websiteReviewProvider("POSITIONING_CHECK",identity);
   try {
     const [site,visual]=await Promise.all([collectSite(url.href,start+40000),render(url,start+40000).catch((err:unknown)=>{const e=(err && typeof err==="object"?err:{}) as {name?:unknown;cause?:{code?:unknown}};const code=typeof e.cause?.code==="string" && /^[A-Z0-9_]{1,32}$/.test(e.cause.code)?e.cause.code:"none";console.warn("[positioning-render]",JSON.stringify({runtime:process.version,errorClass:e.name==="TypeError"||e.name==="AbortError"?e.name:"Error",code}));return null;})]);
     applyRenderedFallback(site,visual?.renderedText??null); const primary=site.pages[0]; if(!primary||primary.retainedChars<150)return failure("blocked_or_unreadable","We could not read enough public content at this secure address. Check that the website opens using https:// and try again.",422,true);
     const screenshots=visual?.screenshots??(["desktop","mobile"] as const).map(viewport=>({id:`screenshot-${viewport}`,viewport,state:"unavailable" as const,analyzed:false,clippedFromPx:null}));
     if(!visual||screenshots.some(s=>!s.analyzed))site.limitations.push("Some or all page images could not be assessed.");
     if(screenshots.some(s=>s.state==="clipped"))site.limitations.push("At least one screenshot covers only the top portion of the page.");
-    const evidence=[...site.evidence,...(visual?.evidence??[])]; const result=await generateAnalysis(evidence,visual?.images??[],{pages:site.pages,screenshots,limitations:site.limitations},deadline,provider);
+    const evidence=[...site.evidence,...(visual?.evidence??[])]; const result=await withWebsiteReviewBudget(provider, process.env.POSITIONING_CHECK_OPENAI_MODEL, 8192, assigned => {
+      provider = assigned;
+      return generateAnalysis(evidence,visual?.images??[],{pages:site.pages,screenshots,limitations:site.limitations},deadline,assigned);
+    });
     const partial=site.limitations.length>0||site.pages.some(p=>p.state!=="readable");
     console.info("[positioning-check]",JSON.stringify({provider,model:result.model,durationMs:Date.now()-start,inputTokens:result.inputTokens,outputTokens:result.outputTokens,calls:result.calls,status:partial?"partial":"success"}));
     return NextResponse.json({status:partial?"partial":"success",metadata:{schemaVersion:"1",rubricVersion:RUBRIC_VERSION,promptVersion:PROMPT_VERSION,model:result.model,generatedAt:new Date().toISOString(),requestedUrl:url.href,resolvedOrigin:site.resolvedOrigin,aiGenerated:true},coverage:{pages:site.pages,screenshots,limitations:site.limitations},evidence,part1:result.analysis.part1,part2:result.analysis.part2},{headers:{"Cache-Control":"no-store"}});
