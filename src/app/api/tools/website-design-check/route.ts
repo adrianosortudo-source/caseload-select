@@ -18,6 +18,7 @@ import { buildTrack1Report } from "@/lib/design-check/aggregate";
 import type { DimensionResult } from "@/lib/design-check/dimension-types";
 import { checkRateLimit, ipFromRequest, rateLimitHeaders } from "@/lib/rate-limit";
 import { withWebsiteReviewBudget } from "@/lib/ai/public-tool-pilot-budget";
+import { startPilotMetrics } from "@/lib/ai/public-pilot-metrics";
 import { websiteReviewProvider } from "@/lib/ai/website-review-rollout";
 
 /**
@@ -59,7 +60,8 @@ function normalizeDomain(raw: string): string {
 }
 
 export async function POST(request: NextRequest) {
-  const deadline = Date.now() + (maxDuration - 5) * 1000;
+  const start = Date.now();
+  const deadline = start + (maxDuration - 5) * 1000;
   const identity = ipFromRequest(request);
   const decision = await checkRateLimit("designCheck", identity);
   if (!decision.ok) {
@@ -96,16 +98,19 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "That domain can't be checked." }, { status: 400 });
   }
 
+  const cohort = websiteReviewProvider("WEBSITE_DESIGN_CHECK", identity);
+  const metrics = startPilotMetrics("design", cohort, start);
   try {
     const result = await fetchRenderResult(url);
     const desktopCapture = result.captures.find((c) => c.viewport === "desktop");
     const mobileCapture = result.captures.find((c) => c.viewport === "mobile");
     if (!desktopCapture || !mobileCapture) {
+      metrics.finish("failed");
       return NextResponse.json({ error: "Could not render this site. Try again or check the domain." }, { status: 502 });
     }
 
-    const cohort = websiteReviewProvider("WEBSITE_DESIGN_CHECK", identity);
     return await withWebsiteReviewBudget(cohort, process.env.WEBSITE_DESIGN_CHECK_OPENAI_MODEL, 3072, async provider => {
+      metrics.attempt(provider);
       let authorityJudgments: AuthorityJudgmentScore[] | undefined;
       try {
         const authorityVision = await judgeAuthorityScreenshot(
@@ -161,6 +166,7 @@ export async function POST(request: NextRequest) {
       }
 
       const track1Report = buildTrack1Report([...desktopDimensions, mobileDimension], authorityResult, generalJudgments, desktopCapture.domSnapshot.darkPatterns);
+      metrics.finish(authorityJudgments && generalJudgments ? "completed" : "degraded");
       console.info("[design-check] review", { provider, authorityJudged: !!authorityJudgments, designJudged: !!generalJudgments });
 
       return NextResponse.json(
@@ -201,6 +207,7 @@ export async function POST(request: NextRequest) {
       );
     });
   } catch (err) {
+    metrics.finish("failed");
     // Logged, not swallowed: the visitor-facing message is deliberately
     // vague, so without this an operator has nothing to debug a failing
     // scan from.
