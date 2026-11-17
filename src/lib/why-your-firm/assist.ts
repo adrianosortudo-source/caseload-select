@@ -24,6 +24,8 @@
  * since no shared client exists in this app.
  */
 
+import { getProvider, hasOpenAIKey, requestOpenAI, type AiProvider } from "@/lib/ai/openai";
+import { toOpenAIJsonSchema } from "@/lib/ai/openai-schema";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { COMPLIANCE_RULES } from "./compliance";
 import { CATEGORIES, type Category } from "./differentiators";
@@ -183,34 +185,42 @@ async function sleep(ms: number): Promise<void> {
  * map an unconfigured deployment (disabled) and a model failure (error) to
  * different statuses without wrapping the whole request in a try/catch.
  */
-export async function runAssist(req: AssistRequest): Promise<RunAssistResult> {
-  const apiKey = resolveApiKey();
-  if (!apiKey) {
+export async function runAssist(req: AssistRequest, provider: AiProvider = getProvider("WHY_YOUR_FIRM_ASSIST_PROVIDER")): Promise<RunAssistResult> {
+  const geminiKey = provider === "gemini" ? resolveApiKey() : null;
+  if (provider === "openai" ? !hasOpenAIKey() : !geminiKey) {
     return {
       mode: "disabled",
-      reason: "No Gemini API key configured (set GOOGLE_AI_API_KEY or GEMINI_API_KEY)",
+      reason: "No API key for the configured provider",
     };
   }
 
-  const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({
+  const instructions = buildAssistSystemPrompt();
+  const model = geminiKey ? new GoogleGenerativeAI(geminiKey).getGenerativeModel({
     model: MODEL,
-    systemInstruction: buildAssistSystemPrompt(),
+    systemInstruction: instructions,
     generationConfig: {
       temperature: TEMPERATURE,
       maxOutputTokens: MAX_OUTPUT_TOKENS,
       responseMimeType: "application/json",
       responseSchema: ASSIST_RESPONSE_SCHEMA as never,
     },
-  });
+  }) : null;
 
   const userPrompt = buildAssistUserPrompt(req.claim, req.proof);
 
   let lastErr: unknown = null;
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     try {
-      const response = await model.generateContent(userPrompt);
-      const raw = response.response.text();
+      const raw = model
+        ? (await model.generateContent(userPrompt)).response.text()
+        : (await requestOpenAI({
+            model: process.env.WHY_YOUR_FIRM_ASSIST_OPENAI_MODEL ?? "gpt-6-luna",
+            instructions,
+            input: userPrompt,
+            maxOutputTokens: MAX_OUTPUT_TOKENS,
+            format: { name: "claim_assist", schema: toOpenAIJsonSchema(ASSIST_RESPONSE_SCHEMA) },
+            signal: AbortSignal.timeout(20_000),
+          })).text;
       let parsed: unknown;
       try {
         parsed = JSON.parse(raw);
@@ -224,7 +234,7 @@ export async function runAssist(req: AssistRequest): Promise<RunAssistResult> {
       return { mode: "live", result };
     } catch (err) {
       lastErr = err;
-      if (attempt < MAX_ATTEMPTS && isTransientError(err)) {
+      if (provider === "gemini" && attempt < MAX_ATTEMPTS && isTransientError(err)) {
         const wait = RETRY_BACKOFF_MS[attempt - 1] ?? 1200;
         // Log only fixed operational metadata. Provider errors can echo part
         // of the request, so neither the error object nor its message belongs

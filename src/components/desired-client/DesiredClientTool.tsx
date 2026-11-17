@@ -1,4 +1,6 @@
 "use client";
+import type { AiProvider } from "@/lib/ai/openai";
+import { WRITING_PROVIDER_HEADER } from "@/lib/ai/writing-provider-policy";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { COMMON_COPY, STORAGE_COPY } from "@/lib/desired-client/copy";
 
@@ -62,7 +64,7 @@ export function clarificationNoticeFor(error:ToolState["error"],aiAvailable?:boo
   return "";
 }
 function isClarificationContinue(value:unknown):boolean { return normalizeInterviewClarificationContinuePrompt(value)!==null; }
-export default function DesiredClientTool({embedded=false}:{embedded?:boolean}) {
+export default function DesiredClientTool({embedded=false,provider="gemini"}:{embedded?:boolean;provider?:AiProvider}) {
  const [state,setState]=useState<ToolState>(initialToolState),[savedDraft,setSavedDraft]=useState<SavedDraft|null>(null),[notice,setNotice]=useState(""),[replacePrompt,setReplacePrompt]=useState(false),[clearPrompt,setClearPrompt]=useState(false);
   const [aiAvailable,setAiAvailable]=useState<boolean|null>(null);
   const [analysisReference,setAnalysisReference]=useState<string|null>(null);
@@ -90,7 +92,7 @@ export default function DesiredClientTool({embedded=false}:{embedded?:boolean}) 
    const request:AnalysisRequestEnvelope={schemaVersion:4,operation:"generate",requestId,answerRevision:snapshot.answers.revision,reviewRunId:snapshot.reviewRunId,analysisIndex:snapshot.providerCallsUsed as 0|1|2,aiConsent:true,answers:snapshot.answers,clarifications:[]};
    const sameRequest=(current:ToolState)=>current.reviewRunId===snapshot.reviewRunId&&current.answers.revision===snapshot.answers.revision&&current.requestCount===snapshot.requestCount;
    try{
-     const response=await fetch("/api/tools/desired-client-matter/analyze",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(request),signal:controller.signal});
+     const response=await fetch("/api/tools/desired-client-matter/analyze",{method:"POST",headers:{"content-type":"application/json",[WRITING_PROVIDER_HEADER]:provider},body:JSON.stringify(request),signal:controller.signal});
      let payload:unknown;
      try{payload=await response.json();}catch{payload=null;}
      const beforeUsage=stateRef.current;
@@ -118,7 +120,7 @@ export default function DesiredClientTool({embedded=false}:{embedded?:boolean}) 
      const current=stateRef.current;
       if(sameRequest(current)&&(timedOut||!controller.signal.aborted)){reportFailure(timedOut?"timeout":"network");commit(failAnalysis(current,"unavailable",current.requestCount<3&&current.providerCallsUsed<current.providerCallLimit));}
    }finally{window.clearTimeout(timeout);if(abortRef.current===controller)abortRef.current=null;}
- },[commit]);
+ },[commit,provider]);
  const requestStageClarification=useCallback(async()=>{
     const current=stateRef.current,stage=current.stage;
     if(stage===7||current.view!=="questions")return;
@@ -132,7 +134,7 @@ export default function DesiredClientTool({embedded=false}:{embedded?:boolean}) 
    const request:InterviewClarificationRequestEnvelope={schemaVersion:4,operation:"clarify",requestId,answerRevision:current.answers.revision,interviewRunId,clarificationIndex:current.answers.interview.clarification_count as 0|1|2,stage,aiConsent:true,answers:current.answers};
    let timedOut=false;const timeout=window.setTimeout(()=>{timedOut=true;controller.abort();},22000);
    try{
-     const response=await fetch("/api/tools/desired-client-matter/analyze",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(request),signal:controller.signal});
+     const response=await fetch("/api/tools/desired-client-matter/analyze",{method:"POST",headers:{"content-type":"application/json",[WRITING_PROVIDER_HEADER]:provider},body:JSON.stringify(request),signal:controller.signal});
      let payload:unknown;try{payload=await response.json();}catch{payload=null;}
      const live=stateRef.current;
      if(controller.signal.aborted||live.answers.revision!==current.answers.revision||live.stage!==stage||live.view!=="questions")return;
@@ -155,7 +157,7 @@ export default function DesiredClientTool({embedded=false}:{embedded?:boolean}) 
      const live=stateRef.current;
      if(live.answers.revision===current.answers.revision&&live.stage===stage&&live.view==="questions")commit(advanceWithoutClarification(live,interviewRunId,"unavailable"));
    }finally{window.clearTimeout(timeout);if(abortRef.current===controller)abortRef.current=null;}
- },[aiAvailable,commit]);
+ },[aiAvailable,commit,provider]);
  const prepareAI=(initial:boolean)=>{if(stateRef.current.loading)return;let next:ToolState;if(initial)next=beginAiRun(stateRef.current,()=>crypto.randomUUID());else next=recordAiAttempt(stateRef.current);if(next===stateRef.current||!next.loading)return;commit(next);void sendAnalysis(next);}; const onAnswerClarification=(choice:string)=>{const next=answerClarification(stateRef.current,choice);commit(next);if(next.loading&&next.reviewRunId)void sendAnalysis(next);};
  const onInterviewAnswer=(answer:string,choiceId?:string)=>commit(answerInterviewClarification(stateRef.current,answer,choiceId));
  const onInterviewSkip=()=>commit(answerInterviewClarification(stateRef.current,"",undefined,true));
@@ -182,13 +184,13 @@ export default function DesiredClientTool({embedded=false}:{embedded?:boolean}) 
     <ConfirmationDialog open={clearPrompt} onClose={()=>setClearPrompt(false)} labelledBy="dc-clear-title"><h2 id="dc-clear-title" data-ui-copy="heading">{STORAGE_COPY.clearConfirm}</h2><button className="dc-button dc-button--primary" onClick={()=>{if(clearStored())setClearPrompt(false);}}>{STORAGE_COPY.clear}</button><button className="dc-button dc-button--secondary" onClick={()=>setClearPrompt(false)}>{STORAGE_COPY.keep}</button></ConfirmationDialog>
     <ConfirmationDialog open={replacePrompt} onClose={()=>setReplacePrompt(false)} labelledBy="dc-replace-title"><h2 id="dc-replace-title" data-ui-copy="heading">{STORAGE_COPY.replaceConfirm}</h2><p data-ui-copy="body">{STORAGE_COPY.downloadBeforeReplace}</p><button className="dc-button dc-button--primary" onClick={startReplacement}>{STORAGE_COPY.replace}</button><button className="dc-button dc-button--secondary" onClick={()=>setReplacePrompt(false)}>{STORAGE_COPY.keep}</button></ConfirmationDialog>
     {(state.view==="questions"||state.view==="review")&&<nav className="dc-progress" aria-label="Progress" data-ui-component-content="desired-client-progress"><ol>{STAGE_DEFINITIONS.map(item=><li key={item.id}><button type="button" aria-current={state.stage===item.id?"step":undefined} disabled={!canEnterStage(state,item.id)} onClick={()=>navigateStage(item.id)} data-ui-copy="supporting">{item.label}</button></li>)}</ol></nav>}
-    {state.view==="questions"&&<GuidedQuestionStage stage={state.stage} answers={state.answers} onEdit={updateAnswers} onBack={backStage} onNext={nextStage} onCompare={beginComparison} error={state.error==="changed"} notice={clarificationNoticeFor(state.error,aiAvailable)} aiAvailable={aiAvailable} preview={state.stage>3?<DraftPreview preview={buildDraftPreview(state.answers)}/>:undefined}/>}
+    {state.view==="questions"&&<GuidedQuestionStage provider={provider} stage={state.stage} answers={state.answers} onEdit={updateAnswers} onBack={backStage} onNext={nextStage} onCompare={beginComparison} error={state.error==="changed"} notice={clarificationNoticeFor(state.error,aiAvailable)} aiAvailable={aiAvailable} preview={state.stage>3?<DraftPreview preview={buildDraftPreview(state.answers)}/>:undefined}/>}
     {state.view==="interviewClarification"&&state.interviewPrompt&&<InterviewClarificationStep prompt={state.interviewPrompt} onAnswer={onInterviewAnswer} onSkip={onInterviewSkip}/>}
     {state.view==="comparison"&&state.answers.focus.area&&<ComparisonStep area={state.answers.focus.area} draft={state.comparisonDraft} step={state.comparisonStep} onDraft={comparisonDraft} onStep={step=>commit({...stateRef.current,comparisonStep:step})} onBack={abandonComparison} onCommit={onCompareCommit}/>}
     {state.view==="clarification"&&state.activeClarification&&<ClarificationStep code={state.activeClarification} onAnswer={onAnswerClarification}/>}
-     {state.view==="review"&&<ReviewStep answers={state.answers} onCreate={onPrimary} onRetry={retryAI} onCreateStructured={createStructured} onEdit={editStage} briefNeedsUpdate={state.briefNeedsUpdate} loading={state.loading} error={state.error==="clarificationUnavailable"||state.error==="clarificationLimitReached"?"":state.error} retryAllowed={state.retryAllowed} legacyBriefReplaced={state.legacyBriefReplaced} aiAvailable={aiAvailable!==false} reportNeedsRegeneration={state.reportNeedsRegeneration} providerCallsUsed={state.providerCallsUsed} providerCallLimit={state.providerCallLimit} failureReference={analysisReference}/>}
+     {state.view==="review"&&<ReviewStep provider={provider} answers={state.answers} onCreate={onPrimary} onRetry={retryAI} onCreateStructured={createStructured} onEdit={editStage} briefNeedsUpdate={state.briefNeedsUpdate} loading={state.loading} error={state.error==="clarificationUnavailable"||state.error==="clarificationLimitReached"?"":state.error} retryAllowed={state.retryAllowed} legacyBriefReplaced={state.legacyBriefReplaced} aiAvailable={aiAvailable!==false} reportNeedsRegeneration={state.reportNeedsRegeneration} providerCallsUsed={state.providerCallsUsed} providerCallLimit={state.providerCallLimit} failureReference={analysisReference}/>}
     {state.view==="brief"&&state.savedBrief&&<BriefView saved={state.savedBrief} answers={state.answers} dismissedCode={state.dismissedCode} reviewed={state.reviewed} onReview={value=>commit(markReviewed(stateRef.current,value))} onEdit={editStage} onAnother={createAnother} onClear={clearStored} onRetry={retryAI} analysisLoading={state.loading} analysisError={state.error==="unavailable"||state.error==="invalid"||state.error==="providerCallLimitReached"?state.error:""} retryAllowed={state.retryAllowed} providerCallsUsed={state.providerCallsUsed} providerCallLimit={state.providerCallLimit} storageWarning={state.storageMessage==="unavailable"}/>}
-     {state.view==="brief"&&!state.savedBrief&&<ReviewStep answers={state.answers} onCreate={onPrimary} onRetry={retryAI} onCreateStructured={createStructured} onEdit={editStage} briefNeedsUpdate={state.briefNeedsUpdate} loading={state.loading} error={state.error==="clarificationUnavailable"||state.error==="clarificationLimitReached"?"":state.error} retryAllowed={state.retryAllowed} legacyBriefReplaced={state.legacyBriefReplaced} aiAvailable={aiAvailable!==false} reportNeedsRegeneration={state.reportNeedsRegeneration} providerCallsUsed={state.providerCallsUsed} providerCallLimit={state.providerCallLimit} failureReference={analysisReference}/>}
+     {state.view==="brief"&&!state.savedBrief&&<ReviewStep provider={provider} answers={state.answers} onCreate={onPrimary} onRetry={retryAI} onCreateStructured={createStructured} onEdit={editStage} briefNeedsUpdate={state.briefNeedsUpdate} loading={state.loading} error={state.error==="clarificationUnavailable"||state.error==="clarificationLimitReached"?"":state.error} retryAllowed={state.retryAllowed} legacyBriefReplaced={state.legacyBriefReplaced} aiAvailable={aiAvailable!==false} reportNeedsRegeneration={state.reportNeedsRegeneration} providerCallsUsed={state.providerCallsUsed} providerCallLimit={state.providerCallLimit} failureReference={analysisReference}/>}
    </div>
    {embedded&&<a className="dc-open-window" href="/tools/best-cases-profile" target="_blank" rel="noreferrer">Open the tool in its own window</a>}
  </div>;

@@ -1,9 +1,5 @@
-/**
- * Gemini answer generation for Firm Assist (DR-100). Retry policy and env
- * key resolution mirror screen-llm-server.ts and gemini-embed.ts.
- */
-
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { getProvider } from '../ai/openai';
+import { createIntakeJsonGenerator, isTransientGenerationError, hasGenerationKey } from '../ai/intake-generation';
 import {
   ANSWER_MODEL,
   ANSWER_TEMPERATURE,
@@ -22,19 +18,12 @@ export type GenerateAnswerMode = 'live' | 'disabled' | 'error';
 export interface GenerateAnswerResult {
   mode: GenerateAnswerMode;
   response?: AnswerModelResponse;
+  model?: string;
   reason?: string;
 }
 
-function resolveApiKey(): string | null {
-  return process.env.GOOGLE_AI_API_KEY ?? process.env.GEMINI_API_KEY ?? null;
-}
-
-function isTransientError(err: unknown): boolean {
-  const msg = err instanceof Error ? err.message : String(err);
-  if (/\b(429|408|500|502|503|504)\b/.test(msg)) return true;
-  if (/(ECONN|ETIMEDOUT|fetch failed|network)/i.test(msg)) return true;
-  if (/quota/i.test(msg)) return true;
-  return false;
+export function hasAnswerKey(): boolean {
+  return hasGenerationKey(getProvider('FIRM_ASSIST_ANSWER_AI_PROVIDER'));
 }
 
 async function sleep(ms: number): Promise<void> {
@@ -67,29 +56,28 @@ export async function generateAnswer(
   firmName: string,
   chunks: RetrievedChunk[],
 ): Promise<GenerateAnswerResult> {
-  const apiKey = resolveApiKey();
-  if (!apiKey) {
-    return { mode: 'disabled', reason: 'No Gemini API key configured (set GOOGLE_AI_API_KEY or GEMINI_API_KEY)' };
+  const provider = getProvider('FIRM_ASSIST_ANSWER_AI_PROVIDER');
+  if (!hasGenerationKey(provider)) {
+    return { mode: 'disabled', reason: 'Firm Assist generation key missing' };
   }
 
-  const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({
-    model: ANSWER_MODEL,
-    systemInstruction: buildAnswerSystemPrompt(firmName),
-    generationConfig: {
-      temperature: ANSWER_TEMPERATURE,
-      responseMimeType: 'application/json',
-      responseSchema: ANSWER_RESPONSE_SCHEMA as never,
-    },
+  const model = provider === 'openai' ? (process.env.FIRM_ASSIST_OPENAI_MODEL?.trim() || 'gpt-6-luna') : ANSWER_MODEL;
+  const generate = createIntakeJsonGenerator({
+    provider,
+    model,
+    instructions: buildAnswerSystemPrompt(firmName),
+    name: 'firm_assist_answer',
+    schema: ANSWER_RESPONSE_SCHEMA,
+    temperature: ANSWER_TEMPERATURE,
+    maxOutputTokens: 1536,
+    timeoutMs: 12000,
   });
-
   const userPrompt = buildAnswerUserPrompt(question, chunks);
 
   let lastErr: unknown = null;
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     try {
-      const result = await model.generateContent(userPrompt);
-      const raw = result.response.text();
+      const { text: raw } = await generate(userPrompt);
       let parsed: unknown;
       try {
         parsed = JSON.parse(raw);
@@ -100,10 +88,10 @@ export async function generateAnswer(
       if (!response) {
         return { mode: 'error', reason: 'invalid_response_shape' };
       }
-      return { mode: 'live', response };
+      return { mode: 'live', response, model };
     } catch (err) {
       lastErr = err;
-      if (attempt < MAX_ATTEMPTS && isTransientError(err)) {
+      if (attempt < MAX_ATTEMPTS && isTransientGenerationError(err)) {
         const wait = RETRY_BACKOFF_MS[attempt - 1] ?? 1200;
         console.warn(`[assist/generate-answer] transient error on attempt ${attempt}, retrying in ${wait}ms:`, err instanceof Error ? err.message : String(err));
         await sleep(wait);

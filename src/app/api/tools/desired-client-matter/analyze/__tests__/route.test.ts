@@ -812,3 +812,19 @@ describe("POST /api/tools/desired-client-matter/analyze", () => {
     expect(mocks.GoogleGenerativeAI).not.toHaveBeenCalled();
   });
 });
+
+it("requires the provider disclosed on the page before generating or clarifying", async () => {
+  vi.stubEnv("DESIRED_CLIENT_PROVIDER", "openai");
+  vi.stubEnv("CASELOAD_OPENAI_API_KEY", "fictional-project-key");
+  try {
+    for (const body of [ENVELOPE, { ...ENVELOPE, operation: "clarify" }]) {
+      const res = await POST(makeRequest(JSON.stringify(body)));
+      expect(res.status).toBe(409);
+      expect((await res.json()).error.code).toBe("AI_UNAVAILABLE");
+    }
+    expect(mocks.checkRateLimit).not.toHaveBeenCalled();
+    expect(mocks.generateContent).not.toHaveBeenCalled();
+  } finally {
+    vi.unstubAllEnvs();
+  }
+});

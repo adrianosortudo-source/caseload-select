@@ -1,15 +1,14 @@
 import { createHash } from "node:crypto";
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { requestDesignJudgments } from "./vision-provider";
+import { websiteReviewProvider } from "@/lib/ai/website-review-rollout";
+import type { AiProvider } from "@/lib/ai/openai";
 
 /**
  * Authority and Positioning judgment layer (WEBSITE_AUTHORITY_SIGNAL_MODULE.md
  * "Judgment prompts" list). Separate rubric and separate call from Phase 2's
  * vision-judgment.ts (that one grades general design-quality composition;
- * this one grades positioning and proof-authenticity), but the exact same
- * call shape: Gemini SDK, native JSON-schema constrained decoding, one
- * retry on a duplicate/missing-entry validation failure. Migrated from
- * Anthropic 2026-08-06 alongside vision-judgment.ts for vendor consistency
- * (see that file's header for the full rationale).
+ * this one grades positioning and proof authenticity). Both use the selected
+ * provider and validate every rubric item.
  *
  * The module lists 7 judgment prompts. One, "is the message consistent
  * across home, about, and service pages," is a cross-page check the
@@ -18,8 +17,6 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
  * measurement, not deferred scope, so it is dropped from this rubric
  * rather than asked anyway. The other 6 run against the single screenshot.
  */
-
-const MODEL = "gemini-2.5-flash";
 
 export const AUTHORITY_JUDGMENT_RUBRIC_ITEMS = [
   {
@@ -120,59 +117,47 @@ export function hashScreenshot(screenshotPng: Buffer): string {
  * vision-judgment.ts's confirmed-live failure rate for this call shape. */
 export async function judgeAuthorityScreenshot(
   screenshotPng: Buffer,
-  deterministicSummary: string
+  deterministicSummary: string,
+  deadline: number = Date.now() + 60000,
+  provider = websiteReviewProvider("WEBSITE_DESIGN_CHECK"),
 ): Promise<AuthorityVisionJudgmentResult> {
   try {
-    return await judgeAuthorityScreenshotOnce(screenshotPng, deterministicSummary);
+    return await judgeAuthorityScreenshotOnce(screenshotPng, deterministicSummary, deadline, provider);
   } catch (err) {
     const isValidationFailure = err instanceof Error && /duplicate entries|missing entries|out of range/.test(err.message);
     if (!isValidationFailure) throw err;
-    return await judgeAuthorityScreenshotOnce(screenshotPng, deterministicSummary);
+    return await judgeAuthorityScreenshotOnce(screenshotPng, deterministicSummary, deadline, provider);
   }
 }
 
 async function judgeAuthorityScreenshotOnce(
   screenshotPng: Buffer,
-  deterministicSummary: string
+  deterministicSummary: string,
+  deadline: number,
+  provider: AiProvider,
 ): Promise<AuthorityVisionJudgmentResult> {
-  const apiKey = process.env.GOOGLE_AI_API_KEY ?? process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    throw new Error("No Gemini API key configured (set GOOGLE_AI_API_KEY or GEMINI_API_KEY).");
-  }
-
-  const screenshotHash = hashScreenshot(screenshotPng);
-  const screenshotBase64 = screenshotPng.toString("base64");
-
-  const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({
-    model: MODEL,
-    systemInstruction: buildSystemPrompt(),
-    generationConfig: {
-      responseMimeType: "application/json",
-      responseSchema: JUDGMENT_RESPONSE_SCHEMA as never,
-    },
+  const result = await requestDesignJudgments({
+    provider,
+    instructions: buildSystemPrompt(),
+    prompt: buildUserPrompt(deterministicSummary),
+    screenshot: screenshotPng,
+    schemaName: "design_authority_rubric",
+    schema: JUDGMENT_RESPONSE_SCHEMA,
+    deadline,
   });
-
-  const result = await model.generateContent([
-    { inlineData: { mimeType: "image/png", data: screenshotBase64 } },
-    { text: buildUserPrompt(deterministicSummary) },
-  ]);
-
-  const raw = result.response.text();
   let parsed: { judgments: AuthorityJudgmentScore[] };
   try {
-    parsed = JSON.parse(raw) as { judgments: AuthorityJudgmentScore[] };
+    parsed = JSON.parse(result.text) as { judgments: AuthorityJudgmentScore[] };
   } catch {
-    throw new Error(`Gemini response was not valid JSON: ${raw.slice(0, 500)}`);
+    throw new Error("The vision provider returned invalid JSON.");
   }
 
   const judgments = validateJudgments(parsed.judgments);
-  const usage = result.response.usageMetadata;
 
   return {
-    screenshotHash,
+    screenshotHash: hashScreenshot(screenshotPng),
     judgments,
-    usage: { inputTokens: usage?.promptTokenCount ?? 0, outputTokens: usage?.candidatesTokenCount ?? 0 },
+    usage: { inputTokens: result.inputTokens, outputTokens: result.outputTokens },
   };
 }
 
@@ -187,7 +172,7 @@ function validateJudgments(judgments: AuthorityJudgmentScore[]): AuthorityJudgme
     seen.set(j.item, j);
   }
   if (duplicates.length > 0) {
-    throw new Error(`Authority judgment returned duplicate entries for: ${duplicates.join(", ")}. Full response: ${JSON.stringify(judgments)}`);
+    throw new Error(`Authority judgment returned duplicate entries for: ${duplicates.join(", ")}.`);
   }
   const missing = AUTHORITY_JUDGMENT_RUBRIC_ITEMS.map((r) => r.key).filter((key) => !seen.has(key));
   if (missing.length > 0) {

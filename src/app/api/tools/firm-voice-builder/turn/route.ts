@@ -19,6 +19,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { checkRateLimit, ipFromRequest, rateLimitHeaders } from "@/lib/rate-limit";
 import { validateTranscript, transcriptToGeminiContents } from "@/lib/firm-voice-builder/turn";
 import { runFirmVoiceBuilderTurn } from "@/lib/firm-voice-builder/gemini";
+import { voiceTurnProvider } from "@/lib/ai/voice-rollout";
+import { runOpenAIVoiceTurn } from "@/lib/firm-voice-builder/openai";
 import {
   parseSectionTag,
   extractProfile,
@@ -81,6 +83,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json<TurnResponseBody>({ ok: false, error: validation.error }, { status: 400 });
   }
 
+  const provider = voiceTurnProvider(req.headers);
+  if (!provider) {
+    return NextResponse.json<TurnResponseBody>(
+      { ok: false, error: "The interview provider changed. Reload the guide to review the new provider and resume." },
+      { status: 409 },
+    );
+  }
   const ip = ipFromRequest(req);
   const decision = await checkRateLimit("firmVoiceBuilder", ip);
   if (!decision.ok) {
@@ -90,8 +99,9 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const contents = transcriptToGeminiContents(validation.transcript);
-  const result = await runFirmVoiceBuilderTurn(contents);
+  const result = provider === "openai"
+    ? await runOpenAIVoiceTurn(validation.transcript)
+    : await runFirmVoiceBuilderTurn(transcriptToGeminiContents(validation.transcript));
 
   if (result.mode === "disabled") {
     return NextResponse.json<TurnResponseBody>(

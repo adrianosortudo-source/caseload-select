@@ -17,11 +17,12 @@ import { judgeAuthorityScreenshot, type AuthorityJudgmentScore } from "@/lib/des
 import { buildTrack1Report } from "@/lib/design-check/aggregate";
 import type { DimensionResult } from "@/lib/design-check/dimension-types";
 import { checkRateLimit, ipFromRequest, rateLimitHeaders } from "@/lib/rate-limit";
+import { websiteReviewProvider } from "@/lib/ai/website-review-rollout";
 
 /**
  * The Website Design Grading tool's public scan endpoint. Runs the full
  * pipeline built across Phases 0-4: real headless-browser render at two
- * viewports, deterministic dimension scoring, two Gemini vision-model
+ * viewports, deterministic dimension scoring, two vision-model
  * judgment passes (general design quality + authority/positioning), and
  * Track 1 aggregation into a letter grade with ranked findings.
  *
@@ -57,7 +58,9 @@ function normalizeDomain(raw: string): string {
 }
 
 export async function POST(request: NextRequest) {
-  const decision = await checkRateLimit("designCheck", ipFromRequest(request));
+  const deadline = Date.now() + (maxDuration - 5) * 1000;
+  const identity = ipFromRequest(request);
+  const decision = await checkRateLimit("designCheck", identity);
   if (!decision.ok) {
     return NextResponse.json({ error: "Too many checks. Try again in a few minutes." }, { status: 429, headers: rateLimitHeaders(decision) });
   }
@@ -93,6 +96,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    const provider = websiteReviewProvider("WEBSITE_DESIGN_CHECK", identity);
     const result = await fetchRenderResult(url);
     const desktopCapture = result.captures.find((c) => c.viewport === "desktop");
     const mobileCapture = result.captures.find((c) => c.viewport === "mobile");
@@ -104,7 +108,9 @@ export async function POST(request: NextRequest) {
     try {
       const authorityVision = await judgeAuthorityScreenshot(
         desktopCapture.screenshotPng,
-        "Lexicon and schema signals are scored separately from measured DOM data; judge only the 6 rubric items against the screenshot."
+        "Lexicon and schema signals are scored separately from measured DOM data; judge only the 6 rubric items against the screenshot.",
+        deadline,
+        provider,
       );
       authorityJudgments = authorityVision.judgments;
     } catch (err) {
@@ -145,7 +151,7 @@ export async function POST(request: NextRequest) {
 
     let generalJudgments;
     try {
-      const visionResult = await judgeScreenshot(desktopCapture.screenshotPng, [...desktopDimensions, mobileDimension, authorityAsDimension]);
+      const visionResult = await judgeScreenshot(desktopCapture.screenshotPng, [...desktopDimensions, mobileDimension, authorityAsDimension], deadline, provider);
       generalJudgments = visionResult.judgments;
     } catch (err) {
       console.error("[design-check] design-quality vision judgment failed, degrading to deterministic-only:", err instanceof Error ? err.message : String(err));
@@ -153,6 +159,7 @@ export async function POST(request: NextRequest) {
     }
 
     const track1Report = buildTrack1Report([...desktopDimensions, mobileDimension], authorityResult, generalJudgments, desktopCapture.domSnapshot.darkPatterns);
+    console.info("[design-check] review", { provider, authorityJudged: !!authorityJudgments, designJudged: !!generalJudgments });
 
     return NextResponse.json(
       {

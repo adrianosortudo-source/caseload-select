@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { newVoiceAssignment } from "@/lib/ai/voice-rollout";
 import FirmVoiceBuilder from "@/components/firm-voice-builder/FirmVoiceBuilder";
 import ToolHeader from "@/components/firm-voice-builder/ToolHeader";
 
@@ -38,7 +39,7 @@ export default async function FirmVoiceBuilderPage({ searchParams }: PageProps) 
     <>
       {!isEmbedded && <ToolHeader />}
       <main className="min-h-screen bg-parchment px-4 py-10">
-        <FirmVoiceBuilder />
+        <FirmVoiceBuilder assignment={newVoiceAssignment()} />
       </main>
     </>
   );

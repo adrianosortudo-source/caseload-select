@@ -1,3 +1,4 @@
+import { getProvider } from "@/lib/ai/openai";
 import Image from "next/image";
 import type { Metadata } from "next";
 import DesiredClientTool from "@/components/desired-client/DesiredClientTool";
@@ -26,7 +27,7 @@ export default async function DesiredClientMatterPage({ searchParams }: PageProp
         </header>
       )}
       <main className="dc-route-main">
-        <DesiredClientTool embedded={embedded} />
+        <DesiredClientTool provider={getProvider("DESIRED_CLIENT_PROVIDER")} embedded={embedded} />
       </main>
     </div>
   );

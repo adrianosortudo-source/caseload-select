@@ -20,6 +20,8 @@
  * Pipeline: parse -> validate -> rate limit -> Gemini -> respond.
  */
 
+import { getProvider } from "@/lib/ai/openai";
+import { matchesWritingProvider } from "@/lib/ai/writing-provider-policy";
 import { NextRequest, NextResponse } from "next/server";
 import { checkRateLimit, ipFromRequest, rateLimitHeaders } from "@/lib/rate-limit";
 import { validateAssistBody, runAssist, type AssistConcern } from "@/lib/why-your-firm/assist";
@@ -52,6 +54,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json<AssistResponseBody>({ ok: false, error: validation.error }, { status: 400 });
   }
 
+  const provider = getProvider("WHY_YOUR_FIRM_ASSIST_PROVIDER");
+  if (!matchesWritingProvider(req.headers, provider)) {
+    return NextResponse.json<AssistResponseBody>(
+      { ok: false, error: "Reload the tool to review the current provider before requesting a suggestion." },
+      { status: 409 },
+    );
+  }
   const decision = await checkRateLimit("whyYourFirmAssist", ipFromRequest(req));
   if (!decision.ok) {
     return NextResponse.json<AssistResponseBody>(
@@ -60,7 +69,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const outcome = await runAssist(validation.value);
+  const outcome = await runAssist(validation.value, provider);
 
   if (outcome.mode === "disabled") {
     return NextResponse.json<AssistResponseBody>(

@@ -9,6 +9,7 @@ import {
   type UnconfirmedVoiceNotifyArgs,
   type OperatorEmailResult,
 } from '@/lib/voice-callback-notify-pure';
+import { getProvider } from '@/lib/ai/openai';
 import { buildLlmDisabledAlertEmail, type LlmDisabledAlertArgs } from '@/lib/llm-health-alert';
 
 const FALLBACK_OPERATOR_EMAIL = 'adriano@caseloadselect.ca';
@@ -118,7 +119,7 @@ export async function notifyOperatorOfLlmDisabled(
   args: LlmDisabledAlertArgs,
 ): Promise<OperatorEmailResult> {
   const result: OperatorEmailResult = { email: 'skipped', errors: [] };
-  const email = buildLlmDisabledAlertEmail(args);
+  const email = buildLlmDisabledAlertEmail({ ...args, provider: getProvider('SCREEN_INTAKE_AI_PROVIDER') });
 
   try {
     const dispatch = await sendEmail(resolveOperatorEmail(), email.subject, email.html);

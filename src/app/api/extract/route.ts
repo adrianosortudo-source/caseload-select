@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { extractionProvider } from "@/lib/ai/intake-generation";
 import { llmExtractServer } from "@/lib/screen-llm-server";
 import { initialiseState } from "@/lib/screen-engine/extractor";
 import { checkRateLimit, ipFromRequest, rateLimitHeaders } from "@/lib/rate-limit";
@@ -21,7 +22,7 @@ const MAX_DESCRIPTION_CHARS = 16_000;
 
 export async function POST(req: Request) {
   // Public route (the browser widget calls it, no auth possible); the
-  // per-IP bucket is the only gate in front of the Gemini spend (H6).
+  // per-IP bucket is the only gate in front of the model spend (H6).
   const ip = ipFromRequest(req);
   const rl = await checkRateLimit("extract", ip);
   if (!rl.ok) {
@@ -60,9 +61,10 @@ export async function POST(req: Request) {
        !slot.applies_to.includes(state.matter_type) || !reply || reply.length > 4000)) {
     return NextResponse.json({ error: "invalid pending slot or reply" }, { status: 400 });
   }
+  const provider = extractionProvider(req);
   const [result, mapped] = await Promise.all([
-    llmExtractServer(description, state, MAX_DESCRIPTION_CHARS),
-    slot && reply ? llmMapOptionReply({ questionLabel: slot.question, options: slot.options!, reply, language: "en" }) : Promise.resolve(null),
+    llmExtractServer(description, state, MAX_DESCRIPTION_CHARS, provider),
+    slot && reply ? llmMapOptionReply({ questionLabel: slot.question, options: slot.options!, reply, language: "en" }, provider) : Promise.resolve(null),
   ]);
   const value = mapped?.value;
   const compositeNegativeGrounded = slot?.id !== "family_existing_order" || value !== "Neither" ||

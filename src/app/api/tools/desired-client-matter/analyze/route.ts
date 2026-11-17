@@ -1,4 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
+import { getProvider } from "@/lib/ai/openai";
+import { matchesWritingProvider } from "@/lib/ai/writing-provider-policy";
+import { desiredClientHasKey } from "@/lib/desired-client/provider";
 import { NextRequest, NextResponse } from "next/server";
 import { checkRateLimit, ipFromRequest, rateLimitHeaders, releaseDesiredClientProviderRun, reserveDesiredClientProviderCall } from "@/lib/rate-limit";
 import { desiredClientModelId, runDesiredClientAnalysis } from "@/lib/desired-client/analyze";
@@ -15,8 +18,7 @@ const NO_STORE = { "Cache-Control": "no-store" };
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function desiredClientAiEnabled(): boolean {
-  const apiKey = process.env.GOOGLE_AI_API_KEY?.trim() || process.env.GEMINI_API_KEY?.trim();
-  return process.env.DESIRED_CLIENT_AI_ENABLED === "true" && Boolean(apiKey) &&
+  return process.env.DESIRED_CLIENT_AI_ENABLED === "true" && desiredClientHasKey() &&
     Boolean(process.env.UPSTASH_REDIS_REST_URL?.trim()) && Boolean(process.env.UPSTASH_REDIS_REST_TOKEN?.trim());
 }
 
@@ -94,6 +96,9 @@ export async function POST(request: NextRequest): Promise<NextResponse<AnalysisF
   let parsed: unknown;
   try { parsed = JSON.parse(body.text); } catch { return fail(randomUUID(), "INVALID_REQUEST", 400); }
   const requestId = requestIdFromBody(parsed);
+  if (!matchesWritingProvider(request.headers, getProvider("DESIRED_CLIENT_PROVIDER"))) {
+    return fail(requestId, "AI_UNAVAILABLE", 409);
+  }
 
   if (parsed && typeof parsed === "object" && !Array.isArray(parsed) && (parsed as Record<string, unknown>).operation === "clarify") {
     const validation = validateInterviewClarificationRequest(parsed);

@@ -21,7 +21,10 @@ import type { WizardData } from "@/lib/why-your-firm/screens";
 import ClaimCard from "./ClaimCard";
 import CustomClaimEntry from "./CustomClaimEntry";
 
+import type { AiProvider } from "@/lib/ai/openai";
+
 interface Props {
+  provider: AiProvider;
   category: Category;
   data: WizardData;
   onPatch: (updater: Partial<WizardData> | ((prev: WizardData) => Partial<WizardData>)) => void;
@@ -29,7 +32,7 @@ interface Props {
   onBack: () => void;
 }
 
-export default function PassOneStep({ category, data, onPatch, onContinue, onBack }: Props) {
+export default function PassOneStep({ provider, category, data, onPatch, onContinue, onBack }: Props) {
   const meta = CATEGORIES.find((c) => c.id === category);
   const cards = cardsInCategory(category);
 
@@ -61,7 +64,7 @@ export default function PassOneStep({ category, data, onPatch, onContinue, onBac
           />
         ))}
 
-        <CustomClaimEntry category={category} data={data} onPatch={onPatch} />
+        <CustomClaimEntry provider={provider} category={category} data={data} onPatch={onPatch} />
       </div>
 
       <div className="flex gap-2">
