@@ -105,7 +105,7 @@ export function GeneCurrentScreenMockup() {
         </div>
         <button type="button" disabled={!ready} onClick={restart}>Start over</button>
       </div>
-      <p className={styles.disclosure} data-ui-component-content="gene-disclosure" data-ui-copy="supporting">Use fictional details, including contact details. Live AI sends your description to Google Gemini. This demo creates no lead and contacts no law firm.</p>
+      <p className={styles.disclosure} data-ui-component-content="gene-disclosure" data-ui-copy="supporting">This demo creates no lead and contacts no law firm. The form identifies the provider before you choose live AI.</p>
       <div ref={canvas} className={styles.canvas} aria-label="Gene C. Colman Family Law Centre website mockup" data-gene-view={view}>
         {showScreenshot && slice(0, formStart, "top")}
         <div className={styles.formRegion} style={{ minHeight: focused ? undefined : width * formHeight }}>

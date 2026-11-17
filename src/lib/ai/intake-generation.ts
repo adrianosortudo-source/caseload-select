@@ -9,23 +9,6 @@ export function operationalIntakeProvider(): IntakeProvider {
   return getProvider('SCREEN_INTAKE_AI_PROVIDER');
 }
 
-/** The pinned sandbox fetches /api/extract from its own document. Treat an absent
- * or unrelated referrer as an ordinary intake. All callers share the rate limit. */
-export function extractionProvider(request: Request): IntakeProvider {
-  const referrer = request.headers.get('referer');
-  if (referrer) {
-    try {
-      const page = new URL(referrer);
-      if (page.origin === new URL(request.url).origin && page.pathname === '/screen-demo-app/index.html') {
-        return getProvider('SCREEN_DEMO_AI_PROVIDER');
-      }
-    } catch {
-      // No verified demo document.
-    }
-  }
-  return operationalIntakeProvider();
-}
-
 export function intakeModel(): string {
   return process.env.SCREEN_OPENAI_MODEL?.trim() || 'gpt-6-luna';
 }

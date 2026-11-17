@@ -46,13 +46,17 @@ export async function llmExtract(
   description: string,
   state: EngineState,
   followUp?: { pendingSlotId: string; reply: string },
+  demoProvider?: 'openai' | 'gemini',
 ): Promise<LlmExtractionResponse> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), state.family_enabled === true ? FAMILY_REQUEST_TIMEOUT_MS : REQUEST_TIMEOUT_MS);
   try {
-    const res = await fetch('/api/extract', {
+    const res = await fetch(demoProvider ? '/api/screen-demo/extract' : '/api/extract', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...(demoProvider && { 'X-Screen-Demo-Provider': demoProvider }),
+      },
       body: JSON.stringify({
         description,
         matter_type: state.matter_type,
@@ -120,6 +124,16 @@ const NON_ANSWER_LITERALS = new Set([
   'none',
   'not applicable',
 ]);
+
+/** A zero count is a substantive answer. Keep it only when the caller
+ * explicitly says they have no children, never from another person's status. */
+function explicitlyHasNoChildren(input: string): boolean {
+  const text = input.normalize('NFKC').toLowerCase().replace(/[’‘]/g, "'");
+  return /\b(?:i|we) (?:have (?:no|zero)|(?:do not|don't) have (?:any )?|have never had (?:any )?)(?: ?children| ?kids)\b/.test(text)
+    || /\b(?:i am|i'm|we are|we're) childless\b/.test(text)
+    || /\b(?:je n'ai pas d'enfants?|nous n'avons pas d'enfants?|no (?:tengo|tenemos) hijos|não (?:tenho|temos) filhos)\b/.test(text)
+    || /(?:我没有孩子|我们没有孩子|我沒有孩子|我們沒有孩子|ليس لدي أطفال|ليس لدينا أطفال)/.test(text);
+}
 
 function isNonAnswer(value: string): boolean {
   return NON_ANSWER_LITERALS.has(value.trim().toLowerCase());
@@ -355,7 +369,9 @@ export function mergeLlmResults(
     // topic from preserving "Not sure" hedges across every other
     // slot the LLM might have returned a non-answer for.
     const nonAnswer = isNonAnswer(value);
-    if (nonAnswer) {
+    if (nonAnswer && slotId === 'children_count' && value === 'None') {
+      if (!explicitlyHasNoChildren(working.input) || !slotOptionsIncludeValue(slotId, value)) continue;
+    } else if (nonAnswer) {
       if (!leadUncertain) continue;
       if (!slotOptionsIncludeValue(slotId, value)) continue;
     }

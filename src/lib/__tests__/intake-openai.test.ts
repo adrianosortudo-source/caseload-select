@@ -1,20 +1,13 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { generateAnswer } from "../assist/generate-answer";
-import { extractionProvider } from "../ai/intake-generation";
 import { initialiseState } from "../screen-engine/extractor";
 import { llmExtractServer } from "../screen-llm-server";
 import { llmMapOptionReply } from "../llm-option-map";
 import { classifyVoiceBranchServer } from "../voice-branch-classifier-server";
 import { classifyVoiceBranchHeuristic } from "../voice-branch-classifier";
 
-const testOrigin = "https://example.test";
-const demoPage = testOrigin + "/screen-demo-app/index.html";
 const invoice = "A fictional customer owes $18,450 on an unpaid invoice.";
 const state = { ...initialiseState(invoice), matter_type: "unpaid_invoice" as const };
-
-function request(referrer?: string): Request {
-  return new Request(testOrigin + "/api/extract", { headers: referrer ? { referer: referrer } : {} });
-}
 
 function stubResponse(json: unknown) {
   vi.stubEnv("CASELOAD_OPENAI_API_KEY", "project-fixture");
@@ -30,19 +23,6 @@ function stubResponse(json: unknown) {
 afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); });
 
 describe("SCREEN provider routing", () => {
-  it("selects the demo independently of operational intake, including iframe document queries", () => {
-    vi.stubEnv("SCREEN_DEMO_AI_PROVIDER", "openai");
-    vi.stubEnv("SCREEN_INTAKE_AI_PROVIDER", "gemini");
-    expect(extractionProvider(request(demoPage + "?embedded=true"))).toBe("openai");
-    for (const referrer of [undefined, "invalid", testOrigin + "/chat", demoPage + ".fake", "https://other.test/screen-demo-app/index.html"]) {
-      expect(extractionProvider(request(referrer))).toBe("gemini");
-    }
-    vi.stubEnv("SCREEN_DEMO_AI_PROVIDER", "gemini");
-    vi.stubEnv("SCREEN_INTAKE_AI_PROVIDER", "openai");
-    expect(extractionProvider(request(demoPage))).toBe("gemini");
-    expect(extractionProvider(request())).toBe("openai");
-  });
-
   it("uses the direct project, nullable slots and canonical output filtering on the OpenAI route", async () => {
     const fetchMock = stubResponse({ amount_at_stake: "$5,000-$25,000", client_email: "invalid", invented: "invalid" });
     const result = await llmExtractServer(invoice, state, 4000, "openai");
