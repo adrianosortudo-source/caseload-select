@@ -1,5 +1,5 @@
 {
-  "buildCommand": "next build",
+  "buildCommand": "next build && node scripts/staff-preview-fixed.mjs",
   "outputDirectory": ".next",
   "crons": [
     {

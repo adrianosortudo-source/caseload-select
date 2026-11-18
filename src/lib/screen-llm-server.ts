@@ -37,6 +37,7 @@ export async function llmExtractServer(
   state: EngineState,
   maxDescriptionLength = MAX_DESCRIPTION_LENGTH,
   provider = operationalIntakeProvider(),
+  onRawModelText?: (text: string) => void,
 ): Promise<LlmExtractionResponse> {
   if (!hasGenerationKey(provider)) {
     return {
@@ -111,6 +112,7 @@ export async function llmExtractServer(
     }
 
     const raw = result.text;
+    onRawModelText?.(raw);
 
     let parsed: Record<string, string | null> = {};
     try {
