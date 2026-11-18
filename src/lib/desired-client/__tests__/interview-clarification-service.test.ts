@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { completeAnswers } from "./blueprint-helpers";
 import { runInterviewClarification } from "../interview-clarification";
+import { isInterviewClarificationAskPrompt } from "../interview-clarification-contract";
 import type { InterviewClarificationRequestEnvelope } from "../types";
 
 const provider = vi.hoisted(() => ({ configure: vi.fn(), generate: vi.fn() }));
@@ -30,6 +31,30 @@ beforeEach(() => { vi.clearAllMocks(); provider.generate.mockReset(); vi.stubEnv
 afterEach(() => { vi.unstubAllEnvs(); vi.restoreAllMocks(); });
 
 describe("bounded clarification reflection repair", () => {
+  it("returns a sourced, answerable fee mismatch without a model call", async () => {
+    const input = request();
+    input.stage = 3;
+    Object.assign(input.answers.value, {
+      fee_amount: "6,500", collected_fee: "15to50", amount_scope: "per_matter", currency: "CAD",
+    });
+    const result = await runInterviewClarification(input);
+    expect(result.mode).toBe("live");
+    if (result.mode !== "live" || result.response.prompt.outcome !== "ask") throw Error("Expected fee clarification");
+    const prompt = result.response.prompt;
+    expect(isInterviewClarificationAskPrompt(prompt, 3, input.answers)).toBe(true);
+    expect(prompt.question).toBe("The fee entered is C$6,500 per matter. Why does it fall outside the selected range (C$15,000 to under C$50,000)?");
+    expect(prompt.choices.map(choice => choice.label)).toEqual([
+      "The amount describes an exception to our usual range",
+      "The amount and range describe different groups of matters",
+      "One or both entries need correction",
+      "I'm not sure yet",
+    ]);
+    expect(provider.generate).not.toHaveBeenCalled();
+    input.stage = 1;
+    provider.generate.mockResolvedValue(response(ask("A short reflection.")));
+    expect((await runInterviewClarification(input)).mode).toBe("live");
+    expect(provider.generate).toHaveBeenCalledOnce();
+  });
   it("repairs an overlong reflection while preserving the valid question, choices and sources", async () => {
     const original = ask("x".repeat(241));
     provider.generate.mockResolvedValueOnce(response(original)).mockResolvedValueOnce(response({ reflection: "The reason helps distinguish work the firm wants to repeat." }));
