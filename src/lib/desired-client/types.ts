@@ -237,10 +237,23 @@ export interface LegacyDesiredClientBrief {
   marketing: { topic: DesiredClientStatement; inquiry_question: DesiredClientStatement; validation_step: DesiredClientStatement };
   work_to_promote_less: DesiredClientStatement[];
 }
+export const WORKSHEET_RECOVERY_LABELS = {
+  why_firm_wants_work: "why the firm wants this work",
+  client_goals_needs: "client goals and needs",
+  why_client_chooses_firm: "why clients choose the firm",
+  recognizable_circumstances: "recognizable circumstances",
+  definition_components: "the confirmed client, matter and reasons for seeking the work",
+  "decision_pathway.trigger": "the trigger for seeking help",
+  "decision_pathway.first_contact": "first contact",
+  "decision_pathway.decision": "the client’s decision",
+  "decision_pathway.desired_progress": "desired progress",
+} as const;
+export type WorksheetRecoverySection = keyof typeof WORKSHEET_RECOVERY_LABELS;
+
 export interface AnalysisResult {
   brief: DesiredClientBriefV4;
   clarification_code: ClarificationCode | null;
-  recoveredSections?: Array<"why_firm_wants_work">;
+  recoveredSections?: WorksheetRecoverySection[];
 }
 export interface AnalysisRequestEnvelope {
   schemaVersion: 4;
@@ -294,7 +307,7 @@ export interface SavedBrief {
   generatedAt: string;
   wordingReviewed: boolean;
   mode: "ai" | "structured";
-  recoveredSections?: Array<"why_firm_wants_work">;
+  recoveredSections?: WorksheetRecoverySection[];
   refreshedFrom?: { generatedAt: string; wordingReviewed: boolean; mode: "ai" | "structured" };
   openClarificationCode?: ClarificationCode;
 }

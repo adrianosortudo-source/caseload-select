@@ -703,6 +703,14 @@ describe("AI Blueprint output contract", () => {
     expect(uncertainty?.text).toContain(answers.opportunity.uncertainty.replace(/[.!?]+$/u,""));
     expect(uncertainty?.text).toMatch(/unknown/iu);
   });
+  it("omits empty opportunity uncertainty while retaining other open questions", () => {
+    const answers = completeAnswers();
+    answers.opportunity.uncertainty = "";
+    const card = validateAnalysisResult(validBlueprint(), answers, [])?.brief.evidence_and_open_questions;
+    expect(card?.claims.flatMap(claim => claim.source_answer_ids)).not.toContain("opportunity.uncertainty");
+    expect(card?.claims.flatMap(claim => claim.source_answer_ids)).toContain("opportunity.sources");
+    expect(card?.claims.map(claim => claim.text).join(" ")).not.toContain("stated opportunity uncertainty");
+  });
   it("rebuilds empty, malformed, and over-limit provider evidence cards", () => {
     const answers = completeAnswers();
     const empty = validBlueprint();

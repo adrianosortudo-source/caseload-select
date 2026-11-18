@@ -4,7 +4,7 @@ import { getAnswerLabel } from "./catalog";
 import { buildStructuredBlueprintV4, paymentContextEvidenceClaim, paymentEvidenceClaim, paymentEvidenceClaims } from "./structured-blueprint";
 import { calculateContribution, hasNegativeContribution } from "./economics";
 import { DESIRED_CLIENT_ANSWER_PATHS } from "./answer-paths";
-import { isInterviewClarificationCurrent, type AnalysisResult, type AnswerReferencePath, type ClarificationCode, type DesiredClientAnswers, type DesiredClientBriefV4, type EvidenceBasis, type EvidenceLinkedStatement } from "./types";
+import { WORKSHEET_RECOVERY_LABELS, type WorksheetRecoverySection, isInterviewClarificationCurrent, type AnalysisResult, type AnswerReferencePath, type ClarificationCode, type DesiredClientAnswers, type DesiredClientBriefV4, type EvidenceBasis, type EvidenceLinkedStatement } from "./types";
 import { allowedSourceAnswerPathsForAnswers as registryAllowedPaths, buildDesiredClientEvidenceGroups, DESIRED_CLIENT_EVIDENCE_SLOTS, getProviderEvidenceSelection, isUnresolvedEvidenceSource as registryIsUnresolvedEvidenceSource, safeEvidenceDiagnostic, statementMatchesEvidenceGroups, type DesiredClientEvidenceSlot } from "./evidence-contract";
 
 const SOURCE_PATHS = new Set<string>(DESIRED_CLIENT_ANSWER_PATHS);
@@ -638,6 +638,12 @@ function recoverMixedWhyFirmSelection(value: unknown, answers: DesiredClientAnsw
   };
 }
 
+const sameGroundedStatement = (actual: EvidenceLinkedStatement, expected: EvidenceLinkedStatement) =>
+    actual.text.trim().replace(/\s+/g, " ") === expected.text.trim().replace(/\s+/g, " ") &&
+    actual.kind === expected.kind && actual.evidence_basis === expected.evidence_basis &&
+    actual.source_answer_ids.length === expected.source_answer_ids.length &&
+    expected.source_answer_ids.every((path) => actual.source_answer_ids.includes(path));
+
 export function validateAnalysisResult(value: unknown, answers: DesiredClientAnswers, _eligibleCodes: readonly ClarificationCode[], onFailure?: (failure: AnalysisValidationFailure) => void): AnalysisResult | null {
   const recoveryState: { diagnostic?: WhyFirmRecoveryDiagnostic } = {};
   const reportFailure = (failure: AnalysisValidationFailure) => onFailure?.({ ...failure, ...(failure.field === "why_firm_wants_work" && recoveryState.diagnostic ? { recoveryDiagnostic: recoveryState.diagnostic } : {}) });
@@ -745,11 +751,7 @@ export function validateAnalysisResult(value: unknown, answers: DesiredClientAns
   // or engagement. Require the model's target fields to match the specific
   // client and matter rebuilt from the firm's answers, including provenance.
   const groundedTarget = buildStructuredBlueprintV4(answers);
-  const sameGroundedStatement = (actual: EvidenceLinkedStatement, expected: EvidenceLinkedStatement) =>
-    actual.text.trim().replace(/\s+/g, " ") === expected.text.trim().replace(/\s+/g, " ") &&
-    actual.kind === expected.kind && actual.evidence_basis === expected.evidence_basis &&
-    actual.source_answer_ids.length === expected.source_answer_ids.length &&
-    expected.source_answer_ids.every((path) => actual.source_answer_ids.includes(path));
+
   if (
     !sameGroundedStatement(typedBrief.definition_components.client, groundedTarget.definition_components.client) ||
     !sameGroundedStatement(typedBrief.definition_components.client_matter, groundedTarget.definition_components.client_matter) ||
@@ -848,16 +850,26 @@ export function validateAnalysisResponseResult(value: unknown, answers: DesiredC
   const reject = (reason: string) => { reportFailure?.({ field: "report", reason }); return null; };
   if (!exact(value, ["brief", "clarification_code", "recoveredSections"])) return reject("root_shape");
   const recovery = value.recoveredSections;
-  if (!Array.isArray(recovery) || recovery.length !== 1 || recovery[0] !== "why_firm_wants_work") {
+  if (!Array.isArray(recovery) || !recovery.length || new Set(recovery).size !== recovery.length ||
+      !recovery.every(id => typeof id === "string" && Object.hasOwn(WORKSHEET_RECOVERY_LABELS, id))) {
     return reject("recovery_metadata_invalid");
   }
-
   const validated = validateAnalysisResult({ brief: value.brief, clarification_code: value.clarification_code }, answers, eligibleCodes, reportFailure);
   if (!validated) return null;
-  if (!isGroundedRecoveredCard(validated.brief.why_firm_wants_work, answers)) {
-    return reject("recovery_metadata_not_grounded");
-  }
-  return { ...validated, recoveredSections: ["why_firm_wants_work"] };
+  const worksheet = buildStructuredBlueprintV4(answers);
+  const sections = recovery as WorksheetRecoverySection[];
+  const grounded = sections.every(id => {
+    if (id === "why_firm_wants_work") return isGroundedRecoveredCard(validated.brief[id], answers);
+    if (id === "definition_components") return (["client", "client_matter", "reasons"] as const).every(
+      part => sameGroundedStatement(validated.brief[id][part], worksheet[id][part]));
+    if (id === "client_goals_needs" || id === "why_client_chooses_firm" || id === "recognizable_circumstances") {
+      const actual = validated.brief[id].claims, expected = worksheet[id].claims;
+      return actual.length === expected.length && actual.every((claim, i) => sameGroundedStatement(claim, expected[i]));
+    }
+    const part = id.slice("decision_pathway.".length) as keyof DesiredClientBriefV4["decision_pathway"];
+    return sameGroundedStatement(validated.brief.decision_pathway[part], worksheet.decision_pathway[part]);
+  });
+  return grounded ? { ...validated, recoveredSections: sections } : reject("recovery_metadata_not_grounded");
 }
 
 const LINKED_STATEMENT_SCHEMA = { type: "object", properties: { text: { type: "string" }, evidence_group_ids: { type: "array", minItems: 1, maxItems: 8, items: { type: "string" } } }, required: ["text", "evidence_group_ids"] } as const;
