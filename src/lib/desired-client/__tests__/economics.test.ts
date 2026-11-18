@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { calculateContribution } from "../economics";
+import { calculateContribution, conflictingCollectedFee } from "../economics";
 import { buildStructuredBlueprintV4 } from "../structured-blueprint";
 import { completeAnswers } from "./blueprint-helpers";
 
@@ -9,6 +9,28 @@ function comparable() {
   return a;
 }
 describe("comparable matter economics",()=>{
+  it("compares CAD per-matter fees using each bracket's displayed bounds",()=>{
+    const value = comparable().value;
+    const bands = [
+      ["under2", ["0", "1,999.99"], ["2,000"]],
+      ["2to5", ["2,000", "4,999.99"], ["1,999.99", "5,000"]],
+      ["5to15", ["5,000", "14,999.99"], ["4,999.99", "15,000"]],
+      ["15to50", ["15,000", "49,999.99"], ["6,500", "50,000"]],
+      ["50plus", ["50,000", "100000"], ["49,999.99"]],
+    ] as const;
+    for (const [band, inside, outside] of bands) {
+      for (const fee of inside) expect(conflictingCollectedFee({...value, collected_fee: band, fee_amount: fee})).toBeNull();
+      for (const fee of outside) expect(conflictingCollectedFee({...value, collected_fee: band, fee_amount: fee})).not.toBeNull();
+    }
+  });
+  it("does not compare incompatible scopes, currencies, unshared brackets or ambiguous amounts",()=>{
+    const value = {...comparable().value, collected_fee: "15to50" as const, fee_amount: "6500"};
+    for (const patch of [
+      {currency:"USD"}, {currency:""}, {amount_scope:"other"}, {amount_scope:null},
+      {collected_fee:"private"}, {collected_fee:"unknown"}, {collected_fee:null},
+      {fee_amount:"6500-8000"}, {fee_amount:"1,2"},
+    ] as const) expect(conflictingCollectedFee({...value,...patch})).toBeNull();
+  });
   it("calculates contribution with explicit shared scope, currency and evidence basis",()=>{
     const a=comparable();
     expect(calculateContribution(a)).toMatchObject({amount:"C$9,000.00",margin:{label:"Contribution margin on collected fees",amount:"50.00%"},currency:"CAD",scope:"per matter",basis:"firm_reported_estimate"});

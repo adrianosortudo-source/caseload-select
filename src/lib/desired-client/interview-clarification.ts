@@ -4,6 +4,7 @@ import { desiredClientHasKey, desiredClientModelId, generateDesiredClientText } 
 import { randomUUID } from "node:crypto";
 import { SchemaType, type Schema } from "@google/generative-ai";
 import { getAnswerLabel } from "./catalog";
+import { conflictingCollectedFee } from "./economics";
 import { getMissingFieldsForStage } from "./screens";
 import { isBoundedMultilineText, validateDraftAnswers } from "./validation";
 import { safeProviderFailureMetadata } from "./provider-diagnostics";
@@ -148,6 +149,25 @@ export type InterviewClarificationOutcome = { mode: "live"; response: InterviewC
 export async function runInterviewClarification(request: InterviewClarificationRequestEnvelope, provider = getProvider("DESIRED_CLIENT_PROVIDER")): Promise<InterviewClarificationOutcome> {
   const startedAt = Date.now();
   if (!desiredClientHasKey(provider)) return { mode: "unavailable" };
+  const mismatch = request.stage === 3 ? conflictingCollectedFee(request.answers.value) : null;
+  if (mismatch) {
+    const labels = [
+      "The amount describes an exception to our usual range",
+      "The amount and range describe different groups of matters",
+      "One or both entries need correction",
+      "I'm not sure yet",
+    ];
+    return { mode: "live", response: {
+      ok: true, requestId: request.requestId, answerRevision: request.answerRevision, interviewRunId: request.interviewRunId,
+      prompt: {
+        outcome: "ask", id: randomUUID(), stage: 3, purpose: "economics_effort_conflict",
+        source_answer_ids: ["value.fee_amount", "value.collected_fee", "value.amount_scope", "value.currency"],
+        question: `The fee entered is ${mismatch.fee} per matter. Why does it fall outside the selected range (${mismatch.range})?`,
+        choices: labels.map((label, index) => ({ id: `choice_${index + 1}`, label })),
+        reflection: "This helps the profile use the fee and range in their proper context.",
+      },
+    } };
+  }
   if (getUsableInterviewClarificationSources(request.stage, request.answers).length === 0) {
     return { mode: "live", response: {
       ok: true,

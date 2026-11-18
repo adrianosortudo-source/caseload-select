@@ -1,4 +1,5 @@
-import type { DesiredClientAnswers } from "./types";
+import type { CollectedFeeId, DesiredClientAnswers } from "./types";
+import { COLLECTED_FEE_LABELS } from "./catalog";
 
 export interface CalculatedContribution {
   label: "Contribution before overhead and acquisition costs";
@@ -17,6 +18,29 @@ function amountInCents(value: string): number | null {
   const [whole, fraction = ""] = input.replace(/,/g, "").split(".");
   const cents = Number(whole) * 100 + Number(fraction.padEnd(2, "0"));
   return Number.isSafeInteger(cents) ? cents : null;
+}
+
+// The worksheet's fee brackets use Canadian dollars and an exclusive upper bound.
+const feeBands: Record<Exclude<CollectedFeeId, "unknown" | "private">, [number, number]> = {
+  under2: [0, 2_000],
+  "2to5": [2_000, 5_000],
+  "5to15": [5_000, 15_000],
+  "15to50": [15_000, 50_000],
+  "50plus": [50_000, Infinity],
+};
+
+export function conflictingCollectedFee(value: DesiredClientAnswers["value"]): { fee: string; range: string } | null {
+  const band = value.collected_fee;
+  if (!band || band === "private" || band === "unknown" || value.amount_scope !== "per_matter" ||
+    value.currency.trim().toUpperCase() !== "CAD") return null;
+  const cents = amountInCents(value.fee_amount);
+  if (cents === null) return null;
+  const [lower, upper] = feeBands[band];
+  if (cents >= lower * 100 && cents < upper * 100) return null;
+  // Format the supplied decimal directly to preserve cents even for large safe integers.
+  const [whole, fraction] = value.fee_amount.trim().replaceAll(",", "").split(".");
+  const fee = "C$" + BigInt(whole).toLocaleString("en-CA") + (fraction ? "." + fraction : "");
+  return { fee, range: COLLECTED_FEE_LABELS[band] };
 }
 
 /** Read the sign from the source amounts, not from locale-formatted currency text. */

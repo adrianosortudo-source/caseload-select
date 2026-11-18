@@ -75,7 +75,7 @@ function restoreSavedBrief(value: unknown, answers: DesiredClientAnswers): Saved
   const openClarificationCode = value.openClarificationCode;
   const priorRefresh = value.refreshedFrom;
   const recoveredSections = value.recoveredSections;
-  if (recoveredSections !== undefined && (!Array.isArray(recoveredSections) || recoveredSections.length !== 1 || recoveredSections[0] !== "why_firm_wants_work" || value.mode !== "ai")) return undefined;
+  if (recoveredSections !== undefined && (!Array.isArray(recoveredSections) || value.mode !== "ai")) return undefined;
   const recoveredResult = recoveredSections
     ? validateAnalysisResponseResult({ brief: value.brief, clarification_code: null, recoveredSections }, answers, [])
     : undefined;
@@ -120,7 +120,7 @@ function restoreSavedBrief(value: unknown, answers: DesiredClientAnswers): Saved
   if (!result) return undefined;
   const wordingChanged = !sameJson(brief, result.brief);
   const refreshRecord = wordingChanged ? (refreshedFrom ?? { generatedAt: new Date(Date.parse(value.generatedAt)).toISOString(), wordingReviewed: value.wordingReviewed, mode: "ai" as const }) : refreshedFrom;
-  return { brief: result.brief, sourceAnswersVersion: "dcm-v3.3", sourceAnswersSnapshot: structuredClone(answers), sourceBriefRevision: answers.revision, generatedAt: wordingChanged ? new Date().toISOString() : new Date(Date.parse(value.generatedAt)).toISOString(), wordingReviewed: wordingChanged ? false : value.wordingReviewed, mode: "ai", ...(recoveredSections ? { recoveredSections: ["why_firm_wants_work"] as Array<"why_firm_wants_work"> } : {}), ...(refreshRecord ? { refreshedFrom: refreshRecord } : {}), ...(openClarificationCode ? { openClarificationCode: openClarificationCode as ClarificationCode } : {}) };
+  return { brief: result.brief, sourceAnswersVersion: "dcm-v3.3", sourceAnswersSnapshot: structuredClone(answers), sourceBriefRevision: answers.revision, generatedAt: wordingChanged ? new Date().toISOString() : new Date(Date.parse(value.generatedAt)).toISOString(), wordingReviewed: wordingChanged ? false : value.wordingReviewed, mode: "ai", ...(recoveredResult?.recoveredSections ? { recoveredSections: recoveredResult.recoveredSections } : {}), ...(refreshRecord ? { refreshedFrom: refreshRecord } : {}), ...(openClarificationCode ? { openClarificationCode: openClarificationCode as ClarificationCode } : {}) };
 }
 
 function validateLegacyAnswerSnapshot(value: unknown): boolean {
@@ -226,12 +226,8 @@ function hydrateLegacyFollowupFingerprints(input: DesiredClientAnswers): Desired
 }
 export function clearDraft(storage: Storage): boolean { try { storage.removeItem(DRAFT_STORAGE_KEY); return true; } catch { return false; } }
 export function savedAnalysis(result: AnalysisResult, answers: DesiredClientAnswers): SavedBrief | undefined {
-  const recoveryRequested = result.recoveredSections?.length === 1 && result.recoveredSections[0] === "why_firm_wants_work";
-  const checked = recoveryRequested
-    ? validateAnalysisResponseResult({ brief: result.brief, clarification_code: result.clarification_code, recoveredSections: ["why_firm_wants_work"] }, answers, [])
-    : validateAnalysisResult({ brief: result.brief, clarification_code: result.clarification_code }, answers, []);
-  const recovered = !!checked?.recoveredSections?.includes("why_firm_wants_work");
-  return checked ? { brief: checked.brief, sourceAnswersVersion: "dcm-v3.3", sourceAnswersSnapshot: structuredClone(answers), sourceBriefRevision: answers.revision, generatedAt: new Date().toISOString(), wordingReviewed: false, mode: "ai", ...(recovered ? { recoveredSections: ["why_firm_wants_work"] as Array<"why_firm_wants_work"> } : {}) } : undefined;
+  const checked = validateAnalysisResponseResult(result, answers, []);
+  return checked ? { brief: checked.brief, sourceAnswersVersion: "dcm-v3.3", sourceAnswersSnapshot: structuredClone(answers), sourceBriefRevision: answers.revision, generatedAt: new Date().toISOString(), wordingReviewed: false, mode: "ai", ...(checked.recoveredSections ? { recoveredSections: checked.recoveredSections } : {}) } : undefined;
 }
 
 function validSavedV2Brief(value: Record<string, unknown>): boolean {

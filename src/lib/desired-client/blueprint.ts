@@ -1,3 +1,4 @@
+import { WORKSHEET_RECOVERY_LABELS } from "./types";
 import { AREA_CATALOG, getAnswerLabel, getWorkLabel } from "./catalog";
 import { buildDefinitionSentence } from "./definition";
 import { calculateContribution, hasNegativeContribution, type CalculatedContribution } from "./economics";
@@ -202,7 +203,9 @@ export function buildBlueprintViewModel(brief: DesiredClientBrief | DesiredClien
     title,
     status: confirmed ? "Wording reviewed" : "Draft wording",
     evidenceStatus: evidenceStatus(brief),
-    modeLabel: meta.recoveredSections?.includes("why_firm_wants_work")
+    modeLabel: meta.recoveredSections?.some(id => id !== "why_firm_wants_work")
+      ? "AI-assisted draft. Your worksheet supplies " + meta.recoveredSections.map(id => WORKSHEET_RECOVERY_LABELS[id]).join(", ") + "."
+      : meta.recoveredSections?.includes("why_firm_wants_work")
       ? "AI-assisted draft with a structured recovery"
       : meta.mode === "ai" ? "AI-assisted draft" : "Structured draft",
     date: formatDate(meta.generatedAt),

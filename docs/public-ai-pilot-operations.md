@@ -10,6 +10,7 @@ The two website reviews share a US$20 grant allowance. Tone of Voice has a separ
 | Website Message Review | `POSITIONING_CHECK_PROVIDER=openai` | `POSITIONING_CHECK_OPENAI_PERCENT=100` | `gpt-6.1-terra` |
 | Tone of Voice | `FIRM_VOICE_BUILDER_PROVIDER=openai` | `FIRM_VOICE_BUILDER_OPENAI_PERCENT=10` | `gpt-6-luna` |
 | Why Choose Your Firm (claim tightening) | `WHY_YOUR_FIRM_ASSIST_PROVIDER=openai` | `WHY_YOUR_FIRM_ASSIST_OPENAI_PERCENT=10` | `gpt-6-luna` |
+| Best Case Profile | `DESIRED_CLIENT_PROVIDER=openai` | `DESIRED_CLIENT_OPENAI_PERCENT=10` | `gpt-6-luna` |
 
 Both website reviews assign every eligible new run to GPT. When the shared allowance cannot fund the first call, the store is unavailable, or the grant expires, a new review uses Gemini. Each review keeps its provider through both visual rubrics or a report repair. Any further GPT call still requires a reservation.
 
@@ -19,7 +20,9 @@ Production uses the existing server-side `CASELOAD_OPENAI_API_KEY`, `UPSTASH_RED
 
 ## Assisted writing and public SCREEN pilot controls
 
-Why Choose qualified for the 10% pilot after an independent review of 30 fictional examples. The reviewer accepted 27 rewrites, found no critical invented claims and confirmed that the tool flagged all ten unsupported rankings. Three otherwise grounded rewrites omitted a detail. To confirm activation, open Why Choose from the public Tools menu in a fresh browser session, check the named recipient, and submit a fictional claim in an OpenAI-assigned session. Check the returned suggestion and the `public-tools` ledger settlement for that deployment. Best Case and SCREEN can enter the shared allowance when their reviews clear.
+Why Choose qualified for the 10% pilot after an independent review of 30 fictional examples. The reviewer accepted 27 rewrites, found no critical invented claims and confirmed that the tool flagged all ten unsupported rankings. Three otherwise grounded rewrites omitted a detail. To confirm activation, open Why Choose from the public Tools menu in a fresh browser session, check the named recipient, and submit a fictional claim in an OpenAI-assigned session. Check the returned suggestion and the `public-tools` ledger settlement for that deployment.
+
+For Best Case, the final staff replay delivered all 30 fictional profiles. The independent reviewer accepted all 30 profiles and 29 follow-ups, with zero critical findings. One follow-up asked about the client's behaviour when the worksheet asked about the firm's supporting evidence. In 15 profiles, the app used worksheet wording for one or more fields. The report identifies those fields in the saved and exported versions. A report reconstructed entirely from the worksheet is available separately as a structured draft. To check the 10% pilot, complete a fictional worksheet in an OpenAI-assigned session, verify the returned profile and match the deployment's `public-tools` settlement.
 
 The public SCREEN opt-in uses `SCREEN_DEMO_AI_PROVIDER` and `SCREEN_DEMO_AI_OPENAI_PERCENT`. The page discloses the assigned recipient before the visitor chooses whether to send fictional details. A change of cohort or provider requires a fresh disclosure. An unchecked demo runs locally.
 
