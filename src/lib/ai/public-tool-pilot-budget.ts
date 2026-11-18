@@ -30,10 +30,11 @@ return 1`;
 const settleScript = `
 local reserved = tonumber(redis.call('HGET', KEYS[1], ARGV[1]) or 0)
 if reserved == 0 then return end
-redis.call('HINCRBY', KEYS[1], 'used', math.min(reserved, tonumber(ARGV[2])) - reserved)
-redis.call('HDEL', KEYS[1], ARGV[1])`;
+local used = redis.call('HINCRBY', KEYS[1], 'used', math.min(reserved, tonumber(ARGV[2])) - reserved)
+redis.call('HDEL', KEYS[1], ARGV[1])
+return used`;
 
-type Reservation = { redis: Redis; key: string; id: string; outputLimit: number };
+type Reservation = { tool: Tool; redis: Redis; key: string; id: string; outputLimit: number };
 const run = new AsyncLocalStorage<{ first?: Reservation }>();
 const guarded = () => process.env.VERCEL_ENV === "production" || process.env.CASELOAD_OPENAI_PILOT_BUDGET === "true";
 const expired = () => Date.now() >= expiresAt * 1000;
@@ -54,14 +55,18 @@ async function reserve(tool: Tool, outputLimit: number): Promise<Reservation | u
   try {
     const redis = new Redis({ url, token, retry: false, enableAutoPipelining: false, signal: () => AbortSignal.timeout(1800) });
     if (await redis.eval(reserveScript, [key], [expiresAt, budgetMicros, amount, id]) === 1) {
-      return { redis, key, id, outputLimit };
+      return { tool, redis, key, id, outputLimit };
     }
   } catch { console.warn("[public-tool-pilot] reservation unavailable", { tool }); }
 }
 
 async function settle(reservation: Reservation, usedMicros: number) {
-  try { await reservation.redis.eval(settleScript, [reservation.key], [reservation.id, usedMicros]); }
-  catch { console.warn("[public-tool-pilot] settlement unconfirmed"); }
+  try {
+    const ledgerUsed = await reservation.redis.eval(settleScript, [reservation.key], [reservation.id, usedMicros]);
+    if (reservation.tool === "websites" && typeof ledgerUsed === "number" && Number.isSafeInteger(ledgerUsed) && ledgerUsed >= 0) {
+      console.info("[public-tool-pilot] ledger settled", { tool: reservation.tool, usedMicros: ledgerUsed });
+    }
+  } catch { console.warn("[public-tool-pilot] settlement unconfirmed"); }
 }
 
 /** A run that cannot fund its first call stays on Gemini throughout. */
