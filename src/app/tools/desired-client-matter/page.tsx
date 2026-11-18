@@ -1,4 +1,6 @@
-import { getProvider } from "@/lib/ai/openai";
+import { headers } from "next/headers";
+import { writingProvider } from "@/lib/ai/writing-rollout";
+import { publicPilotSession } from "@/lib/ai/public-tool-session";
 import Image from "next/image";
 import type { Metadata } from "next";
 import DesiredClientTool from "@/components/desired-client/DesiredClientTool";
@@ -27,7 +29,7 @@ export default async function DesiredClientMatterPage({ searchParams }: PageProp
         </header>
       )}
       <main className="dc-route-main">
-        <DesiredClientTool provider={getProvider("DESIRED_CLIENT_PROVIDER")} embedded={embedded} />
+        <DesiredClientTool provider={writingProvider("best", publicPilotSession(await headers()))} embedded={embedded} />
       </main>
     </div>
   );

@@ -1,4 +1,4 @@
-import { createIntakeJsonGenerator, isTransientGenerationError, hasGenerationKey, intakeModel, operationalIntakeProvider } from './ai/intake-generation';
+import { createIntakeJsonGenerator, isTransientGenerationError, hasGenerationKey, intakeModel, operationalIntakeProvider, type IntakeOpenAIChannel } from './ai/intake-generation';
 import type { EngineState, MatterType } from './screen-engine/types';
 import { getExtractableSlots, buildResponseSchema } from './screen-engine/llm/schema';
 import { buildSystemPrompt, buildUserPrompt } from './screen-engine/llm/prompt';
@@ -37,7 +37,7 @@ export async function llmExtractServer(
   state: EngineState,
   maxDescriptionLength = MAX_DESCRIPTION_LENGTH,
   provider = operationalIntakeProvider(),
-  onRawModelText?: (text: string) => void,
+  openAI?: IntakeOpenAIChannel,
 ): Promise<LlmExtractionResponse> {
   if (!hasGenerationKey(provider)) {
     return {
@@ -67,14 +67,14 @@ export async function llmExtractServer(
 
   const generate = createIntakeJsonGenerator({
     provider,
-    model: provider === 'openai' ? intakeModel() : MODEL,
+    model: provider === 'openai' ? openAI?.model ?? intakeModel() : MODEL,
     name: 'screen_extraction',
     instructions: systemPrompt,
     schema: responseSchema,
     temperature: TEMPERATURE,
     maxOutputTokens: 4096,
     timeoutMs: 12000,
-  });
+  }, openAI?.request);
   let result: Awaited<ReturnType<typeof generate>> | null = null;
   let lastErr: unknown = null;
   let attempt = 0;
@@ -112,7 +112,6 @@ export async function llmExtractServer(
     }
 
     const raw = result.text;
-    onRawModelText?.(raw);
 
     let parsed: Record<string, string | null> = {};
     try {

@@ -442,7 +442,8 @@ export function buildStructuredBlueprintV4(answers:DesiredClientAnswers,options?
 
   const unresolvedAnswer=(path:AnswerReferencePath):boolean=>{
     const answer=present(answers,path);
-    return path==="opportunity.uncertainty"||answer.unknown||answer.value===null||answer.value===""||
+    if (path==="opportunity.uncertainty") return Boolean(fragment(answers.opportunity.uncertainty));
+    return answer.unknown||answer.value===null||answer.value===""||
       (path==="opportunity.sources"&&answers.opportunity.sources.some(value=>value==="unknown"||value==="no_evidence"))||
       (path==="value.reasons"&&Array.isArray(answer.value)&&(!answer.value.length||answer.value.includes("undecided")));
   };

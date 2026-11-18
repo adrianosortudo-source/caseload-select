@@ -8,7 +8,7 @@ import { gzipSync } from 'node:zlib';
 const env = process.env;
 const project = 'prj_nsulX2POrn1tSwTze8KwrvRsIecn';
 const branch = 'codex/openai-tools-migration';
-const title = 'Capture fixed staff preview cases 2026-11-18-A';
+const title = 'Capture corrected Best Case staff fixtures 2026-11-18-B';
 if (env.VERCEL_ENV !== 'preview' || env.VERCEL_GIT_COMMIT_REF !== branch ||
     !env.VERCEL_GIT_COMMIT_MESSAGE?.startsWith(title)) {
   console.info('Staff capture inactive on this build.');
@@ -21,7 +21,7 @@ if (!ids.length || !ids.every(id => id === project) || (claim.environment && cla
     !/^[0-9a-f]{40}$/.test(env.VERCEL_GIT_COMMIT_SHA ?? '')) throw new Error('Staff replay project binding unavailable.');
 if (!env.CASELOAD_OPENAI_API_KEY?.trim()) throw new Error('Staff preview model access unavailable.');
 const work = await mkdtemp(join(tmpdir(),'caseload-staff-fixed-'));
-const destination = 'public/staff-evidence-20261118a';
+const destination = 'public/staff-best-20261118b';
 await mkdir(destination);
 const status = [];
 const baseEnv = Object.fromEntries(['PATH','HOME','TMPDIR','VERCEL_GIT_COMMIT_SHA','CASELOAD_OPENAI_API_KEY'].filter(k => env[k]).map(k => [k,env[k]]));
@@ -42,11 +42,7 @@ const react=['--conditions=react-server','--import','tsx'];
 async function best(first,last) {
   for(let id=first;id<=last;id++) await run('best-'+id,[...react,'scripts/evaluate-assisted-writing/run.cjs','capture','openai','best',join(work,'best-'+id),String(id),String(id)],6,'responses');
 }
-await Promise.all([best(1,10),best(11,20),(async()=>{
-  await run('search',['scripts/assist-search-evaluation/run.mjs','openai',join(work,'search.json')],4,'embeddings');
-  await run('screen',[...react,'scripts/evaluate-screen-providers/run.ts','openai','--evidence-dir',join(work,'screen')],90,'responses');
-  await best(21,30);
-})()]);
+await Promise.all([best(1,10),best(11,20),best(21,30)]);
 const files={};
 async function collect(directory) {
   for(const x of await readdir(directory,{withFileTypes:true})) {

@@ -4,6 +4,10 @@ import { toOpenAIJsonSchema } from './openai-schema';
 import { getProvider, hasOpenAIKey, requestOpenAI } from './openai';
 
 export type IntakeProvider = ReturnType<typeof getProvider>;
+export interface IntakeOpenAIChannel {
+  model: string;
+  request: typeof requestOpenAI;
+}
 
 export function operationalIntakeProvider(): IntakeProvider {
   return getProvider('SCREEN_INTAKE_AI_PROVIDER');
@@ -44,10 +48,10 @@ interface GeneratedJson {
   outputTokens?: number;
 }
 
-export function createIntakeJsonGenerator(options: JsonGenerationOptions): (prompt: string) => Promise<GeneratedJson> {
+export function createIntakeJsonGenerator(options: JsonGenerationOptions, sendOpenAI = requestOpenAI): (prompt: string) => Promise<GeneratedJson> {
   if (options.provider === 'openai') {
     const schema = toOpenAIJsonSchema(options.schema);
-    return (prompt) => requestOpenAI({
+    return (prompt) => sendOpenAI({
       model: options.model,
       instructions: options.instructions,
       input: prompt,

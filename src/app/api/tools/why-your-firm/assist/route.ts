@@ -20,7 +20,9 @@
  * Pipeline: parse -> validate -> rate limit -> Gemini -> respond.
  */
 
-import { getProvider } from "@/lib/ai/openai";
+import { publicPilotSession } from "@/lib/ai/public-tool-session";
+import { writingProvider } from "@/lib/ai/writing-rollout";
+import { startPilotMetrics } from "@/lib/ai/public-pilot-metrics";
 import { matchesWritingProvider } from "@/lib/ai/writing-provider-policy";
 import { NextRequest, NextResponse } from "next/server";
 import { checkRateLimit, ipFromRequest, rateLimitHeaders } from "@/lib/rate-limit";
@@ -54,14 +56,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json<AssistResponseBody>({ ok: false, error: validation.error }, { status: 400 });
   }
 
-  const provider = getProvider("WHY_YOUR_FIRM_ASSIST_PROVIDER");
+  const identity = ipFromRequest(req);
+  const provider = writingProvider("why", publicPilotSession(req.headers));
   if (!matchesWritingProvider(req.headers, provider)) {
     return NextResponse.json<AssistResponseBody>(
       { ok: false, error: "Reload the tool to review the current provider before requesting a suggestion." },
       { status: 409 },
     );
   }
-  const decision = await checkRateLimit("whyYourFirmAssist", ipFromRequest(req));
+  const decision = await checkRateLimit("whyYourFirmAssist", identity);
   if (!decision.ok) {
     return NextResponse.json<AssistResponseBody>(
       { ok: false, error: "rate limited, try again shortly" },
@@ -69,7 +72,10 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  const metrics = startPilotMetrics("why", provider, Date.now());
+  metrics.attempt(provider);
   const outcome = await runAssist(validation.value, provider);
+  metrics.finish(outcome.mode === "live" ? "completed" : "failed");
 
   if (outcome.mode === "disabled") {
     return NextResponse.json<AssistResponseBody>(

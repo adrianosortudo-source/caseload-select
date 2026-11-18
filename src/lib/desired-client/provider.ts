@@ -1,20 +1,21 @@
 import "server-only";
+import { requestPublicToolOpenAI } from "@/lib/ai/public-tool-pilot-budget";
 import { GoogleGenerativeAI, type GenerationConfig } from "@google/generative-ai";
-import { getProvider, hasOpenAIKey, requestOpenAI } from "@/lib/ai/openai";
+import { getProvider, hasOpenAIKey } from "@/lib/ai/openai";
 import { toOpenAIJsonSchema } from "@/lib/ai/openai-schema";
 
 function googleKey(): string | undefined {
   return process.env.GOOGLE_AI_API_KEY?.trim() || process.env.GEMINI_API_KEY?.trim();
 }
 
-export function desiredClientModelId(): string {
-  return getProvider("DESIRED_CLIENT_PROVIDER") === "openai"
+export function desiredClientModelId(provider = getProvider("DESIRED_CLIENT_PROVIDER")): string {
+  return provider === "openai"
     ? process.env.DESIRED_CLIENT_OPENAI_MODEL ?? "gpt-6-luna"
     : "gemini-2.5-flash";
 }
 
-export function desiredClientHasKey(): boolean {
-  return getProvider("DESIRED_CLIENT_PROVIDER") === "openai" ? hasOpenAIKey() : Boolean(googleKey());
+export function desiredClientHasKey(provider = getProvider("DESIRED_CLIENT_PROVIDER")): boolean {
+  return provider === "openai" ? hasOpenAIKey() : Boolean(googleKey());
 }
 
 interface GenerationSettings {
@@ -28,10 +29,11 @@ interface GenerationSettings {
 export async function generateDesiredClientText(
   input: string,
   { instructions, schema, maxOutputTokens, thinkingBudget, timeoutMs }: GenerationSettings,
+  provider = getProvider("DESIRED_CLIENT_PROVIDER"),
 ): Promise<{ text: string; finishReason?: string }> {
-  const model = desiredClientModelId();
-  if (getProvider("DESIRED_CLIENT_PROVIDER") === "openai") {
-    return requestOpenAI({
+  const model = desiredClientModelId(provider);
+  if (provider === "openai") {
+    return requestPublicToolOpenAI({
       model, instructions, input, maxOutputTokens,
       format: { name: "best_case_profile", schema: toOpenAIJsonSchema(schema as Record<string, unknown>) },
       signal: AbortSignal.timeout(timeoutMs),

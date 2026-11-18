@@ -3,7 +3,7 @@ import { Redis } from "@upstash/redis";
 import { waitUntil } from "@vercel/functions";
 import type { AiProvider } from "./openai";
 
-export const pilotTools = ["design", "message", "voice"] as const;
+export const pilotTools = ["design", "message", "voice", "screen-demo", "why", "best"] as const;
 type PilotTool = typeof pilotTools[number];
 type Outcome = "completed" | "degraded" | "failed";
 const upperBoundsMs = [1000, 2000, 3000, 4000, 5000, 6000, 8000, 10000, 12000, 14000, 16000,

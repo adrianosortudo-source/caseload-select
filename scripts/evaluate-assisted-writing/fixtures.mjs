@@ -1,13 +1,13 @@
-const crypto = require("node:crypto");
-const assert = require("node:assert/strict");
+import crypto from "node:crypto";
+import assert from "node:assert/strict";
 const digest = value => crypto.createHash("sha256").update(JSON.stringify(value)).digest("hex");
 const id = (i, series) => "00000000-0000-4000-8000-" + String(series * 100 + i).padStart(12, "0");
 const areas = ["business", "employment", "family", "immigration", "nonprofit", "criminal", "ip", "regulatory", "injury", "estates"];
-const { AREA_CATALOG, TRIGGER_LABELS } = require("../../src/lib/desired-client/catalog.ts");
-const { completeAnswers, negativeEconomicsAnswers } = require("../../src/lib/desired-client/__tests__/blueprint-helpers.ts");
-const { validateAnalysisRequest } = require("../../src/lib/desired-client/validation.ts");
-const { validateInterviewClarificationRequest } = require("../../src/lib/desired-client/interview-clarification.ts");
-const { validateAssistBody } = require("../../src/lib/why-your-firm/assist.ts");
+import { AREA_CATALOG, TRIGGER_LABELS } from "../../src/lib/desired-client/catalog.ts";
+import { completeAnswers, negativeEconomicsAnswers } from "../../src/lib/desired-client/__tests__/blueprint-helpers.ts";
+import { validateAnalysisRequest } from "../../src/lib/desired-client/validation.ts";
+import { validateInterviewClarificationRequest } from "../../src/lib/desired-client/interview-clarification.ts";
+import { validateAssistBody } from "../../src/lib/why-your-firm/assist.ts";
 
 function makeFixture(i) {
   const area = areas[i % areas.length];
@@ -46,4 +46,4 @@ function makeFixture(i) {
   return { case: i + 1, area, hash: digest({ why, answers, stage: clarify.stage }), why, clarify, profile };
 }
 
-module.exports = { makeFixture };
+export { makeFixture };

@@ -2,7 +2,7 @@ import "server-only";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { randomUUID } from "node:crypto";
 import { Redis } from "@upstash/redis";
-import { requestOpenAI, type AiProvider } from "./openai";
+import { hasOpenAIKey, requestOpenAI, type AiProvider } from "./openai";
 
 // Production deployments share each allowance. The two website tools share one ledger.
 const expiresAt = Date.UTC(2026, 11, 9) / 1000;
@@ -10,10 +10,17 @@ const expiresAt = Date.UTC(2026, 11, 9) / 1000;
 // $5/M long-context cache writes, including a 10% regional premium. $9/M output
 // covers the $7.50/M long-context rate and the same premium. Standard tier only.
 const maxInput = 922_000;
+function publicToolsAllowanceMicros(): number {
+  const dollars = process.env.CASELOAD_PUBLIC_TOOLS_PILOT_USD?.trim() ?? "";
+  if (!/^\d+(?:\.\d{1,2})?$/.test(dollars)) return 0;
+  const micros = Math.round(Number(dollars) * 1_000_000);
+  return Number.isSafeInteger(micros) ? micros : 0;
+}
 // Luna's corresponding input, cache write, and output pricing stays under $1/M each.
 const policies = {
   websites: { model: "gpt-6.1-terra", budgetMicros: 20_000_000, inputMicros: 8, outputMicros: 9, maxOutput: 8192 },
   voice: { model: "gpt-6-luna", budgetMicros: 10_000_000, inputMicros: 1, outputMicros: 1, maxOutput: 16384 },
+  "public-tools": { model: "gpt-6-luna", get budgetMicros() { return publicToolsAllowanceMicros(); }, inputMicros: 1, outputMicros: 1, maxOutput: 4096 },
 };
 type Tool = keyof typeof policies;
 
@@ -40,6 +47,14 @@ const guarded = () => process.env.VERCEL_ENV === "production" || process.env.CAS
 const expired = () => Date.now() >= expiresAt * 1000;
 export const publicPilotGrantExpired = () => guarded() && expired();
 
+/** Eligibility to disclose GPT. Each actual call must still obtain its own reservation. */
+export function publicToolPilotEnabled(): boolean {
+  const policy = policies["public-tools"];
+  const largestHold = maxInput * policy.inputMicros + policy.maxOutput * policy.outputMicros;
+  return !guarded() || (!expired() && policy.budgetMicros >= largestHold && hasOpenAIKey() &&
+    Boolean(process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN));
+}
+
 export class PublicPilotCapacityError extends Error {
   readonly status = 409;
   constructor() { super("GPT pilot capacity unavailable"); }
@@ -52,6 +67,7 @@ async function reserve(tool: Tool, outputLimit: number): Promise<Reservation | u
   const key = "caseload:openai:" + tool + ":grant-ending-2026-12-09";
   const { inputMicros, outputMicros, budgetMicros } = policies[tool];
   const amount = maxInput * inputMicros + outputLimit * outputMicros;
+  if (amount > budgetMicros) return;
   try {
     const redis = new Redis({ url, token, retry: false, enableAutoPipelining: false, signal: () => AbortSignal.timeout(1800) });
     if (await redis.eval(reserveScript, [key], [expiresAt, budgetMicros, amount, id]) === 1) {
@@ -63,7 +79,7 @@ async function reserve(tool: Tool, outputLimit: number): Promise<Reservation | u
 async function settle(reservation: Reservation, usedMicros: number) {
   try {
     const ledgerUsed = await reservation.redis.eval(settleScript, [reservation.key], [reservation.id, usedMicros]);
-    if (reservation.tool === "websites" && typeof ledgerUsed === "number" && Number.isSafeInteger(ledgerUsed) && ledgerUsed >= 0) {
+    if (reservation.tool !== "voice" && typeof ledgerUsed === "number" && Number.isSafeInteger(ledgerUsed) && ledgerUsed >= 0) {
       console.info("[public-tool-pilot] ledger settled", { tool: reservation.tool, usedMicros: ledgerUsed });
     }
   } catch { console.warn("[public-tool-pilot] settlement unconfirmed"); }
@@ -107,3 +123,5 @@ async function requestBudgeted(tool: Tool, request: Parameters<typeof requestOpe
 
 export const requestWebsiteOpenAI: typeof requestOpenAI = request => requestBudgeted("websites", request);
 export const requestVoiceOpenAI: typeof requestOpenAI = request => requestBudgeted("voice", request);
+export const requestPublicToolOpenAI: typeof requestOpenAI = request => requestBudgeted("public-tools", request);
+export const publicToolPilotModel = policies["public-tools"].model;

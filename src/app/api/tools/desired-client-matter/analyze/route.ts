@@ -1,5 +1,8 @@
 import { createHash, randomUUID } from "node:crypto";
-import { getProvider } from "@/lib/ai/openai";
+import type { AiProvider } from "@/lib/ai/openai";
+import { publicPilotSession } from "@/lib/ai/public-tool-session";
+import { writingProvider } from "@/lib/ai/writing-rollout";
+import { startPilotMetrics } from "@/lib/ai/public-pilot-metrics";
 import { matchesWritingProvider } from "@/lib/ai/writing-provider-policy";
 import { desiredClientHasKey } from "@/lib/desired-client/provider";
 import { NextRequest, NextResponse } from "next/server";
@@ -17,8 +20,8 @@ const MAX_BODY_BYTES = 32_768;
 const NO_STORE = { "Cache-Control": "no-store" };
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-function desiredClientAiEnabled(): boolean {
-  return process.env.DESIRED_CLIENT_AI_ENABLED === "true" && desiredClientHasKey() &&
+function desiredClientAiEnabled(provider: AiProvider): boolean {
+  return process.env.DESIRED_CLIENT_AI_ENABLED === "true" && desiredClientHasKey(provider) &&
     Boolean(process.env.UPSTASH_REDIS_REST_URL?.trim()) && Boolean(process.env.UPSTASH_REDIS_REST_TOKEN?.trim());
 }
 
@@ -27,8 +30,9 @@ function desiredClientProviderCallLimit(): 3 {
 }
 
 /** Exposes only the enabled state so the tool can set honest expectations. */
-export async function GET(): Promise<NextResponse<{ enabled: boolean; providerCallLimit: 3 }>> {
-  return NextResponse.json({ enabled: desiredClientAiEnabled(), providerCallLimit: desiredClientProviderCallLimit() }, { headers: NO_STORE });
+export async function GET(request: Request): Promise<NextResponse<{ enabled: boolean; providerCallLimit: 3 }>> {
+  const provider = writingProvider("best", publicPilotSession(request.headers));
+  return NextResponse.json({ enabled: desiredClientAiEnabled(provider), providerCallLimit: desiredClientProviderCallLimit() }, { headers: NO_STORE });
 }
 
 function fail(requestId: string, code: AnalysisFailureCode, status: number, extraHeaders: Record<string, string> = {}, diagnostic?: { field: string; reason: string }, usage?: { providerCallsUsed: number; providerCallLimit: number }): NextResponse<AnalysisFailureEnvelope> {
@@ -96,7 +100,9 @@ export async function POST(request: NextRequest): Promise<NextResponse<AnalysisF
   let parsed: unknown;
   try { parsed = JSON.parse(body.text); } catch { return fail(randomUUID(), "INVALID_REQUEST", 400); }
   const requestId = requestIdFromBody(parsed);
-  if (!matchesWritingProvider(request.headers, getProvider("DESIRED_CLIENT_PROVIDER"))) {
+  const identity = ipFromRequest(request);
+  const provider = writingProvider("best", publicPilotSession(request.headers));
+  if (!matchesWritingProvider(request.headers, provider)) {
     return fail(requestId, "AI_UNAVAILABLE", 409);
   }
 
@@ -104,15 +110,15 @@ export async function POST(request: NextRequest): Promise<NextResponse<AnalysisF
     const validation = validateInterviewClarificationRequest(parsed);
     if (!validation.valid) return fail(requestId, "INVALID_REQUEST", 400);
     const value = validation.value;
-    if (!desiredClientAiEnabled()) {
+    if (!desiredClientAiEnabled(provider)) {
       return fail(value.requestId, "AI_DISABLED", 503);
     }
-    const ip = ipFromRequest(request);
+
     for (const bucket of ["desiredClientClarify", "desiredClientClarifyDaily"] as const) {
-      const decision = await checkRateLimit(bucket, ip);
+      const decision = await checkRateLimit(bucket, identity);
       if (!decision.ok) return fail(value.requestId, "RATE_LIMITED", 429, rateLimitHeaders(decision));
     }
-    const outcome = await runInterviewClarification(value);
+    const outcome = await runInterviewClarification(value, provider);
     if (outcome.mode !== "live") return fail(value.requestId, outcome.mode === "unavailable" ? "AI_UNAVAILABLE" : "INVALID_AI_OUTPUT", 502);
     return NextResponse.json(outcome.response, { headers: NO_STORE });
   }
@@ -120,14 +126,13 @@ export async function POST(request: NextRequest): Promise<NextResponse<AnalysisF
   const validation = validateAnalysisRequest(parsed);
   if (!validation.valid) return fail(requestId, "INVALID_REQUEST", 400);
 
-  if (!desiredClientAiEnabled()) {
+  if (!desiredClientAiEnabled(provider)) {
     return fail(validation.value.requestId, "AI_DISABLED", 503);
   }
 
-  const ip = ipFromRequest(request);
   const buckets = [
-    ["desiredClientAnalyze", ip],
-    ["desiredClientDaily", ip],
+    ["desiredClientAnalyze", identity],
+    ["desiredClientDaily", identity],
     ["desiredClientGlobal", "all"],
   ] as const;
   for (const [bucket, identity] of buckets) {
@@ -141,6 +146,8 @@ export async function POST(request: NextRequest): Promise<NextResponse<AnalysisF
   const providerCallLimit = desiredClientProviderCallLimit();
   const ownerToken = randomUUID();
   const answerFingerprint = createHash("sha256").update(JSON.stringify(validation.value.answers)).digest("hex");
+  const metrics = startPilotMetrics("best", provider, Date.now());
+  metrics.attempt(provider);
   let outcome: Awaited<ReturnType<typeof runDesiredClientAnalysis>>;
   try {
     outcome = await runDesiredClientAnalysis(validation.value, eligibleCodes, providerCallLimit, async (expectedCallsUsed) =>
@@ -152,7 +159,12 @@ export async function POST(request: NextRequest): Promise<NextResponse<AnalysisF
         answerFingerprint,
         ownerToken,
       }),
+      provider,
     );
+    metrics.finish(outcome.mode === "live" ? "completed" : "failed");
+  } catch (error) {
+    metrics.finish("failed");
+    throw error;
   } finally {
     await releaseDesiredClientProviderRun(validation.value.reviewRunId, ownerToken);
   }
@@ -179,7 +191,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<AnalysisF
   console.info("[desired-client] analysis complete", {
     requestId: validation.value.requestId,
     outcome: "success",
-    model: desiredClientModelId(),
+    model: desiredClientModelId(provider),
   });
   return NextResponse.json(response, { headers: NO_STORE });
 }
