@@ -137,19 +137,19 @@ afterEach(() => {
 describe("GET /api/tools/desired-client-matter/analyze readiness", () => {
   it("reports AI readiness and the server generation-call limit without caching", async () => {
     process.env.DESIRED_CLIENT_AI_ENABLED="false";
-    const disabled=await GET();
+    const disabled=await GET(new Request("https://app.caseloadselect.ca/api/tools/desired-client-matter/analyze"));
     expect(await disabled.json()).toEqual({enabled:false,providerCallLimit:3});
     await expectNoStore(disabled);
     process.env.DESIRED_CLIENT_AI_ENABLED="true";
-    const enabled=await GET();
+    const enabled=await GET(new Request("https://app.caseloadselect.ca/api/tools/desired-client-matter/analyze"));
     expect(await enabled.json()).toEqual({enabled:true,providerCallLimit:3});
     await expectNoStore(enabled);
     process.env.VERCEL_ENV="preview";
-    const preview=await GET();
+    const preview=await GET(new Request("https://app.caseloadselect.ca/api/tools/desired-client-matter/analyze"));
     expect(await preview.json()).toEqual({enabled:true,providerCallLimit:3});
     delete process.env.VERCEL_ENV;
     delete process.env.UPSTASH_REDIS_REST_TOKEN;
-    const incomplete=await GET();
+    const incomplete=await GET(new Request("https://app.caseloadselect.ca/api/tools/desired-client-matter/analyze"));
     expect(await incomplete.json()).toEqual({enabled:false,providerCallLimit:3});
     await expectNoStore(incomplete);
   });

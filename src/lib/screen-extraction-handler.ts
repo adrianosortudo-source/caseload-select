@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import type { IntakeProvider } from "@/lib/ai/intake-generation";
+import { publicToolPilotModel, requestPublicToolOpenAI } from "@/lib/ai/public-tool-pilot-budget";
+import { startPilotMetrics } from "@/lib/ai/public-pilot-metrics";
 import { llmExtractServer } from "@/lib/screen-llm-server";
 import { initialiseState } from "@/lib/screen-engine/extractor";
 import { checkRateLimit, ipFromRequest, rateLimitHeaders } from "@/lib/rate-limit";
@@ -20,9 +22,8 @@ interface ExtractRequest {
 // Reject oversized descriptions explicitly before forwarding the complete accepted text.
 const MAX_DESCRIPTION_CHARS = 16_000;
 
-export async function handleScreenExtraction(req: Request, provider: IntakeProvider) {
-  // Public route (the browser widget calls it, no auth possible); the
-  // per-IP bucket is the only gate in front of the model spend (H6).
+export async function handleScreenExtraction(req: Request, provider: IntakeProvider, surface?: "public-demo") {
+  const started = Date.now();
   const ip = ipFromRequest(req);
   const rl = await checkRateLimit("extract", ip);
   if (!rl.ok) {
@@ -61,10 +62,14 @@ export async function handleScreenExtraction(req: Request, provider: IntakeProvi
        !slot.applies_to.includes(state.matter_type) || !reply || reply.length > 4000)) {
     return NextResponse.json({ error: "invalid pending slot or reply" }, { status: 400 });
   }
+  const metrics = surface === "public-demo" ? startPilotMetrics("screen-demo", provider, started) : undefined;
+  const channel = surface === "public-demo" ? { model: publicToolPilotModel, request: requestPublicToolOpenAI } : undefined;
+  metrics?.attempt(provider);
   const [result, mapped] = await Promise.all([
-    llmExtractServer(description, state, MAX_DESCRIPTION_CHARS, provider),
-    slot && reply ? llmMapOptionReply({ questionLabel: slot.question, options: slot.options!, reply, language: "en" }, provider) : Promise.resolve(null),
-  ]);
+    llmExtractServer(description, state, MAX_DESCRIPTION_CHARS, provider, channel),
+    slot && reply ? llmMapOptionReply({ questionLabel: slot.question, options: slot.options!, reply, language: "en" }, provider, channel) : Promise.resolve(null),
+  ]).catch(error => { metrics?.finish("failed"); throw error; });
+  metrics?.finish(result.mode === "live" && (!mapped || mapped.mode === "live") ? "completed" : "degraded");
   const value = mapped?.value;
   const compositeNegativeGrounded = slot?.id !== "family_existing_order" || value !== "Neither" ||
     /^neither[.!\s]*$/i.test(reply) || familyNegativeIsGrounded(slot.id, value, `${description}\n${reply}`);

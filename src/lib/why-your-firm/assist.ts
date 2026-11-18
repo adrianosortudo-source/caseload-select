@@ -24,7 +24,8 @@
  * since no shared client exists in this app.
  */
 
-import { getProvider, hasOpenAIKey, requestOpenAI, type AiProvider } from "@/lib/ai/openai";
+import { requestPublicToolOpenAI } from "@/lib/ai/public-tool-pilot-budget";
+import { getProvider, hasOpenAIKey, type AiProvider } from "@/lib/ai/openai";
 import { toOpenAIJsonSchema } from "@/lib/ai/openai-schema";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { COMPLIANCE_RULES } from "./compliance";
@@ -213,7 +214,7 @@ export async function runAssist(req: AssistRequest, provider: AiProvider = getPr
     try {
       const raw = model
         ? (await model.generateContent(userPrompt)).response.text()
-        : (await requestOpenAI({
+        : (await requestPublicToolOpenAI({
             model: process.env.WHY_YOUR_FIRM_ASSIST_OPENAI_MODEL ?? "gpt-6-luna",
             instructions,
             input: userPrompt,

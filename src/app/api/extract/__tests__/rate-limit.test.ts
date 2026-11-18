@@ -91,7 +91,7 @@ describe("/api/extract rate limiting", () => {
     const description = "x".repeat(16_000);
     const res = await POST(makeRequest({ description }));
     expect(res.status).toBe(200);
-    expect(mocks.llmExtractServer).toHaveBeenCalledWith(description, expect.anything(), 16_000, "gemini");
+    expect(mocks.llmExtractServer).toHaveBeenCalledWith(description, expect.anything(), 16_000, "gemini", undefined);
   });
 
   it("keeps the empty-description short-circuit (no LLM call, no 4xx)", async () => {
