@@ -1,6 +1,6 @@
 # Public GPT pilot operations
 
-The two website reviews share a US$20 grant allowance. Tone of Voice has a separate US$10 allowance. New GPT calls stop at **December 9, 2026 at 00:00 UTC**. Every GPT call and repair reserves its worst-case cost before it begins. A timeout can keep the whole reservation. The `used` balance therefore measures committed and conservatively estimated usage. The OpenAI project dashboard supplies actual billed usage.
+The two website reviews share a US$20 grant allowance. Tone of Voice has a separate US$10 allowance. Why Choose Your Firm, Best Case Profile and the fictional SCREEN demo share a third allowance of US$10 in total. New GPT calls stop at **December 9, 2026 at 00:00 UTC**. Every GPT call and repair reserves its worst-case cost before it begins. A timeout can keep the whole reservation. The `used` balance therefore measures committed and conservatively estimated usage. The OpenAI project dashboard supplies actual billed usage.
 
 ## Approved production settings
 
@@ -9,6 +9,7 @@ The two website reviews share a US$20 grant allowance. Tone of Voice has a separ
 | Website Design Review | `WEBSITE_DESIGN_CHECK_PROVIDER=openai` | `WEBSITE_DESIGN_CHECK_OPENAI_PERCENT=100` | `gpt-6.1-terra` |
 | Website Message Review | `POSITIONING_CHECK_PROVIDER=openai` | `POSITIONING_CHECK_OPENAI_PERCENT=100` | `gpt-6.1-terra` |
 | Tone of Voice | `FIRM_VOICE_BUILDER_PROVIDER=openai` | `FIRM_VOICE_BUILDER_OPENAI_PERCENT=10` | `gpt-6-luna` |
+| Why Choose Your Firm (claim tightening) | `WHY_YOUR_FIRM_ASSIST_PROVIDER=openai` | `WHY_YOUR_FIRM_ASSIST_OPENAI_PERCENT=10` | `gpt-6-luna` |
 
 Both website reviews assign every eligible new run to GPT. When the shared allowance cannot fund the first call, the store is unavailable, or the grant expires, a new review uses Gemini. Each review keeps its provider through both visual rubrics or a report repair. Any further GPT call still requires a reservation.
 
@@ -17,6 +18,8 @@ Apply percentage changes through the reviewed deployment path. To roll back eith
 Production uses the existing server-side `CASELOAD_OPENAI_API_KEY`, `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN`. A branch preview can explicitly exercise the same budget with `CASELOAD_OPENAI_PILOT_BUDGET=true` and the same protected Redis database. Daily traffic metrics count Vercel production only.
 
 ## Assisted writing and public SCREEN pilot controls
+
+Why Choose qualified for the 10% pilot after an independent review of 30 fictional examples. The reviewer accepted 27 rewrites, found no critical invented claims and confirmed that the tool flagged all ten unsupported rankings. Three otherwise grounded rewrites omitted a detail. To confirm activation, open Why Choose from the public Tools menu in a fresh browser session, check the named recipient, and submit a fictional claim in an OpenAI-assigned session. Check the returned suggestion and the `public-tools` ledger settlement for that deployment. Best Case and SCREEN can enter the shared allowance when their reviews clear.
 
 The public SCREEN opt-in uses `SCREEN_DEMO_AI_PROVIDER` and `SCREEN_DEMO_AI_OPENAI_PERCENT`. The page discloses the assigned recipient before the visitor chooses whether to send fictional details. A change of cohort or provider requires a fresh disclosure. An unchecked demo runs locally.
 
