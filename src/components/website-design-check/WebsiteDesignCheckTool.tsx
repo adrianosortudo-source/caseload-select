@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback, type FormEvent } from "react";
 import WebsiteDesignCheckReport, { type DesignCheckResult } from "./WebsiteDesignCheckReport";
 
 /**
@@ -22,7 +22,11 @@ const SCAN_PHASES = [
 
 export default function WebsiteDesignCheckTool() {
   const [step, setStep] = useState<Step>("input");
-  const [domain, setDomain] = useState("");
+  const [domain, setDomain] = useState<string | null>(null);
+  // The browser can accept a URL before React has attached the submit handler.
+  const attachDomainInput = useCallback((input: HTMLInputElement | null) => {
+    if (input) setDomain(input.value);
+  }, []);
   const [error, setError] = useState("");
   const [result, setResult] = useState<DesignCheckResult | null>(null);
   const [scanPhase, setScanPhase] = useState(0);
@@ -34,13 +38,15 @@ export default function WebsiteDesignCheckTool() {
     };
   }, []);
 
-  async function handleScan() {
-    const trimmed = domain.trim();
+  async function handleScan(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const trimmed = String(new FormData(event.currentTarget).get("domain") ?? "").trim();
     if (!trimmed) {
       setError("Enter a domain to check.");
       return;
     }
 
+    setDomain(trimmed);
     setError("");
     setStep("scanning");
     setScanPhase(0);
@@ -89,11 +95,13 @@ export default function WebsiteDesignCheckTool() {
       {step === "input" && (
         <div className="dc-input-card" data-ui-component-content="website-input">
           <label className="dc-field-label" htmlFor="dc-domain-input">Public website URL</label>
-          <div className="dc-input-row">
+          <form className="dc-input-row" onSubmit={handleScan}>
             <div className="dc-input-field-wrap">
-              {!/^https?:\/\//i.test(domain.trim()) && <span className="dc-input-prefix" aria-hidden="true">https://</span>}
+              {!/^https?:\/\//i.test(domain?.trim() ?? "") && <span className="dc-input-prefix" aria-hidden="true">https://</span>}
               <input
+                ref={attachDomainInput}
                 id="dc-domain-input"
+                name="domain"
                 type="text"
                 inputMode="url"
                 autoCapitalize="none"
@@ -103,19 +111,18 @@ export default function WebsiteDesignCheckTool() {
                 aria-describedby={error ? "dc-domain-error dc-domain-hint" : "dc-domain-hint"}
                 className="dc-input-field"
                 placeholder="yourfirm.ca"
-                value={domain}
+                defaultValue={domain ?? ""}
                 onChange={(e) => {
                   setDomain(e.target.value);
                   setError("");
                 }}
-                onKeyDown={(e) => e.key === "Enter" && handleScan()}
                 autoFocus
               />
             </div>
-            <button type="button" className="dc-scan-btn" onClick={handleScan}>
+            <button type="submit" className="dc-scan-btn" disabled={domain === null}>
               Check my site
             </button>
-          </div>
+          </form>
           {error && <p id="dc-domain-error" className="dc-error" role="alert" data-ui-copy="supporting">{error}</p>}
           <p id="dc-domain-hint" className="dc-input-hint" data-ui-copy="supporting">
             Renders your homepage in a real browser at mobile and desktop widths, then measures typography, contrast, spacing,
