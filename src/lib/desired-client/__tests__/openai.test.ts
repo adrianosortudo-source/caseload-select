@@ -3,6 +3,8 @@ import { requestOpenAI } from "@/lib/ai/openai";
 import { runDesiredClientAnalysis } from "../analyze";
 import { runInterviewClarification } from "../interview-clarification";
 import { buildStructuredBlueprintV4 } from "../structured-blueprint";
+import { validateAnalysisResponseResult } from "../output";
+import { savedAnalysis } from "../storage";
 import { completeAnswers, providerBlueprint, validBlueprint } from "./blueprint-helpers";
 
 vi.mock("@/lib/ai/openai", async (original) => ({
@@ -23,6 +25,7 @@ describe("OpenAI Best Case Profile", () => {
       why_firm_wants_work?: unknown;
       why_client_chooses_firm: { claims: Array<{ text: string; evidence_group_ids: string[] }> };
       decision_pathway: { desired_progress: { text: string } };
+      definition_components: { reasons: { text: string } };
     } };
     delete generated.brief.why_firm_wants_work;
     generated.brief.why_client_chooses_firm.claims[0] = {
@@ -30,6 +33,7 @@ describe("OpenAI Best Case Profile", () => {
       evidence_group_ids: ["not-a-registered-evidence-group"],
     };
     generated.brief.decision_pathway.desired_progress.text = "Unverified provider claim. ".repeat(25);
+    generated.brief.definition_components.reasons.text = "The firm values a fit with its skills.";
     vi.mocked(requestOpenAI).mockResolvedValue({ text: JSON.stringify(generated), inputTokens: 120, outputTokens: 35 });
     const result = await runDesiredClientAnalysis({ ...ids, answers, answerRevision: answers.revision, operation: "generate",
       reviewRunId: "22222222-2222-4222-8222-222222222222", analysisIndex: 0, clarifications: [],
@@ -39,6 +43,11 @@ describe("OpenAI Best Case Profile", () => {
     const worksheet = buildStructuredBlueprintV4(answers);
     expect(result.result.brief.why_client_chooses_firm).toEqual(worksheet.why_client_chooses_firm);
     expect(result.result.brief.decision_pathway.desired_progress).toEqual(worksheet.decision_pathway.desired_progress);
+    expect(result.result.brief.definition_components.reasons).toEqual(worksheet.definition_components.reasons);
+    expect(result.result.recoveredSections?.sort()).toEqual(["decision_pathway.desired_progress", "definition_components", "why_client_chooses_firm"]);
+    expect(validateAnalysisResponseResult(result.result, answers, [])?.recoveredSections).toEqual(result.result.recoveredSections);
+    expect(savedAnalysis(result.result, answers)?.recoveredSections).toEqual(result.result.recoveredSections);
+    expect(validateAnalysisResponseResult({ ...result.result, recoveredSections: ["unrecognized"] }, answers, [])).toBeNull();
     expect(JSON.stringify(result.result)).not.toContain("Unverified provider claim");
     expect(requestOpenAI).toHaveBeenCalledTimes(1);
   });

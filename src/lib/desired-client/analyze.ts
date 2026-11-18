@@ -12,7 +12,7 @@ import { decodeProviderEvidenceGroups, decodeProviderTargetCard, providerBluepri
 import type { AnalysisRequestEnvelope, AnalysisResult, ClarificationCode, DesiredClientAnswers } from "./types";
 import { buildStructuredBlueprintV4 } from "./structured-blueprint";
 import { evidenceGroupIdsForStatement } from "./evidence-contract";
-import type { DesiredClientBriefV4 } from "./types";
+import type { DesiredClientBriefV4, WorksheetRecoverySection } from "./types";
 
 const REQUEST_TIMEOUT_MS = 24_000;
 const REPAIRABLE_CARDS = ["client_and_matter", "client_goals_needs", "why_firm_wants_work", "why_client_chooses_firm", "recognizable_circumstances"];
@@ -36,6 +36,11 @@ function restoreWorksheetFragment(decoded: unknown, failure: AnalysisValidationF
   const brief = (decoded as Partial<AnalysisResult> | null)?.brief;
   if (!brief || typeof brief !== "object") return false;
   const { field, reason } = failure;
+  if (field === "definition_components" && reason === "target_not_grounded_in_confirmed_answers") {
+    // The validator requires these exact three confirmed components. Preserve the generated outcome.
+    for (const part of ["client", "client_matter", "reasons"] as const) brief.definition_components[part] = worksheet.definition_components[part];
+    return true;
+  }
   if (reason === "evidence_group_selection_invalid" &&
       (field === "client_goals_needs" || field === "why_client_chooses_firm" || field === "recognizable_circumstances")) {
     brief[field] = worksheet[field];
@@ -143,14 +148,25 @@ export async function runDesiredClientAnalysis(
         decodeProviderTargetCard(parsed, request.answers), request.answers,
         useGroundedFirmValue ? groundedValueCard : undefined,
       );
-      const restored = new Set<string>();
+      const restored = new Set<WorksheetRecoverySection>();
       for (;;) {
         validationFailure = null;
         const validated = validateAnalysisResult(decoded, request.answers, eligibleCodes, failure => { validationFailure ??= failure; });
+        if (validated && restored.size) {
+          const narrativeSections: WorksheetRecoverySection[] = ["client_goals_needs", "why_client_chooses_firm",
+            "recognizable_circumstances", "decision_pathway.trigger", "decision_pathway.first_contact",
+            "decision_pathway.decision", "decision_pathway.desired_progress"];
+          if (narrativeSections.every(section => restored.has(section))) {
+            // The UI offers its separately labelled structured draft when no AI narrative remains.
+            validationFailure = { field: "report", reason: "worksheet_only" };
+            return null;
+          }
+          validated.recoveredSections = [...new Set([...(validated.recoveredSections ?? []), ...restored])];
+        }
         const failure = validationFailure as AnalysisValidationFailure | null;
-        if (validated || !useGroundedFirmValue || !failure || restored.has(failure.field) ||
+        if (validated || !useGroundedFirmValue || !failure || restored.has(failure.field as WorksheetRecoverySection) ||
             !restoreWorksheetFragment(decoded, failure, worksheet)) return validated;
-        restored.add(failure.field);
+        restored.add(failure.field as WorksheetRecoverySection);
       }
     };
     let result = validate();
