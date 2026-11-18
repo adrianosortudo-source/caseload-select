@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { requestOpenAI } from "../openai";
-import { withWebsiteReviewBudget, requestVoiceOpenAI, requestWebsiteOpenAI } from "../public-tool-pilot-budget";
+import { publicToolPilotEnabled, requestPublicToolOpenAI, withWebsiteReviewBudget, requestVoiceOpenAI, requestWebsiteOpenAI } from "../public-tool-pilot-budget";
 import { runOpenAIVoiceTurn } from "@/lib/firm-voice-builder/openai";
 import { newVoiceAssignment, voiceTurnProvider } from "../voice-rollout";
 
@@ -27,6 +27,31 @@ beforeEach(() => {
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllEnvs(); vi.useRealTimers(); });
 
 describe("grant-period public tool budgets", () => {
+  it("requires a fundable shared public allowance and refuses expired, unpriced, or oversized attempts", async () => {
+    const request = { ...voice, maxOutputTokens: 4096 };
+    for (const amount of [undefined, "0", "0.01", "-3", "1.000", "Infinity", "1e9"]) {
+      vi.stubEnv("CASELOAD_PUBLIC_TOOLS_PILOT_USD", amount);
+      expect(publicToolPilotEnabled()).toBe(false);
+      await expect(requestPublicToolOpenAI(request)).rejects.toThrow("capacity");
+    }
+    expect(evalRedis).not.toHaveBeenCalled();
+    vi.stubEnv("CASELOAD_PUBLIC_TOOLS_PILOT_USD", "12.34");
+    expect(publicToolPilotEnabled()).toBe(true);
+    await expect(requestPublicToolOpenAI({ ...request, model: "unpriced" })).rejects.toThrow("capacity");
+    await expect(requestPublicToolOpenAI({ ...request, maxOutputTokens: 4097 })).rejects.toThrow("capacity");
+    await requestPublicToolOpenAI(request);
+    expect(evalRedis.mock.calls[0][1]).toEqual(["caseload:openai:public-tools:grant-ending-2026-12-09"]);
+    expect(evalRedis.mock.calls[0][2].slice(1, 3)).toEqual([12_340_000, 926_096]);
+    expect(evalRedis.mock.calls[1][2][1]).toBe(123);
+    expect(requestOpenAI).toHaveBeenCalledWith({ ...request, serviceTier: "default" });
+    evalRedis.mockRejectedValueOnce(new Error("redis unavailable"));
+    await expect(requestPublicToolOpenAI(request)).rejects.toThrow("capacity");
+    expect(requestOpenAI).toHaveBeenCalledTimes(1);
+    vi.setSystemTime(new Date("2026-12-09T00:00:00Z"));
+    expect(publicToolPilotEnabled()).toBe(false);
+    await expect(requestPublicToolOpenAI(request)).rejects.toThrow("capacity");
+    expect(requestOpenAI).toHaveBeenCalledTimes(1);
+  });
   it("logs only the aggregate website balance returned by a successful Redis settlement", async () => {
     const info = vi.spyOn(console, "info").mockImplementation(() => {});
     evalRedis.mockResolvedValueOnce(1).mockResolvedValueOnce(765_432);

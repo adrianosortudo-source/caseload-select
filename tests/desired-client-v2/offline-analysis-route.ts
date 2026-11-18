@@ -26,7 +26,7 @@ export async function startOfflineAnalysisRoute(providerOutput: unknown, outputD
  const env = { DESIRED_CLIENT_AI_ENABLED: "true", GOOGLE_AI_API_KEY: "offline-stub", GEMINI_API_KEY: "", UPSTASH_REDIS_REST_URL: "https://offline.invalid", UPSTASH_REDIS_REST_TOKEN: "offline-stub", VERCEL_ENV: "preview" };
  const previous = new Map(Object.keys(env).map(key => [key, process.env[key]]));
  Object.assign(process.env, env);
- const route = createRequire(path.join(process.cwd(), "package.json"))(bundlePath) as { GET: () => Promise<Response>; POST: (request: NextRequest) => Promise<Response>; offlineProviderCalls: () => number };
+ const route = createRequire(path.join(process.cwd(), "package.json"))(bundlePath) as { GET: (request: Request) => Promise<Response>; POST: (request: NextRequest) => Promise<Response>; offlineProviderCalls: () => number };
  const server = createServer(async (incoming, outgoing) => {
   try {
    const chunks: Buffer[] = [];
@@ -34,7 +34,7 @@ export async function startOfflineAnalysisRoute(providerOutput: unknown, outputD
    const headers = new Headers();
    for (const [key, value] of Object.entries(incoming.headers)) if (value) headers.set(key, Array.isArray(value) ? value.join(",") : value);
    const url = "http://localhost:3301/api/tools/desired-client-matter/analyze";
-   const response = incoming.method === "GET" ? await route.GET() : await route.POST(new Request(url, { method: "POST", headers, body: Buffer.concat(chunks).toString() }) as NextRequest);
+   const response = incoming.method === "GET" ? await route.GET(new Request(url, { headers })) : await route.POST(new Request(url, { method: "POST", headers, body: Buffer.concat(chunks).toString() }) as NextRequest);
    outgoing.writeHead(response.status, Object.fromEntries(response.headers));
    outgoing.end(await response.text());
   } catch {

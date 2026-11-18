@@ -1,4 +1,4 @@
-import { createIntakeJsonGenerator, isTransientGenerationError, hasGenerationKey, intakeModel, operationalIntakeProvider } from './ai/intake-generation';
+import { createIntakeJsonGenerator, isTransientGenerationError, hasGenerationKey, intakeModel, operationalIntakeProvider, type IntakeOpenAIChannel } from './ai/intake-generation';
 import {
   buildOptionMapSystemPrompt,
   buildOptionMapUserPrompt,
@@ -28,7 +28,7 @@ async function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-export async function llmMapOptionReply(args: OptionMapArgs, provider = operationalIntakeProvider()): Promise<OptionMapResult> {
+export async function llmMapOptionReply(args: OptionMapArgs, provider = operationalIntakeProvider(), openAI?: IntakeOpenAIChannel): Promise<OptionMapResult> {
   if (!hasGenerationKey(provider)) {
     return { value: null, mode: 'disabled' };
   }
@@ -39,14 +39,14 @@ export async function llmMapOptionReply(args: OptionMapArgs, provider = operatio
 
   const generate = createIntakeJsonGenerator({
     provider,
-    model: provider === 'openai' ? intakeModel() : MODEL,
+    model: provider === 'openai' ? openAI?.model ?? intakeModel() : MODEL,
     instructions: buildOptionMapSystemPrompt(),
     name: 'screen_option_map',
     schema: buildOptionMapResponseSchema(),
     temperature: TEMPERATURE,
     maxOutputTokens: 256,
     timeoutMs: 6000,
-  });
+  }, openAI?.request);
   const userPrompt = buildOptionMapUserPrompt(args);
 
   let lastErr: unknown = null;

@@ -374,12 +374,16 @@ function getLimiter(bucket: RateLimitBucket): Ratelimit | null {
  * behavior (we don't want a missing header to exempt everyone).
  */
 export function ipFromRequest(req: NextRequest | Request): string {
-  const xff = req.headers.get("x-forwarded-for");
+  return ipFromHeaders(req.headers);
+}
+
+export function ipFromHeaders(headers: Pick<Headers, "get">): string {
+  const xff = headers.get("x-forwarded-for");
   if (xff) {
     const first = xff.split(",")[0]?.trim();
     if (first) return first;
   }
-  const xri = req.headers.get("x-real-ip");
+  const xri = headers.get("x-real-ip");
   if (xri && xri.trim()) return xri.trim();
   return "unknown";
 }

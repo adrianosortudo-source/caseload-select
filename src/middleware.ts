@@ -58,6 +58,7 @@ import {
   isPreviewQaBootstrapRequest,
   isPreviewQaReadRequest,
 } from "@/lib/preview-qa-policy";
+import { isPublicPilotEntry, PUBLIC_PILOT_COOKIE, publicPilotSession } from "@/lib/ai/public-tool-session";
 
 const APP_DOMAIN = process.env.NEXT_PUBLIC_APP_DOMAIN ?? "caseloadselect.ca";
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
@@ -70,6 +71,23 @@ function nextWithTrustedRequestContext(req: NextRequest): NextResponse {
   requestHeaders.set("x-caseload-request-path", req.nextUrl.pathname);
   requestHeaders.set("x-caseload-request-method", req.method);
   requestHeaders.set("x-caseload-request-origin", req.nextUrl.origin);
+  if (req.method === "GET" && isPublicPilotEntry(req.nextUrl.pathname)) {
+    const fresh = publicPilotSession(requestHeaders) ? undefined : crypto.randomUUID();
+    if (fresh) {
+      const cookies = (requestHeaders.get("cookie") ?? "").split(";").map(s => s.trim())
+        .filter(s => s && !s.startsWith(PUBLIC_PILOT_COOKIE + "="));
+      // Render the first disclosure with the same session cookie its ensuing POST will carry.
+      requestHeaders.set("cookie", [...cookies, PUBLIC_PILOT_COOKIE + "=" + fresh].join("; "));
+    }
+    const response = NextResponse.next({ request: { headers: requestHeaders } });
+    response.headers.set("Cache-Control", "private, no-store");
+    if (fresh) {
+      const secure = req.nextUrl.protocol === "https:";
+      response.cookies.set(PUBLIC_PILOT_COOKIE, fresh, { path: "/", httpOnly: true, secure,
+        sameSite: secure ? "none" : "lax", partitioned: secure });
+    }
+    return response;
+  }
   return NextResponse.next({ request: { headers: requestHeaders } });
 }
 /** Edge-compatible mirror of the server recovery gate. Once the feature is

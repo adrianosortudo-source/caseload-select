@@ -1,4 +1,6 @@
-import { getProvider } from "@/lib/ai/openai";
+import { headers } from "next/headers";
+import { writingProvider } from "@/lib/ai/writing-rollout";
+import { publicPilotSession } from "@/lib/ai/public-tool-session";
 import type { Metadata } from "next";
 import WhyYourFirm from "@/components/why-your-firm/WhyYourFirm";
 import ToolHeader from "@/components/why-your-firm/ToolHeader";
@@ -50,7 +52,7 @@ export default async function WhyYourFirmPage({ searchParams }: PageProps) {
     <>
       {!isEmbedded && <ToolHeader />}
       <main className="bg-parchment px-4 py-10">
-        <WhyYourFirm provider={getProvider("WHY_YOUR_FIRM_ASSIST_PROVIDER")} />
+        <WhyYourFirm provider={writingProvider("why", publicPilotSession(await headers()))} />
       </main>
     </>
   );
