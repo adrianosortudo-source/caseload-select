@@ -22,6 +22,7 @@ import { checkRateLimit, ipFromRequest, rateLimitHeaders } from '@/lib/rate-limi
 import { embedQuery } from '@/lib/assist/gemini-embed';
 import { retrieveChunks } from '@/lib/assist/retrieve';
 import { generateAnswer } from '@/lib/assist/generate-answer';
+import { offersOpenAIAnswers, openaiAnswerOption } from '@/lib/assist/answer-provider';
 import { validateQuestion, resolveAllowedOrigin, buildExitResponse, type SourcePage } from '@/lib/assist/answer-route-pure';
 import { loadFirmAssistConfig } from '@/lib/assist/firm-config';
 
@@ -78,23 +79,27 @@ export async function POST(
   }
   const headers = corsHeaders(allowedOrigin);
 
-  let body: { question?: unknown };
+  let body: { question?: unknown; openaiAnswerConsent?: unknown };
   try {
     body = await req.json();
   } catch {
     return NextResponse.json({ ok: false, error: 'invalid JSON body' }, { status: 400, headers });
   }
 
-  const validation = validateQuestion(body.question);
+  const validation = validateQuestion(body?.question);
   if (!validation.ok || !validation.question) {
     return NextResponse.json({ ok: false, error: validation.error }, { status: 400, headers });
   }
   const question = validation.question;
+  const optedIn = body.openaiAnswerConsent !== undefined;
+  if (optedIn && (body.openaiAnswerConsent !== openaiAnswerOption.consentVersion || !offersOpenAIAnswers(firm.firmId))) {
+    return NextResponse.json({ ok: false, error: 'OpenAI answer option unavailable. Refresh the form to choose an available option.' }, { status: 409, headers });
+  }
 
   // Per-IP bucket. Fails open when Upstash is unconfigured (see the
   // fail-closed ceiling below, which does not depend on Upstash).
   const ip = ipFromRequest(req);
-  const decision = await checkRateLimit('assist', `${firmId}:${ip}`);
+  const decision = await checkRateLimit('assist', `${firm.firmId}:${ip}`);
   if (!decision.ok) {
     return NextResponse.json(
       { ok: false, error: 'rate limited, try again shortly' },
@@ -111,7 +116,7 @@ export async function POST(
   const { count: dailyCount, error: countErr } = await supabase
     .from('assist_queries')
     .select('id', { count: 'exact', head: true })
-    .eq('firm_id', firmId)
+    .eq('firm_id', firm.firmId)
     .gte('created_at', since);
   if (countErr) {
     console.warn('[assist route] daily ceiling count query failed, allowing request:', countErr.message);
@@ -132,9 +137,23 @@ export async function POST(
     return NextResponse.json({ ok: false, error: 'could not process the question, try again' }, { status: 502, headers });
   }
 
-  const chunks = await retrieveChunks(firmId, embedResult.vectors[0]);
+  const chunks = await retrieveChunks(firm.firmId, embedResult.vectors[0]);
+  const pageIds = Array.from(new Set(chunks.map((c) => c.page_id)));
+  const { data: pageRows, error: pagesError } = await supabase
+    .from('assist_corpus_pages')
+    .select('id, title, url')
+    .eq('firm_id', firm.firmId)
+    .eq('include', true)
+    .in('id', pageIds.length > 0 ? pageIds : ['00000000-0000-0000-0000-000000000000']);
+  if (optedIn && pagesError) {
+    return NextResponse.json({ ok: false, error: 'could not verify source pages, try again' }, { status: 502, headers });
+  }
+  const pagesById = new Map<string, SourcePage>(
+    (pageRows ?? []).map((p) => [p.id as string, { id: p.id as string, title: p.title as string | null, url: p.url as string }]),
+  );
 
-  const genResult = await generateAnswer(question, firm.firmName, chunks);
+  const approvedChunks = optedIn ? chunks.filter(chunk => pagesById.has(chunk.page_id)) : chunks;
+  const genResult = await generateAnswer(question, firm.firmName, approvedChunks, optedIn ? 'openai' : 'gemini');
   if (genResult.mode === 'disabled') {
     return NextResponse.json({ ok: false, error: 'assist is not configured for this deployment' }, { status: 503, headers });
   }
@@ -142,16 +161,12 @@ export async function POST(
     return NextResponse.json({ ok: false, error: 'could not generate an answer, try again' }, { status: 502, headers });
   }
 
-  const pageIds = Array.from(new Set(chunks.map((c) => c.page_id)));
-  const { data: pageRows } = await supabase
-    .from('assist_corpus_pages')
-    .select('id, title, url')
-    .in('id', pageIds.length > 0 ? pageIds : ['00000000-0000-0000-0000-000000000000']);
-  const pagesById = new Map<string, SourcePage>(
-    (pageRows ?? []).map((p) => [p.id as string, { id: p.id as string, title: p.title as string | null, url: p.url as string }]),
-  );
-
-  const exitResponse = buildExitResponse(genResult.response, pagesById, firm.customDomain);
+  const answer = genResult.response;
+  const hasApprovedCitation = answer.source_page_ids.some(id => pagesById.has(id));
+  const groundedAnswer = optedIn && answer.intent === 'informational' && !hasApprovedCitation
+    ? { intent: 'out_of_corpus' as const, answer_html: '', source_page_ids: [] }
+    : answer;
+  const exitResponse = buildExitResponse(groundedAnswer, pagesById, firm.customDomain);
   const latencyMs = Date.now() - startedAt;
 
   // Best-effort logging. Never blocks or fails the response to the visitor.
@@ -162,11 +177,11 @@ export async function POST(
     const ua = req.headers.get('user-agent') ?? '';
     const salt = process.env.ASSIST_HASH_SALT ?? '';
     const visitorHash = createHash('sha256').update(`${ip}:${ua}:${salt}`).digest('hex');
-    const loggedPageIds = genResult.response.source_page_ids.filter((id) => pagesById.has(id));
+    const loggedPageIds = groundedAnswer.source_page_ids.filter((id) => pagesById.has(id));
     await supabase.from('assist_queries').insert({
-      firm_id: firmId,
+      firm_id: firm.firmId,
       question,
-      intent: genResult.response.intent,
+      intent: groundedAnswer.intent,
       answer_html: exitResponse.exit === 'answered' ? exitResponse.answer_html : null,
       source_page_ids: exitResponse.exit === 'answered' ? loggedPageIds : [],
       exit_type: exitResponse.exit,

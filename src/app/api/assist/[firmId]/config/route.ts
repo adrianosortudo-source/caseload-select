@@ -12,7 +12,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
-import { hasAnswerKey } from '@/lib/assist/generate-answer';
+import { hasGenerationKey } from '@/lib/ai/intake-generation';
+import { offersOpenAIAnswers, openaiAnswerOption } from '@/lib/assist/answer-provider';
 import { resolveAllowedOrigin } from '@/lib/assist/answer-route-pure';
 import { loadFirmAssistConfig } from '@/lib/assist/firm-config';
 
@@ -51,20 +52,23 @@ export async function GET(
   }
   const headers = corsHeaders(allowedOrigin);
 
-  const hasEmbeddingKey = Boolean(process.env.GOOGLE_AI_API_KEY ?? process.env.GEMINI_API_KEY);
-  if (!hasEmbeddingKey || !hasAnswerKey()) {
+  if (!hasGenerationKey('gemini')) {
     return NextResponse.json({ ok: true, enabled: false }, { status: 200, headers });
   }
 
   const { count } = await supabase
     .from('assist_corpus_pages')
     .select('id', { count: 'exact', head: true })
-    .eq('firm_id', firmId)
+    .eq('firm_id', firm.firmId)
     .eq('include', true);
 
   if (!count || count === 0) {
     return NextResponse.json({ ok: true, enabled: false }, { status: 200, headers });
   }
 
-  return NextResponse.json({ ok: true, enabled: true }, { status: 200, headers });
+  return NextResponse.json({
+    ok: true,
+    enabled: true,
+    ...(offersOpenAIAnswers(firm.firmId) ? { openaiAnswerOption } : {}),
+  }, { status: 200, headers });
 }

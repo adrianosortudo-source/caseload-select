@@ -7,7 +7,7 @@
  *  - Tap once to start recording. Mic indicator pulses.
  *  - Tap again (or auto-stop after 60s) to end recording.
  *  - The recording is transcoded to WAV (16 kHz mono) in the browser, then
- *    POSTed to /api/transcribe (Gemini). The transcript is appended to the
+ *    POSTed to /api/transcribe. The transcript is appended to the
  *    parent textarea (via onTranscript). Shared audio helpers live in
  *    voice-capture.ts.
  *
@@ -29,7 +29,8 @@ import { useEffect, useRef, useState } from "react";
 import { pickMimeType, transcribeRecording } from "./voice-capture";
 
 interface Props {
-  /** Called with the transcribed text once Gemini returns. */
+  transcriptionOffer?: string;
+  /** Called with the transcribed text after a successful upload. */
   onTranscript: (text: string) => void;
   /** Called when an error occurs (mic blocked, transcription failed). */
   onError?: (message: string) => void;
@@ -44,16 +45,18 @@ type VoiceCapability =
   | { mode: "inline" }
   | { mode: "unavailable"; message: string };
 
-export function VoiceInput({ onTranscript, onError, onAvailabilityChange }: Props) {
+export function VoiceInput({ transcriptionOffer, onTranscript, onError, onAvailabilityChange }: Props) {
   const [state, setState] = useState<RecState>("idle");
   const [capability, setCapability] = useState<VoiceCapability | null>(null);
   const [elapsed, setElapsed] = useState(0);
+  const [useOpenAI, setUseOpenAI] = useState(false);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const streamRef = useRef<MediaStream | null>(null);
   const startedAtRef = useRef<number>(0);
   const tickerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const autoStopRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mounted = useRef(false);
 
   // Capability detection on mount. This cannot call getUserMedia because that
   // would prompt for mic permission outside the user's tap; it checks the known
@@ -67,7 +70,10 @@ export function VoiceInput({ onTranscript, onError, onAvailabilityChange }: Prop
 
   // Cleanup on unmount
   useEffect(() => {
+    mounted.current = true;
     return () => {
+      mounted.current = false;
+      if (recorderRef.current) recorderRef.current.onstop = null;
       stopTicker();
       stopRecorder();
       releaseStream();
@@ -112,6 +118,10 @@ export function VoiceInput({ onTranscript, onError, onAvailabilityChange }: Prop
     setState("requesting");
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      if (!mounted.current) {
+        stream.getTracks().forEach(track => track.stop());
+        return;
+      }
       streamRef.current = stream;
       const recorder = new MediaRecorder(stream, { mimeType: pickMimeType() });
       recorderRef.current = recorder;
@@ -164,7 +174,8 @@ export function VoiceInput({ onTranscript, onError, onAvailabilityChange }: Prop
       return;
     }
 
-    const result = await transcribeRecording(blob);
+    const result = await transcribeRecording(blob, useOpenAI ? transcriptionOffer : undefined);
+    setUseOpenAI(false);
     setState("idle");
     if (!result.ok) {
       if (onError) onError(result.error);
@@ -189,7 +200,7 @@ export function VoiceInput({ onTranscript, onError, onAvailabilityChange }: Prop
     state === "recording" ? `Recording... ${elapsed}s` :
     "Tap to record";
 
-  return (
+  const recordButton = (
     <button
       type="button"
       onClick={isRecording ? stop : start}
@@ -214,6 +225,16 @@ export function VoiceInput({ onTranscript, onError, onAvailabilityChange }: Prop
       <span>{label}</span>
       {isRecording && <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse ml-1" />}
     </button>
+  );
+  if (!transcriptionOffer) return recordButton;
+  return (
+    <>
+      <label className="flex items-start gap-2 text-sm">
+        <input type="checkbox" checked={useOpenAI} disabled={state !== "idle"} onChange={event => setUseOpenAI(event.target.checked)} />
+        <span>Send this recording to OpenAI for transcription. Google handles recordings when this box is clear. You can edit the transcript before continuing.</span>
+      </label>
+      {recordButton}
+    </>
   );
 }
 

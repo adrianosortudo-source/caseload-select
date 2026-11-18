@@ -7,12 +7,13 @@
 
 import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
 
-export interface FirmAssistConfig {
-  found: boolean;
+export type FirmAssistConfig = { found: false } | {
+  found: true;
+  firmId: string;
   embedOrigins: string[];
   customDomain: string | null;
   firmName: string;
-}
+};
 
 export async function loadFirmAssistConfig(firmId: string): Promise<FirmAssistConfig> {
   const { data } = await supabase
@@ -22,12 +23,13 @@ export async function loadFirmAssistConfig(firmId: string): Promise<FirmAssistCo
     .maybeSingle();
 
   if (!data) {
-    return { found: false, embedOrigins: [], customDomain: null, firmName: '' };
+    return { found: false };
   }
 
   const branding = (data.branding ?? null) as { firm_name?: string } | null;
   return {
     found: true,
+    firmId: data.id,
     embedOrigins: Array.isArray(data.embed_origins) ? (data.embed_origins as string[]) : [],
     customDomain: (data.custom_domain as string | null) ?? null,
     firmName: branding?.firm_name ?? (data.name as string | null) ?? 'the firm',
