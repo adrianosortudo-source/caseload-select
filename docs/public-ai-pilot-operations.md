@@ -24,6 +24,8 @@ From the app checkout, provide the pilot Redis URL and preferably a read-only to
 node --conditions=react-server --import tsx scripts/read-public-pilot-metrics.ts 2026-11-17 2026-11-23
 ```
 
+For the daily website budget check, filter the app’s production runtime logs for `[public-tool-pilot] ledger settled` and `websites`. The latest `usedMicros` is the shared balance at that settlement, including outstanding reservations. Divide by 1,000,000 for US dollars and compare with the US$20 allowance. Record the timestamp with the balance. If there is no recent settlement, use the production app’s configured Redis to read the current balance.
+
 Each hash uses the UTC date on which the request began. For example, these Redis commands read November 17 website activity and the committed grant balances in millionths of a US dollar.
 
 ```text

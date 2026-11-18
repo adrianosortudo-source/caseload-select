@@ -24,9 +24,29 @@ beforeEach(() => {
   evalRedis.mockReset().mockResolvedValue(1);
   vi.mocked(requestOpenAI).mockReset().mockResolvedValue(usage);
 });
-afterEach(() => { vi.unstubAllEnvs(); vi.useRealTimers(); });
+afterEach(() => { vi.restoreAllMocks(); vi.unstubAllEnvs(); vi.useRealTimers(); });
 
 describe("grant-period public tool budgets", () => {
+  it("logs only the aggregate website balance returned by a successful Redis settlement", async () => {
+    const info = vi.spyOn(console, "info").mockImplementation(() => {});
+    evalRedis.mockResolvedValueOnce(1).mockResolvedValueOnce(765_432);
+    await requestWebsiteOpenAI(website);
+    expect(info.mock.calls).toEqual([["[public-tool-pilot] ledger settled", { tool: "websites", usedMicros: 765_432 }]]);
+    expect(evalRedis).toHaveBeenCalledTimes(2);
+
+    info.mockClear();
+    evalRedis.mockResolvedValueOnce(1).mockResolvedValueOnce(0);
+    await withWebsiteReviewBudget("openai", undefined, 3072, async () => "no call needed");
+    expect(info.mock.calls).toEqual([["[public-tool-pilot] ledger settled", { tool: "websites", usedMicros: 0 }]]);
+
+    info.mockClear();
+    evalRedis.mockResolvedValueOnce(1).mockResolvedValueOnce(null);
+    await requestWebsiteOpenAI(website);
+    evalRedis.mockResolvedValueOnce(1).mockResolvedValueOnce(500);
+    await requestVoiceOpenAI(voice);
+    expect(info).not.toHaveBeenCalled();
+  });
+
   it("reserves before both requests, charges bounded usage, and requests Standard processing", async () => {
     await withWebsiteReviewBudget("openai", undefined, 3072, async provider => {
       expect(provider).toBe("openai");
