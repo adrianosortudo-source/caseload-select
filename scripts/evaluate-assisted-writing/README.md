@@ -4,7 +4,7 @@ Run these commands from the app checkout with its dependencies installed. The fi
 
 ```sh
 node --conditions=react-server --import tsx scripts/evaluate-assisted-writing/run.cjs check
-node --conditions=react-server --import tsx --test scripts/evaluate-assisted-writing/offline.test.cjs
+node --conditions=react-server --import tsx --test scripts/evaluate-assisted-writing/offline.test.mjs
 ```
 
 The capture command makes real provider requests. Run it in a staff process with the approved provider credential in its environment and an explicit spend allowance. It accepts `openai` or `gemini`, followed by `why`, `best` or `both`, a new output directory, and optionally the first and last case numbers from 1 to 30. It processes one operation at a time and stops after the first failed operation. Earlier results remain on disk.

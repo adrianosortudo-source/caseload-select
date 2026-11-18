@@ -1,8 +1,8 @@
-const assert = require("node:assert/strict");
-const test = require("node:test");
-const { makeFixture } = require("./fixtures.cjs");
-const { assistantOutput, recordRequests, runFixture } = require("./run.cjs");
-const { completeAnswers, validBlueprint, providerBlueprint } = require("../../src/lib/desired-client/__tests__/blueprint-helpers.ts");
+import assert from "node:assert/strict";
+import test from "node:test";
+import { makeFixture } from "./fixtures.mjs";
+import { assistantOutput, recordRequests, runFixture } from "./run.mjs";
+import { completeAnswers, validBlueprint, providerBlueprint } from "../../src/lib/desired-client/__tests__/blueprint-helpers.ts";
 
 test("builds 30 valid fictional fixtures with repeatable blinded input hashes", () => {
   const hashes = Array.from({ length: 30 }, (_, index) => {
