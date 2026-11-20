@@ -140,7 +140,7 @@ export default async function SeoCheckPage({ searchParams }: PageProps) {
         <section className="seo-disclaimer">
           <p>
             <strong>Free diagnostic tool.</strong> This report checks publicly visible signals
-            on your website. It does not access analytics, Search Console, or any private data.
+            on your website. The scan uses public pages. Private analytics and search performance records stay in your accounts.
             Results are based on a multi-page diagnostic crawl (up to 25 pages) and may not capture every signal on larger sites.
             Built by CaseLoad Select.
           </p>
