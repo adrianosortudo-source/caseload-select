@@ -1,7 +1,6 @@
 "use client";
 
-import type { AiProvider } from "@/lib/ai/openai";
-import { providerName } from "@/lib/ai/writing-provider-policy";
+import ToolPrivacyPolicyLink from "@/components/ToolPrivacyPolicyLink";
 import { REVIEW_COPY, COMMON_COPY, WELCOME_COPY, STORAGE_COPY } from "@/lib/desired-client/copy";
 import { AREA_CATALOG, CAPACITY_LABELS, CLIENT_INSIGHT_BASIS_LABELS, COLLECTED_FEE_LABELS, CONDITION_LABELS, DECISION_NEED_LABELS, DEVELOPMENT_NEED_LABELS, FIT_SIGNAL_LABELS, GOAL_LABELS, LESS_WORK_REASON_LABELS, LIMIT_LABELS, PAYMENT_LABELS, PRACTICE_EXPERIENCE_LABELS, PRACTICE_DIRECTION_LABELS, REASON_LABELS, TEAM_HOURS_LABELS, TIMING_LABELS, TRIGGER_LABELS, getFeeEffortLabel, getRoleLabel, getWorkLabel } from "@/lib/desired-client/catalog";
 import { STAGE_DEFINITIONS, getMissingFieldsForStage } from "@/lib/desired-client/screens";
@@ -16,9 +15,9 @@ const CLIENT_CHOICE:Record<string,string>={relevant_experience:"Experience with 
 const FIRM_STRENGTH:Record<string,string>={matter_experience:"Relevant experience with this matter",specialist_knowledge:"Specific knowledge the matter calls for",clear_advice:"Clear explanation of options and consequences",practical_approach:"A practical approach to the client's goal",responsive_service:"A service approach that fits the client's needs",language_or_community:"Language or community-informed service",other:"Another strength",unknown:"Not established yet"};
 const filled=(...values:Array<string|null|undefined>)=>values.filter((value):value is string=>Boolean(value?.trim()));
 const valueLabel=(value:string|null|undefined,labels:Record<string,string>)=>value?labels[value]??value:"";
-export function ReviewStep({provider="gemini",answers,onCreate,onRetry,onEdit,onCreateStructured,briefNeedsUpdate,loading,error,retryAllowed,legacyBriefReplaced=false,aiAvailable=true,reportNeedsRegeneration=false,providerCallsUsed=0,providerCallLimit=3,failureReference=null}:{
+export function ReviewStep({answers,onCreate,onRetry,onEdit,onCreateStructured,briefNeedsUpdate,loading,error,retryAllowed,legacyBriefReplaced=false,aiAvailable=true,reportNeedsRegeneration=false,providerCallsUsed=0,providerCallLimit=3,failureReference=null}:{
   answers:DesiredClientAnswers; onCreate:()=>void; onRetry:()=>void; onEdit:(stage:Stage)=>void; onCreateStructured?:()=>void;
-  provider?:AiProvider; briefNeedsUpdate:boolean; loading:boolean; error:""|"unavailable"|"invalid"|"structuredInvalid"|"changed"|"focusChanged"|"providerCallLimitReached";retryAllowed:boolean;legacyBriefReplaced?:boolean;aiAvailable?:boolean;reportNeedsRegeneration?:boolean;providerCallsUsed?:number;providerCallLimit?:number;failureReference?:string|null;
+  briefNeedsUpdate:boolean; loading:boolean; error:""|"unavailable"|"invalid"|"structuredInvalid"|"changed"|"focusChanged"|"providerCallLimitReached";retryAllowed:boolean;legacyBriefReplaced?:boolean;aiAvailable?:boolean;reportNeedsRegeneration?:boolean;providerCallsUsed?:number;providerCallLimit?:number;failureReference?:string|null;
 }) {
   const area=answers.focus.area;
   const work=answers.focus.work==="other"?answers.focus.work_other:area&&answers.focus.work?getWorkLabel(area,answers.focus.work):"";
@@ -102,7 +101,7 @@ export function ReviewStep({provider="gemini",answers,onCreate,onRetry,onEdit,on
       <h2 data-ui-copy="heading">{aiAvailable?REVIEW_COPY.prepareAI:"Create a structured Desired Client Blueprint"}</h2>
       {aiAvailable?<p data-ui-copy="body">AI will connect your choices into a Desired Client Blueprint: the client situation and matter, why the work fits the firm, the signs of a relevant enquiry, what the firm has seen so far, and what would make the work worth repeating. It will keep reported experience, estimates, preferences and unknowns distinct. You can review and correct the draft.</p>:<p className="dc-alert" role="status" data-ui-copy="body">AI-assisted drafting is currently unavailable. You can still create a structured draft from your answers.</p>}
       <p data-ui-copy="supporting">The blueprint is a working marketing definition. It does not verify the firm&apos;s experience or economics, approve a target, decide whether to accept a client, or activate a lead score. The firm makes those judgments.</p>
-      {aiAvailable&&<><p data-ui-copy="supporting">{WELCOME_COPY.aiDisclosure}</p><p data-ui-copy="supporting">Selecting “{REVIEW_COPY.prepareAI}” sends your answers to {providerName(provider)} for this draft. Describe patterns of work only. Do not enter confidential or identifying client information.</p></>}
+      {aiAvailable&&<><p data-ui-copy="supporting">{WELCOME_COPY.aiDisclosure}</p><p data-ui-copy="supporting">Selecting “{REVIEW_COPY.prepareAI}” sends your answers to our external AI provider for this draft. Describe patterns of work only. Do not enter confidential or identifying client information. <ToolPrivacyPolicyLink /></p></>}
       <div className="dc-actions">
         {!aiAvailable&&onCreateStructured?<button type="button" className="dc-button dc-button--primary" disabled={loading} onClick={onCreateStructured}>Create structured draft</button>:error?(retryAllowed&&<button type="button" className="dc-button dc-button--primary" disabled={loading} onClick={onRetry}>{REVIEW_COPY.tryAgain}</button>):<button type="button" className="dc-button dc-button--primary" disabled={loading} onClick={onCreate}>{loading?REVIEW_COPY.creatingAI:REVIEW_COPY.prepareAI}</button>}
         {aiAvailable&&error&&onCreateStructured&&<button type="button" className="dc-button dc-button--secondary" disabled={loading} onClick={onCreateStructured}>Continue with a structured draft</button>}

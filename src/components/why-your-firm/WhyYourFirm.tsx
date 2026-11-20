@@ -31,7 +31,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { AiProvider } from "@/lib/ai/openai";
-import { providerName } from "@/lib/ai/writing-provider-policy";
+import ToolPrivacyPolicyLink from "@/components/ToolPrivacyPolicyLink";
 import { copy } from "@/lib/why-your-firm/compliance";
 import { GATE_MODE } from "@/lib/why-your-firm/config";
 import { watchEmbedHeight, announceStepChange } from "@/lib/why-your-firm/embed";
@@ -231,7 +231,7 @@ export default function WhyYourFirm({ provider }: { provider: AiProvider }) {
     setPhase("wizard");
   }
 
-  const privacyLine = GATE_MODE === "no_gate" ? copy.tool.privacyNoGateAssist(providerName(provider)) : copy.tool.privacy;
+  const privacyLine = GATE_MODE === "no_gate" ? copy.tool.privacyNoGateAssist : copy.tool.privacy;
 
   if (phase === "loading") return null;
 
@@ -241,7 +241,7 @@ export default function WhyYourFirm({ provider }: { provider: AiProvider }) {
         <p className="label mb-2">{copy.tool.eyebrow}</p>
         <h1 className="text-2xl max-[360px]:text-[22px] font-primary font-extrabold text-navy mb-3">{copy.tool.name}</h1>
         <p className="text-sm text-body leading-relaxed mb-3">{copy.tool.intro}</p>
-        <p className="text-sm text-body leading-relaxed mb-3">{privacyLine}</p>
+        <p className="text-sm text-body leading-relaxed mb-3">{privacyLine} <ToolPrivacyPolicyLink /></p>
         <button type="button" className="btn-gold mt-2" onClick={startFresh}>
           {copy.tool.start}
         </button>
@@ -254,7 +254,7 @@ export default function WhyYourFirm({ provider }: { provider: AiProvider }) {
       <div className="card p-6 max-w-xl mx-auto text-center">
         <p className="label mb-2">{copy.tool.resumeEyebrow}</p>
         <h2 className="text-lg font-display font-semibold text-navy mb-3">{copy.tool.resume}</h2>
-        <p className="text-sm text-body mb-5">{privacyLine}</p>
+        <p className="text-sm text-body mb-5">{privacyLine} <ToolPrivacyPolicyLink /></p>
         <div className="flex gap-2 justify-center">
           <button type="button" className="btn-gold" onClick={resumeSaved}>
             {copy.tool.resumeAction}

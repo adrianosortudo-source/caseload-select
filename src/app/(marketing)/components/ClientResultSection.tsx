@@ -57,7 +57,7 @@ export default function ClientResultSection() {
               <StatCounter target={7} />
             </div>
             <div className="r-stat-label">Intake channels live</div>
-            <div className="r-stat-note">Web, voice, WhatsApp, SMS, and more, all scored the same way</div>
+            <div className="r-stat-note">Web, voice, mobile chat, text messages, and more, all scored the same way</div>
           </div>
           <div className="r-stat reveal reveal-delay-3">
             <div className="r-stat-num">

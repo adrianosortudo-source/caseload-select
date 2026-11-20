@@ -107,8 +107,7 @@ export default async function FilesPage({
       )}
 
       <p className="text-[11px] text-black/40">
-        Files are stored privately on Supabase and served via 60-second signed
-        URLs. Links open in a new tab. Every add, open, download, and archive is
+        Files are private. Each link opens in a new tab and expires after 60 seconds. Every add, open, download, and archive is
         audit-logged.
       </p>
     </div>

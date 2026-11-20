@@ -650,9 +650,8 @@ function ContentViewer({
         <div className="space-y-2">
           <p className="flex items-center gap-2 text-xs text-navy bg-parchment-2 border border-border-brand px-3 py-2">
             <span aria-hidden="true" className="font-bold">“ ”</span>
-            Select any passage, the title, or the lead to comment on it, the same
-            way you would in Google Docs. Click the hero or any inline image to
-            comment on that image.
+            Select the title, the lead, or any passage to leave a comment.
+            To comment on an image, click it.
           </p>
           {deliverable.deliverable_role === "lead_magnet_pdf" && version.signed_url ? (
             <div className="border border-border-brand bg-white px-4 py-3">

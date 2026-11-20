@@ -1,5 +1,6 @@
 "use client";
 
+import ToolPrivacyPolicyLink from "@/components/ToolPrivacyPolicyLink";
 import { useState, useRef, useEffect, useCallback, type FormEvent } from "react";
 import WebsiteDesignCheckReport, { type DesignCheckResult } from "./WebsiteDesignCheckReport";
 
@@ -126,7 +127,7 @@ export default function WebsiteDesignCheckTool() {
           {error && <p id="dc-domain-error" className="dc-error" role="alert" data-ui-copy="supporting">{error}</p>}
           <p id="dc-domain-hint" className="dc-input-hint" data-ui-copy="supporting">
             Renders your homepage in a real browser at mobile and desktop widths, then measures typography, contrast, spacing,
-            forms, and authority signals against a fixed rubric.
+            forms, and authority signals against a fixed rubric. Our external AI provider reviews public homepage screenshots and visual findings. <ToolPrivacyPolicyLink />
           </p>
         </div>
       )}

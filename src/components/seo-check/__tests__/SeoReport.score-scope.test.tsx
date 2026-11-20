@@ -45,7 +45,7 @@ describe("SeoReport score scope", () => {
   it("uses the same plain-language Google indexability limit in operator mode", () => {
     render(<SeoCheckTool variant="operator" />);
     expect(screen.getByText(/reviews the available website categories per page/i)).toBeTruthy();
-    expect(screen.getByText(/If we cannot tell whether a page tells Google not to index it, that check is not scored/i)).toBeTruthy();
+    expect(screen.getByText(/If we cannot tell whether a page asks the primary search engine to exclude it, that check is not scored/i)).toBeTruthy();
   });
 
   it("keeps editorial observations separate from the topics for a separate review", () => {
@@ -53,7 +53,7 @@ describe("SeoReport score scope", () => {
     fireEvent.click(screen.getByText("Five basic checks and counts"));
     expect(screen.getByText("Description and heading observations prompt editorial review; they are not validated ranking tests.")).toBeTruthy();
     expect(screen.getByText("A separate review should assess:")).toBeTruthy();
-    expect(screen.getByText("Google indexing", { exact: true })).toBeTruthy();
+    expect(screen.getByText("Indexing status", { exact: true })).toBeTruthy();
     expect(screen.getByText("Search performance", { exact: true })).toBeTruthy();
     expect(screen.getByText("Enquiry quality", { exact: true })).toBeTruthy();
   });

@@ -60,7 +60,7 @@ export async function POST(req: NextRequest) {
   const provider = writingProvider("why", publicPilotSession(req.headers));
   if (!matchesWritingProvider(req.headers, provider)) {
     return NextResponse.json<AssistResponseBody>(
-      { ok: false, error: "Reload the tool to review the current provider before requesting a suggestion." },
+      { ok: false, error: "Our external AI provider for this claim has changed. Reload the tool before requesting a suggestion." },
       { status: 409 },
     );
   }

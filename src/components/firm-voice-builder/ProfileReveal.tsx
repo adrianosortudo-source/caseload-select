@@ -47,8 +47,8 @@ export default function ProfileReveal({ profile, messages }: { profile: string; 
     <div className="card my-4 p-5">
       <p className="label mb-1">Your Firm Voice Profile is ready</p>
       <p className="text-sm text-body mb-4">
-        Copy the profile below and paste it at the top of any AI chat. Keep the transcript too:
-        the quarterly re-run works better when the tool can see how your answers evolved.
+        Keep a copy of your profile as a guide when drafting or editing. Download the transcript if you want
+        to compare your answers the next time you review your voice.
       </p>
       <div className="flex gap-2 mb-4">
         <button type="button" onClick={handleCopy} className="btn-gold text-sm">

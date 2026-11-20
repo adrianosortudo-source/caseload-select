@@ -1,3 +1,4 @@
+import { PUBLIC_TOOL_LANGUAGE } from "@/lib/ai/public-tool-language";
 import { createHash } from "node:crypto";
 import { requestDesignJudgments } from "./vision-provider";
 import { websiteReviewProvider } from "@/lib/ai/website-review-rollout";
@@ -97,6 +98,7 @@ function buildSystemPrompt(): string {
     items,
     "",
     "Rules:",
+    PUBLIC_TOOL_LANGUAGE,
     "- Grade only what a real visitor would see in this screenshot. Do not invent detail you cannot see.",
     "- Governing principle: authority is a structure others can point to, not a self-designation. A page can sound confident and still score low here if nothing backs the confidence.",
     "- A deterministic findings summary (lexicon hits, schema presence, testimonial attribution) is provided below as corroborating evidence. The screenshot is the primary evidence for every judgment item.",

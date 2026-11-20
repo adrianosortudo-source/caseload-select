@@ -133,7 +133,7 @@ export default async function FirmOnboardingPage({
                   <div className="mt-1.5 flex items-center gap-2 flex-wrap">
                     <Tag label={`Token ${row.submission_token}`} />
                     {row.whatsapp_number_decision === "provision_new_ghl_number" ? (
-                      <Tag label="New GHL number" tone="pass" />
+                      <Tag label="New intake number" tone="pass" />
                     ) : row.whatsapp_number_decision === "different_carrier_line" ? (
                       <Tag label="Different number" tone="warn" />
                     ) : null}

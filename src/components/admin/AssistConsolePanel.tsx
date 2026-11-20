@@ -180,7 +180,7 @@ export default function AssistConsolePanel({
             <p>
               Reindex: {summary.reindex.pages_processed} processed, {summary.reindex.pages_ok} updated,{' '}
               {summary.reindex.pages_unchanged} unchanged, {summary.reindex.pages_errored} errored
-              {summary.reindex.pages_disabled > 0 ? `, ${summary.reindex.pages_disabled} disabled (no Gemini key)` : ''}.
+              {summary.reindex.pages_disabled > 0 ? `, ${summary.reindex.pages_disabled} disabled (search indexing key missing)` : ''}.
             </p>
           </div>
         )}

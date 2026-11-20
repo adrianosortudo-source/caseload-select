@@ -25,6 +25,7 @@ import {
   Font,
 } from "@react-pdf/renderer";
 import path from "node:path";
+import { seoCrawlerLabel, seoReportCopy } from "./presentation-copy";
 import { classifyAuditNote, AUDIT_NOTE_LABEL, type AuditNoteKind, classifyActionTier, ACTION_TIER_LABEL, ACTION_TIER_ORDER, type ActionTier } from "./audit-notes";
 
 const FONTS_DIR = path.join(process.cwd(), "public", "fonts");
@@ -310,7 +311,7 @@ export function AuditReportPdf({ result }: { result: AuditPdfResult }) {
                     <View key={it.id ?? i} style={s.issue} wrap={false}>
                       <View style={s.issueHead}>
                         <Text style={[s.tag, { color: ACTION_TIER_COLOR[tier] }]}>{SEV_LABEL[sev]}</Text>
-                        <Text style={s.issueTitle}>{it.title ?? "Issue"}</Text>
+                        <Text style={s.issueTitle}>{seoReportCopy(it.title ?? "Issue")}</Text>
                         <Text style={s.meta}>
                           {it.category ?? ""}
                           {it.affectedCount ? ` · ${it.affectedCount}/${it.totalPages ?? "?"} page${it.affectedCount > 1 ? "s" : ""}` : ""}
@@ -319,8 +320,8 @@ export function AuditReportPdf({ result }: { result: AuditPdfResult }) {
                         </Text>
                         {note && <Text style={[s.tag, { color: AUDIT_NOTE_COLOR[note] }]}>{AUDIT_NOTE_LABEL[note]}</Text>}
                       </View>
-                      {it.detail && <Text style={s.issueDetail}>{it.detail}</Text>}
-                      {it.fix && <Text style={s.fix}><Text style={s.fixLabel}>FIX  </Text>{it.fix}</Text>}
+                      {it.detail && <Text style={s.issueDetail}>{seoReportCopy(it.detail)}</Text>}
+                      {it.fix && <Text style={s.fix}><Text style={s.fixLabel}>FIX  </Text>{seoReportCopy(it.fix)}</Text>}
                       {it.evidence && <Text style={s.evidence}>Evidence: {it.evidence}</Text>}
                       {internal && it.internalNote && <Text style={s.internalLine}>Internal: {it.internalNote}</Text>}
                       {internal && it.prospectingAngle && <Text style={s.internalLine}>Angle: {it.prospectingAngle}</Text>}
@@ -364,7 +365,7 @@ export function AuditReportPdf({ result }: { result: AuditPdfResult }) {
               <View style={s.bots}>
                 {searchBots.map((b) => (
                   <Text key={b.name} style={[s.botChip, { color: b.blocked ? COLORS.danger : COLORS.navy }]}>
-                    {b.name}: {b.blocked ? "Blocked" : "Allowed"}
+                    {seoCrawlerLabel(b.name ?? "")}: {b.blocked ? "Blocked" : "Allowed"}
                   </Text>
                 ))}
               </View>
@@ -372,7 +373,7 @@ export function AuditReportPdf({ result }: { result: AuditPdfResult }) {
               <View style={s.bots}>
                 {trainingBots.map((b) => (
                   <Text key={b.name} style={[s.botChip, { color: b.blocked ? COLORS.navy : COLORS.stoneOnLight }]}>
-                    {b.name}: {b.blocked ? "Blocked" : "Allowed"}
+                    {seoCrawlerLabel(b.name ?? "")}: {b.blocked ? "Blocked" : "Allowed"}
                   </Text>
                 ))}
               </View>

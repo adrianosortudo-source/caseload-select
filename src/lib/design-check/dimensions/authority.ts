@@ -188,7 +188,7 @@ function checkReviewSchema(nodes: JsonLdNode[]): CheckItem {
       label: "Review or rating structured data",
       status: "fail",
       detail: "No AggregateRating or Review schema found on this page.",
-      fix: "Add AggregateRating schema (ratingValue, reviewCount) linked to a real review source such as Google Business Profile.",
+      fix: "Add AggregateRating schema (ratingValue, reviewCount) linked to the public listing where those ratings appear.",
     };
   }
   const withCount = aggregateRatings.filter((r) => typeof r.reviewCount === "number" || typeof r.ratingCount === "number");

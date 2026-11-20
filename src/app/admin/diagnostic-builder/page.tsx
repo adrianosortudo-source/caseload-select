@@ -184,9 +184,8 @@ export default function DiagnosticBuilderPage() {
             in the manual items.
           </li>
           <li>
-            <strong>Draft with AI:</strong> Gemini turns the notes into a
-            field-by-field draft. It refuses to invent anything the notes do
-            not support, so missing data surfaces as required-field gaps.
+            <strong>Draft with AI:</strong> The assistant drafts each field from the notes and flags required
+            fields that still need evidence.
           </li>
           <li>
             <strong>Render PDF:</strong> the QA gate runs (em dash, italics,
@@ -211,11 +210,9 @@ export default function DiagnosticBuilderPage() {
           Why local
         </h2>
         <p className="text-sm text-black/70">
-          The engine runs on the operator&apos;s machine because (a) headless
-          Chrome and Playwright are heavy on Vercel serverless, (b) PageSpeed
-          Insights and Google directory probes work better from a residential
-          IP than a datacentre, and (c) the deliverable is operator-supervised
-          by design. The Console is the entry point; the work happens on disk.
+          The browser checks run on the operator&apos;s computer. Page-speed and
+          directory checks work better from a residential connection, and the
+          operator reviews each deliverable. The Console is the entry point; the work happens on disk.
         </p>
       </section>
     </div>
