@@ -7,6 +7,7 @@ const labels: ReadonlyArray<readonly [RegExp, string]> = [
   [/\b(?:Google Business Profile|Bing Places|GBP)\b/g, "business listing"],
   [/\b(?:Google Maps|Google Map)\b/g, "map"],
   [/\bGoogle-addressed\b/g, "search-engine-specific"],
+  [/\bGoogle exclusion observed\b/g, "Search exclusion observed"],
   [/\bGoogle indexing\b/g, "indexing in the primary search engine"],
   [/\bGooglebot\b/g, "the primary search crawler"],
   [/\bBingbot\b/g, "the secondary search crawler"],

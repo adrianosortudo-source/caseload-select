@@ -25,13 +25,16 @@ function methodologyDisplayLabel(model:SeoReportModel){return model.methodology.
 function methodologyDisclosureText(model:SeoReportModel){return model.methodology.label==="Method not recorded"?model.methodology.label:model.methodology.label+", version "+model.methodology.version}
 function indexabilitySummaryText(model:SeoReportModel){if(model.methodology.version===5)return `Page-level search engine scope: ${model.accessSummary.noindexCount} noindex instruction(s) addressed to the primary search engine observed; ${model.accessSummary.indexabilityNotAssessedCount} not assessed. The search engine can act on an instruction only if it retrieves that response.`;if(model.methodology.label==="Historical score")return `Legacy page-level noindex instructions observed: ${model.accessSummary.noindexCount}. The saved scan used its original method.`;return "Page-level indexing scope was not interpreted for this saved result."}
 function stateLabel(state:ReportDecision["state"]){return state==="Observed mismatch"?"Resolve first":state==="Confirm intended use"?"Confirm intent":state}
+function decisionPageEvidence(finding:ReportDecision,evidence:string){
+ return ["R1","R2","R3","R4"].includes(finding.ruleId??"")?evidence:seoReportCopy(evidence);
+}
 function decisionText(finding:ReportDecision,index:number){const relatedPages=finding.relatedPages??[];return `${index+1}. ${seoReportCopy(finding.title)}
 Evidence state: ${stateLabel(finding.state)}
 What we found: ${seoReportCopy(finding.observed)}
 Pages:
 ${finding.pages.map(page=>`${page.title}: ${page.url}
-${page.evidence}`).join("\n")}
-${relatedPages.length?`Related pages to compare:\n${relatedPages.map(page=>`${page.title}: ${page.url}\n${page.evidence}`).join("\n")}`:""}
+${decisionPageEvidence(finding,page.evidence)}`).join("\n")}
+${relatedPages.length?`Related pages to compare:\n${relatedPages.map(page=>`${page.title}: ${page.url}\n${decisionPageEvidence(finding,page.evidence)}`).join("\n")}`:""}
 Why it matters: ${seoReportCopy(finding.whyItMatters)}
 Recommended decision: ${seoReportCopy(finding.nextStep)}
 Who should act: ${finding.owner}
@@ -73,7 +76,7 @@ function DecisionFinding({finding,index,copied,onCopy}:{finding:ReportDecision;i
   <p className="cls-decision-state" data-ui-copy="supporting">{stateLabel(finding.state)}</p>
   <div className="cls-decision-block"><h4 data-ui-copy="heading">What we found</h4><p data-ui-copy="body">{seoReportCopy(finding.observed)}</p></div>
   {/* Saved page titles are source labels, not explanatory copy. */}
-  <details className="cls-evidence cls-decision-evidence"><summary>View evidence for {finding.pages.length} affected page{finding.pages.length===1?"":"s"}{relatedPages.length?` and ${relatedPages.length} related page to compare`:""}</summary><ul className="cls-decision-pages" aria-label={`Evidence pages for ${seoReportCopy(finding.title)}`}>{finding.pages.map(page=><li key={page.url} data-ui-component-content="decision-page">{evidenceHref(page.url)?<a href={evidenceHref(page.url)!} target="_blank" rel="noopener noreferrer" >{page.title}</a>:<span>{page.title}</span>}{preservesSourceFieldEvidence?<pre className="cls-decision-source-record">{page.evidence}</pre>:<p data-ui-copy="supporting">{page.evidence}</p>}</li>)}</ul>{relatedPages.length>0&&<div className="cls-decision-related"><h4>Related page to compare</h4><ul className="cls-decision-pages">{relatedPages.map(page=><li key={page.url}>{evidenceHref(page.url)?<a href={evidenceHref(page.url)!} target="_blank" rel="noopener noreferrer">{page.title}</a>:<span>{page.title}</span>}<p>{page.evidence}</p></li>)}</ul></div>}</details>
+  <details className="cls-evidence cls-decision-evidence"><summary>View evidence for {finding.pages.length} affected page{finding.pages.length===1?"":"s"}{relatedPages.length?` and ${relatedPages.length} related page to compare`:""}</summary><ul className="cls-decision-pages" aria-label={`Evidence pages for ${seoReportCopy(finding.title)}`}>{finding.pages.map(page=><li key={page.url} data-ui-component-content="decision-page">{evidenceHref(page.url)?<a href={evidenceHref(page.url)!} target="_blank" rel="noopener noreferrer" >{page.title}</a>:<span>{page.title}</span>}{preservesSourceFieldEvidence?<pre className="cls-decision-source-record">{page.evidence}</pre>:<p data-ui-copy="supporting">{decisionPageEvidence(finding,page.evidence)}</p>}</li>)}</ul>{relatedPages.length>0&&<div className="cls-decision-related"><h4>Related page to compare</h4><ul className="cls-decision-pages">{relatedPages.map(page=><li key={page.url}>{evidenceHref(page.url)?<a href={evidenceHref(page.url)!} target="_blank" rel="noopener noreferrer">{page.title}</a>:<span>{page.title}</span>}<p>{page.evidence}</p></li>)}</ul></div>}</details>
   <div className="cls-decision-block"><h4 data-ui-copy="heading">Why it matters</h4><p data-ui-copy="body">{seoReportCopy(finding.whyItMatters)}</p></div>
   <div className="cls-decision-block"><h4 data-ui-copy="heading">Recommended decision</h4><p data-ui-copy="body">{seoReportCopy(finding.nextStep)}</p></div>
   <div className="cls-decision-block"><h4 data-ui-copy="heading">Who should act</h4><p data-ui-copy="body">{finding.owner}</p></div>

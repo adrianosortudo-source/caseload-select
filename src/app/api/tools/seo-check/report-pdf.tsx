@@ -323,8 +323,8 @@ export function AuditReportPdf({ result }: { result: AuditPdfResult }) {
                       {it.detail && <Text style={s.issueDetail}>{seoReportCopy(it.detail)}</Text>}
                       {it.fix && <Text style={s.fix}><Text style={s.fixLabel}>FIX  </Text>{seoReportCopy(it.fix)}</Text>}
                       {it.evidence && <Text style={s.evidence}>Evidence: {it.evidence}</Text>}
-                      {internal && it.internalNote && <Text style={s.internalLine}>Internal: {it.internalNote}</Text>}
-                      {internal && it.prospectingAngle && <Text style={s.internalLine}>Angle: {it.prospectingAngle}</Text>}
+                      {internal && it.internalNote && <Text style={s.internalLine}>Internal: {seoReportCopy(it.internalNote)}</Text>}
+                      {internal && it.prospectingAngle && <Text style={s.internalLine}>Angle: {seoReportCopy(it.prospectingAngle)}</Text>}
                     </View>
                   );
                 })}
@@ -418,7 +418,7 @@ export function AuditReportPdf({ result }: { result: AuditPdfResult }) {
               {internal.recommendedOpeningAngle && (
                 <>
                   <Text style={s.listSub}>RECOMMENDED OPENING ANGLE</Text>
-                  <Text style={s.para}>{internal.recommendedOpeningAngle}</Text>
+                  <Text style={s.para}>{seoReportCopy(internal.recommendedOpeningAngle)}</Text>
                 </>
               )}
               {([

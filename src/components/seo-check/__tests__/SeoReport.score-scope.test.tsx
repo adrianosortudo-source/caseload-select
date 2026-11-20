@@ -140,7 +140,7 @@ describe("SeoReport score scope", () => {
     const { container } = render(<SeoReport result={{ ...result, pagesScanned: 1, pages: [unsafePage] }} onReset={vi.fn()} hideCta />);
     const disclosure = screen.getByText("View evidence for 1 affected page");
     expect(disclosure.tagName).toBe("SUMMARY");
-    const pageEvidence = screen.getByText(/Google exclusion observed/);
+    const pageEvidence = screen.getByText(/Search exclusion observed/);
     expect(pageEvidence.tagName).toBe("P");
     expect(pageEvidence.getAttribute("data-ui-copy")).toBe("supporting");
     expect(pageEvidence.closest("details")?.open).toBe(false);
