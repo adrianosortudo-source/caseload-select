@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { NextRequest } from "next/server";
-import { interviewClarificationSourceFingerprint, type AnalysisRequestEnvelope, type DesiredClientAnswers, type InterviewClarificationAnswer, type InterviewClarificationRequestEnvelope } from "@/lib/desired-client/types";
+import type { AnalysisRequestEnvelope, DesiredClientAnswers, InterviewClarificationRequestEnvelope } from "@/lib/desired-client/types";
 import { completeAnswers, mixedPaymentProviderBlueprint, negativeEconomicsAnswers, providerBlueprint, validBlueprint } from "@/lib/desired-client/__tests__/blueprint-helpers";
 import { validateAnalysisResponseResult, validateAnalysisResult } from "@/lib/desired-client/output";
 import { DRAFT_STORAGE_KEY, loadDraft, saveDraft, savedAnalysis } from "@/lib/desired-client/storage";
@@ -366,99 +366,18 @@ describe("POST /api/tools/desired-client-matter/analyze", () => {
     expect(mocks.generateContent).toHaveBeenCalledTimes(3);
   });
 
-  it("normalizes a provider ask and carries its answered history into the next request", async () => {
+  it("rejects a previously valid stage clarification before billing or provider access", async () => {
     const request = makeClarificationRequest();
-    mocks.generateContent.mockResolvedValueOnce(providerResponse({
-      outcome: "ask",
-      prompt: {
-        purpose: "economics_effort_conflict",
-        source_answer_ids: ["value.reasons", "value.fee_effort"],
-        question: "Which estimate should the firm confirm first?",
-        choices: [{ label: "The collected fee" }, { label: "The delivery cost" }],
-        reflection: "The firm's value assessment and estimated economics need reconciliation.",
-      },
-      reason: null,
-    }));
-    const first = await POST(makeRequest(JSON.stringify(request)));
-    expect(first.status).toBe(200);
-    const firstBody = await first.json();
-    expect(firstBody.prompt).toMatchObject({
-      outcome: "ask", stage: 3, purpose: "economics_effort_conflict",
-      source_answer_ids: ["value.reasons", "value.fee_effort"],
-      choices: [{ id: "choice_1", label: "The collected fee" }, { id: "choice_2", label: "The delivery cost" }],
-    });
-    expect(firstBody.prompt.id).toMatch(/^[0-9a-f-]{36}$/i);
-    expect(mocks.getGenerativeModel.mock.calls[0][0].generationConfig.responseSchema).toMatchObject({
-      type: "object", required: ["outcome", "prompt", "reason"],
-    });
-
-    const followup = firstBody.prompt;
-    const answered = structuredClone(request.answers);
-    answered.revision += 1;
-    const answer = followup.choices[0].label;
-    const history: InterviewClarificationAnswer = {
-      id: followup.id,
-      stage: followup.stage,
-      purpose: followup.purpose,
-      source_answer_ids: followup.source_answer_ids,
-      question: followup.question,
-      answer,
-      choiceId: followup.choices[0].id,
-      skipped: false,
-      reflection: followup.reflection,
-    };
-    answered.interview = {
-      ai_clarification_consent: true,
-      clarification_count: 1,
-      clarified_stages: [3],
-      followups: [history],
-    };
-    history.source_answer_fingerprint = interviewClarificationSourceFingerprint(answered, history.source_answer_ids);
-    const next = {
-      ...request,
-      requestId: "66666666-6666-4666-8666-666666666666",
-      answerRevision: answered.revision,
-      clarificationIndex: 1,
-      stage: 4 as const,
-      answers: answered,
-    };
-    mocks.generateContent.mockResolvedValueOnce(providerResponse({ outcome: "continue", prompt: null, reason: "There is no material ambiguity in this section." }));
-    const second = await POST(makeRequest(JSON.stringify(next)));
-    expect(second.status).toBe(200);
-    expect((await second.json()).prompt).toEqual({ outcome: "continue", reason: "There is no material ambiguity in this section." });
-    const nextModelInput = JSON.parse(mocks.generateContent.mock.calls[1][0] as string);
-    expect(nextModelInput.previous_followups).toEqual([{ stage: 3, question: followup.question, answer }]);
-  });
-
-  it("returns safe field diagnostics for rejected clarification output", async () => {
-    const request = makeClarificationRequest();
-    const secretModelText = "synthetic private model text sentinel";
-    mocks.generateContent.mockResolvedValueOnce(providerResponse({
-      outcome: "ask",
-      prompt: {
-        purpose: "not-a-stage-three-purpose",
-        source_answer_ids: ["value.reasons"],
-        question: secretModelText,
-        choices: [{ label: "First" }, { label: "Second" }],
-        reflection: "A harmless reflection.",
-      },
-      reason: null,
-    }));
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     const response = await POST(makeRequest(JSON.stringify(request)));
-    expect(response.status).toBe(502);
-    expect((await response.json()).error.code).toBe("INVALID_AI_OUTPUT");
-    expect(warn).toHaveBeenCalledTimes(1);
-    expect(warn.mock.calls[0]).toHaveLength(1);
-    expect(JSON.parse(warn.mock.calls[0][0] as string)).toEqual({
-      event: "desired_client_clarification_rejected", requestId: request.requestId,
-      stage: request.stage, reason: "prompt_contract", validationCode: "purpose", repairAttempts: 0,
-    });
-    expect(JSON.stringify(warn.mock.calls)).not.toContain(secretModelText);
-    expect(JSON.stringify(warn.mock.calls)).not.toContain(JSON.stringify(request.answers));
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ ok: false, requestId: request.requestId, error: { code: "INVALID_REQUEST" } });
+    expect(mocks.checkRateLimit).not.toHaveBeenCalled();
+    expect(mocks.reserveDesiredClientProviderCall).not.toHaveBeenCalled();
+    expect(mocks.getGenerativeModel).not.toHaveBeenCalled();
+    expect(mocks.generateContent).not.toHaveBeenCalled();
   });
 
-  it("rejects legacy post-draft clarification codes because v4 follow-ups happen during discovery", async () => {
+  it("rejects legacy post-draft clarification codes on the final profile", async () => {
     const answers = { ...B0, delivery: { ...B0.delivery, capacity: "change" as const } };
     mocks.generateContent.mockResolvedValueOnce(providerResponse({ ...MODEL_RESULT, clarification_code: "CAPACITY_CONFLICT" }));
     const early = await POST(makeRequest(JSON.stringify({ ...ENVELOPE, reviewRunId: "33333333-3333-4333-8333-333333333333", answers, analysisIndex: 0 })));
@@ -813,7 +732,7 @@ describe("POST /api/tools/desired-client-matter/analyze", () => {
   });
 });
 
-it("requires the provider disclosed on the page before generating or clarifying", async () => {
+it("rejects stale provider assignments before processing new or retired requests", async () => {
   vi.stubEnv("DESIRED_CLIENT_PROVIDER", "openai");
   vi.stubEnv("CASELOAD_OPENAI_API_KEY", "fictional-project-key");
   try {

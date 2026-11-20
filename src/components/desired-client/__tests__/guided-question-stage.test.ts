@@ -45,13 +45,6 @@ function PaymentContextStage() {
   });
 }
 
-function FocusStage({aiAvailable}:{aiAvailable:boolean|null}) {
-  const [answers,setAnswers]=useState<DesiredClientAnswers>(()=>emptyAnswers());
-  return createElement(GuidedQuestionStage,{
-    stage:1,answers,onEdit:(edit)=>setAnswers(edit),onBack:()=>undefined,onNext:()=>undefined,onCompare:()=>undefined,error:false,aiAvailable,
-  });
-}
-
 describe("GuidedQuestionStage write-in choice limits", () => {
   it("keeps a custom fit signal and explains how it shares the three-choice limit", () => {
     render(createElement(FitSignalStage));
@@ -88,18 +81,16 @@ describe("GuidedQuestionStage optional payment context", () => {
   });
 });
 
-describe("GuidedQuestionStage AI availability",()=>{
-  it("replaces consent with a clear status when AI is known to be disabled",()=>{
-    render(createElement(FocusStage,{aiAvailable:false}));
-
-    expect(screen.getByRole("status").textContent).toContain("AI follow-ups are unavailable");
-    expect(screen.queryByRole("checkbox",{name:/Allow up to three short AI follow-up questions/})).toBeNull();
-  });
-
-  it("keeps the consent choice available while AI availability is unknown",()=>{
-    render(createElement(FocusStage,{aiAvailable:null}));
-
-    expect(screen.getByRole("checkbox",{name:/Allow up to three short AI follow-up questions/})).toBeTruthy();
-    expect(screen.queryByRole("status")).toBeNull();
+describe("GuidedQuestionStage questionnaire", () => {
+  it("shows the practice questions without an AI follow-up control or notice", () => {
+    const answers = emptyAnswers();
+    answers.interview.ai_clarification_consent = true;
+    render(createElement(GuidedQuestionStage, {
+      stage: 1, answers, onEdit: () => undefined, onBack: () => undefined,
+      onNext: () => undefined, onCompare: () => undefined, error: false,
+    }));
+    expect(screen.getByRole("group", { name: "What do you want this profile to help your firm do?" })).toBeTruthy();
+    expect(screen.queryByRole("checkbox", { name: /AI follow-up/i })).toBeNull();
+    expect(screen.queryByText(/AI follow-ups?/i)).toBeNull();
   });
 });

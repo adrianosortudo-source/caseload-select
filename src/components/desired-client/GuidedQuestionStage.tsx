@@ -1,6 +1,5 @@
 "use client";
 
-import ToolPrivacyPolicyLink from "@/components/ToolPrivacyPolicyLink";
 import type { ReactNode } from "react";
 import {
   AREA_ORDER, CAPACITY_LABELS, CLIENT_INSIGHT_BASIS_LABELS, COLLECTED_FEE_LABELS, CONDITION_LABELS, CONTACT_LABELS, FIT_SIGNAL_OPTIONS,
@@ -69,9 +68,9 @@ const MULTI_CHOICE_WRITE_INS: Partial<Record<string, WriteInKey>> = {
   "dc-fit-signals": "fit_signals",
 };
 
-export function GuidedQuestionStage({stage,answers,onEdit,onBack,onNext,onCompare,error,notice,aiAvailable,preview}:{
+export function GuidedQuestionStage({stage,answers,onEdit,onBack,onNext,onCompare,error,notice,preview}:{
   stage:StageId; answers:DesiredClientAnswers; onEdit:Change; onBack:()=>void; onNext:()=>void;
-  onCompare:()=>void; error:boolean; notice?:string; aiAvailable?:boolean|null; preview?:ReactNode;
+  onCompare:()=>void; error:boolean; notice?:string; preview?:ReactNode;
 }) {
   const area=answers.focus.area;
   const route=answers.focus.route;
@@ -116,7 +115,7 @@ export function GuidedQuestionStage({stage,answers,onEdit,onBack,onNext,onCompar
       <h1 tabIndex={-1} data-ui-copy="heading">{STAGE_DEFINITIONS[stage-1].heading}</h1>
       <p data-ui-copy="body">{STAGE_DEFINITIONS[stage-1].explanation}</p>
     </div>
-    {notice&&<div className="dc-alert dc-alert--notice" role="status" data-ui-component-content="desired-client-followup-notice">{notice.split(/(?<=\.)\s+/u).map((sentence,index)=><p key={`${index}-${sentence}`} data-ui-copy="supporting">{sentence}</p>)}</div>}
+    {notice&&<div className="dc-alert dc-alert--notice" role="status" data-ui-component-content="desired-client-work-change-notice">{notice.split(/(?<=\.)\s+/u).map((sentence,index)=><p key={`${index}-${sentence}`} data-ui-copy="supporting">{sentence}</p>)}</div>}
     <div className="dc-stage__layout"><div className="dc-stage__questions" data-ui-component-content={`desired-client-stage-questions-${stage}`}>
       {stage===1&&<>
         {radio("dc-practice-direction","What do you want this profile to help your firm do?",PRACTICE_DIRECTION_OPTIONS,answers.practice.direction,(a,v)=>{
@@ -134,7 +133,6 @@ export function GuidedQuestionStage({stage,answers,onEdit,onBack,onNext,onCompar
             {radio("dc-less-reason","Why should it receive less marketing attention?",[{id:"preference",label:"The firm prefers other work"},{id:"capacity",label:"Capacity is limited"},{id:"effort",label:"The effort is hard to support"},{id:"financial",label:"The financial return does not justify the effort"},{id:"model",label:"It does not fit the firm's service model"},{id:"unknown",label:"Not sure yet"}],answers.direction.less_reason,(a,v)=>{a.direction.less_reason=v as typeof a.direction.less_reason;},undefined,false)}
           </>}
         </section>
-        <section className="dc-optional" data-ui-component-content="desired-client-ai-follow-up"><h2>AI follow-up (optional)</h2>{aiAvailable===false?<p className="dc-alert" role="status" data-ui-copy="supporting">AI follow-ups are unavailable. Your answers are saved. Continue below.</p>:<><label className="dc-option"><input className="dc-option__input" type="checkbox" checked={answers.interview.ai_clarification_consent} onChange={event=>onEdit(a=>({...a,interview:{...a.interview,ai_clarification_consent:event.currentTarget.checked}}))}/><span className="dc-option__label" data-ui-copy="body">Allow up to three short AI follow-up questions. Our external AI provider processes the answers you submit. You can skip questions and keep your original answers.</span></label><p data-ui-copy="supporting">You can continue without AI follow-ups. <ToolPrivacyPolicyLink /></p></>}</section>
       </>}
       {stage===2&&<>
         <label className="dc-text-field" data-ui-component-content="desired-client-practice-area-control">
@@ -174,7 +172,7 @@ export function GuidedQuestionStage({stage,answers,onEdit,onBack,onNext,onCompar
           {text("Is there a community the firm specifically serves?",answers.client_context.community_focus,(a,v)=>{a.client_context.community_focus=v;},"Describe a genuine service or community focus. Do not infer an individual client's needs from background.")}
           {text("Are language or culturally informed service needs relevant?",answers.client_context.language_service_needs,(a,v)=>{a.client_context.language_service_needs=v;},"Name languages or service practices the firm can actually support.")}
           {text("Which specific matter and legal work would the firm welcome again?",answers.client_context.repeat_matter_pattern,(a,v)=>{a.client_context.repeat_matter_pattern=v;},answers.focus.area==="business"&&answers.focus.work==="business_acquisitions"?"Required. Name the buyer or seller, transaction type, document and legal work, and when the lawyer is involved. For example: a buyer of an established operating business who needs an asset purchase agreement drafted or reviewed before final terms are agreed. Use a typical pattern, not client details. If not known yet, say so.":"Required. Name the client's situation, specific matter or document, legal work and the stage when the lawyer is involved. Use a typical pattern, not client details. If not known yet, say so.",600,true)}
-          {radio("dc-goal","What progress does this client want?",[{id:"understand",label:"Understand options and decide what to do"},{id:"complete",label:"Complete a planned transaction or process"},{id:"resolve",label:"Resolve a disagreement"},{id:"protect",label:"Protect something important"},{id:"prepare",label:"Prepare for a future change"},{id:"respond",label:"Meet an obligation or respond to a process"},{id:"unknown",label:"Not sure yet"}],answers.client.goals.includes("unknown")?"unknown":answers.client.goals[0]??null,(a,v)=>{a.client.goals=[v as typeof a.client.goals[number]];},"Choose the broad goal. A follow-up may help you make it concrete.")}
+          {radio("dc-goal","What progress does this client want?",[{id:"understand",label:"Understand options and decide what to do"},{id:"complete",label:"Complete a planned transaction or process"},{id:"resolve",label:"Resolve a disagreement"},{id:"protect",label:"Protect something important"},{id:"prepare",label:"Prepare for a future change"},{id:"respond",label:"Meet an obligation or respond to a process"},{id:"unknown",label:"Not sure yet"}],answers.client.goals.includes("unknown")?"unknown":answers.client.goals[0]??null,(a,v)=>{a.client.goals=[v as typeof a.client.goals[number]];},"Choose the broad goal here, then describe the practical result below.")}
           {text("What practical result can this legal work help the client achieve?",answers.client.goal_detail,(a,v)=>{a.client.goal_detail=v;},"Required unless you selected “Not sure yet” above. Describe the decision, transaction or problem the legal work helps the client move forward. Keep it general and confidential details out.",240,true)}
           {text("Who is involved in deciding or paying for the legal help? (optional)",answers.client.decision_context,(a,v)=>{a.client.decision_context=v;},"Describe roles only, such as an owner deciding with a co-owner or adviser. Do not assume a single decision maker.",240)}
           <section className="dc-optional"><h3>What matters to the client when choosing a lawyer? (optional)</h3>{multi("dc-decision-needs","Which needs or concerns have you heard or would expect them to raise?",[{id:"scope_cost",label:"Scope and cost"},{id:"options",label:"Understanding the options"},{id:"relevant_experience",label:"Relevant experience"},{id:"process",label:"What happens next"},{id:"response",label:"A timely response"},{id:"heard",label:"Being heard and understood"},{id:"unknown",label:"Not sure yet"}],answers.client.decision_needs,(a,v)=>{a.client.decision_needs=v as typeof a.client.decision_needs;if(v.includes("unknown"))clearWriteIn(a,"decision_needs");},2,["unknown"],"Choose what is known or reasonably expected; the report will keep observation separate from hypothesis.",false)}</section>

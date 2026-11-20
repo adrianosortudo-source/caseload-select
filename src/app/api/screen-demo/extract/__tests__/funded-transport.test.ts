@@ -1,5 +1,5 @@
 import { beforeEach, afterEach, expect, it, vi } from "vitest";
-import { GET, POST } from "../route";
+import { handleScreenExtraction } from "@/lib/screen-extraction-handler";
 
 const { ledger, send } = vi.hoisted(() => ({ ledger: vi.fn(), send: vi.fn() }));
 vi.mock("@upstash/redis", () => ({ Redis: class { eval = ledger; } }));
@@ -15,8 +15,9 @@ vi.mock("@/lib/ai/public-pilot-metrics", () => ({
 }));
 
 const url = "https://example.test/api/screen-demo/extract";
-function post(body: object, provider = "openai") {
-  return POST(new Request(url, { method: "POST", headers: { "X-Screen-Demo-Provider": provider }, body: JSON.stringify(body) }));
+function extract(body: object) {
+  const request = new Request(url, { method: "POST", body: JSON.stringify(body) });
+  return handleScreenExtraction(request, "openai", "public-demo");
 }
 const family = { description: "Fictional case. I need help separating. There is no court order.", matter_type: "family_general", family_enabled: true };
 
@@ -24,7 +25,6 @@ beforeEach(() => {
   vi.useFakeTimers({ toFake: ["Date"] }); vi.setSystemTime(new Date("2026-11-18T00:00:00Z"));
   vi.stubEnv("VERCEL_ENV", "production"); vi.stubEnv("CASELOAD_PUBLIC_TOOLS_PILOT_USD", "5");
   vi.stubEnv("UPSTASH_REDIS_REST_URL", "https://fixture.invalid"); vi.stubEnv("UPSTASH_REDIS_REST_TOKEN", "fixture");
-  vi.stubEnv("SCREEN_DEMO_AI_PROVIDER", "openai"); vi.stubEnv("SCREEN_DEMO_AI_OPENAI_PERCENT", "100");
   vi.stubEnv("CASELOAD_OPENAI_API_KEY", "fixture"); vi.stubEnv("SCREEN_OPENAI_MODEL", "unrelated-private-model");
   vi.stubGlobal("fetch", vi.fn(() => { throw new Error("network forbidden"); }));
   ledger.mockReset().mockResolvedValue(1);
@@ -34,7 +34,7 @@ afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); vi.useRealTimers();
 
 it("reserves extraction, mapping and a transient retry separately; uncertain family answers stay unanswered", async () => {
   send.mockRejectedValueOnce(new Error("OpenAI request failed (503)"));
-  const response = await post({ ...family, pending_slot_id: "family_existing_order", reply: "I only know about the order." });
+  const response = await extract({ ...family, pending_slot_id: "family_existing_order", reply: "I only know about the order." });
   const result = await response.json();
   expect(result).toMatchObject({ mode: "live", attempts: 2, mapping_mode: "live" });
   expect(result.mapped_answer).toBeUndefined();
@@ -46,11 +46,8 @@ it("reserves extraction, mapping and a transient retry separately; uncertain fam
   expect(ledger.mock.calls).toHaveLength(5); // The failed transport retains its full reservation.
 });
 
-it("stays local on wallet exhaustion, refuses changed disclosure and never calls another provider", async () => {
-  expect(await (await GET(new Request(url))).json()).toEqual({ provider: "openai", available: true });
+it("keeps the extraction service local on wallet exhaustion", async () => {
   ledger.mockResolvedValue(0);
-  expect(await (await post(family)).json()).toMatchObject({ mode: "error", extracted: {}, reason: "GPT pilot capacity unavailable" });
-  vi.stubEnv("SCREEN_DEMO_AI_OPENAI_PERCENT", "0");
-  expect((await post(family)).status).toBe(409);
+  expect(await (await extract(family)).json()).toMatchObject({ mode: "error", extracted: {}, reason: "GPT pilot capacity unavailable" });
   expect(send).not.toHaveBeenCalled(); expect(fetch).not.toHaveBeenCalled();
 });

@@ -7,31 +7,29 @@ import { POST as legacyExtract } from "@/app/api/extract/route";
 
 afterEach(() => { vi.unstubAllEnvs(); handle.mockClear(); });
 
-describe("public demo provider disclosure", () => {
-  it("reports the selected provider without processing a description", async () => {
-    vi.stubEnv("SCREEN_DEMO_AI_PROVIDER", "openai");
-    vi.stubEnv("CASELOAD_OPENAI_API_KEY", "test");
-    const res = await GET(new Request("https://example.test/api/screen-demo/extract"));
-    expect(await res.json()).toEqual({ provider: "openai", available: true });
+describe("public demo extraction compatibility", () => {
+  it("reports live extraction as unavailable to an older tab", async () => {
+    const res = GET();
+    expect(await res.json()).toEqual({ available: false });
     expect(res.headers.get("cache-control")).toBe("no-store");
     expect(handle).not.toHaveBeenCalled();
   });
 
-  it("requires the visitor's selected provider to match the current disclosure", async () => {
-    vi.stubEnv("SCREEN_DEMO_AI_PROVIDER", "openai");
+  it.each(["openai", "gemini"])("keeps an older %s tab local regardless of stale consent", async (provider) => {
+    vi.stubEnv("SCREEN_DEMO_AI_PROVIDER", provider);
+    vi.stubEnv("SCREEN_DEMO_AI_OPENAI_PERCENT", "100");
     vi.stubEnv("CASELOAD_OPENAI_API_KEY", "test");
-    for (const selected of ["", "gemini"]) {
-      const req = new Request("https://example.test/api/screen-demo/extract", {
-        method: "POST", headers: { "X-Screen-Demo-Provider": selected, referer: "https://example.test/screen-demo-app/index.html" },
-      });
-      expect((await POST(req)).status).toBe(409);
-    }
-    expect(handle).not.toHaveBeenCalled();
+    vi.stubEnv("GOOGLE_AI_API_KEY", "test");
     const req = new Request("https://example.test/api/screen-demo/extract", {
-      method: "POST", headers: { "X-Screen-Demo-Provider": "openai" },
+      method: "POST",
+      headers: { "X-Screen-Demo-Provider": provider, "Content-Type": "application/json" },
+      body: JSON.stringify({ description: "Fictional contract question" }),
     });
-    expect((await POST(req)).status).toBe(200);
-    expect(handle).toHaveBeenCalledWith(req, "openai", "public-demo");
+    const res = POST(req);
+    expect(res.status).toBe(409);
+    expect(await res.json()).toEqual({ mode: "disabled", extracted: {} });
+    expect(req.bodyUsed).toBe(false);
+    expect(handle).not.toHaveBeenCalled();
   });
 
   it("preserves the legacy Gemini disclosure for any referrer or client-supplied provider marker", async () => {
