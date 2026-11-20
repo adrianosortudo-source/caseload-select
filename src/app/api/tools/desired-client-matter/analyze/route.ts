@@ -8,9 +8,8 @@ import { desiredClientHasKey } from "@/lib/desired-client/provider";
 import { NextRequest, NextResponse } from "next/server";
 import { checkRateLimit, ipFromRequest, rateLimitHeaders, releaseDesiredClientProviderRun, reserveDesiredClientProviderCall } from "@/lib/rate-limit";
 import { desiredClientModelId, runDesiredClientAnalysis } from "@/lib/desired-client/analyze";
-import { runInterviewClarification, validateInterviewClarificationRequest } from "@/lib/desired-client/interview-clarification";
 import { validateAnalysisRequest } from "@/lib/desired-client/validation";
-import type { AnalysisFailureCode, AnalysisFailureEnvelope, AnalysisSuccessEnvelope, InterviewClarificationSuccessEnvelope } from "@/lib/desired-client/types";
+import type { AnalysisFailureCode, AnalysisFailureEnvelope, AnalysisSuccessEnvelope } from "@/lib/desired-client/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -76,7 +75,7 @@ async function readBodyWithinLimit(request: NextRequest): Promise<BodyReadResult
   catch { return { ok: false, reason: "INVALID_BODY" }; }
 }
 
-export async function POST(request: NextRequest): Promise<NextResponse<AnalysisFailureEnvelope | AnalysisSuccessEnvelope | InterviewClarificationSuccessEnvelope>> {
+export async function POST(request: NextRequest): Promise<NextResponse<AnalysisFailureEnvelope | AnalysisSuccessEnvelope>> {
   const contentType = request.headers.get("content-type") ?? "";
   if (!/^application\/json(?:\s*;|\s*$)/i.test(contentType)) return fail(randomUUID(), "INVALID_REQUEST", 400);
 
@@ -106,23 +105,6 @@ export async function POST(request: NextRequest): Promise<NextResponse<AnalysisF
     return fail(requestId, "AI_UNAVAILABLE", 409);
   }
 
-  if (parsed && typeof parsed === "object" && !Array.isArray(parsed) && (parsed as Record<string, unknown>).operation === "clarify") {
-    const validation = validateInterviewClarificationRequest(parsed);
-    if (!validation.valid) return fail(requestId, "INVALID_REQUEST", 400);
-    const value = validation.value;
-    if (!desiredClientAiEnabled(provider)) {
-      return fail(value.requestId, "AI_DISABLED", 503);
-    }
-
-    for (const bucket of ["desiredClientClarify", "desiredClientClarifyDaily"] as const) {
-      const decision = await checkRateLimit(bucket, identity);
-      if (!decision.ok) return fail(value.requestId, "RATE_LIMITED", 429, rateLimitHeaders(decision));
-    }
-    const outcome = await runInterviewClarification(value, provider);
-    if (outcome.mode !== "live") return fail(value.requestId, outcome.mode === "unavailable" ? "AI_UNAVAILABLE" : "INVALID_AI_OUTPUT", 502);
-    return NextResponse.json(outcome.response, { headers: NO_STORE });
-  }
-
   const validation = validateAnalysisRequest(parsed);
   if (!validation.valid) return fail(requestId, "INVALID_REQUEST", 400);
 
@@ -140,8 +122,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<AnalysisF
     if (!decision.ok) return fail(validation.value.requestId, "RATE_LIMITED", 429, rateLimitHeaders(decision));
   }
 
-  // v4 creates the complete blueprint in one response. Follow-ups happen
-  // during discovery through the separate clarify operation, never afterward.
+  // Generate the complete profile from the answers submitted at review.
   const eligibleCodes: [] = [];
   const providerCallLimit = desiredClientProviderCallLimit();
   const ownerToken = randomUUID();

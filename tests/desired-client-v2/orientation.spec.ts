@@ -64,162 +64,43 @@ test("the six sections explain their purpose and allow explicit unknowns", async
   await capture(page, "orientation-768-review");
 });
 
-test("known-disabled AI hides follow-up consent and continues without a request",async({page})=>{
-  let postRequests=0;
-  await page.route("**/api/tools/desired-client-matter/analyze",async apiRoute=>{
-    if(apiRoute.request().method()==="GET"){
-      await apiRoute.fulfill({status:200,contentType:"application/json",body:JSON.stringify({enabled:false})});
-      return;
-    }
-    postRequests+=1;
-    await apiRoute.fulfill({status:503,contentType:"application/json",body:JSON.stringify({ok:false,error:{code:"AI_DISABLED"}})});
+test("a legacy follow-up opt-in stays retired through all six stages until the user requests a profile", async ({ page }) => {
+  const answers = completeAnswers();
+  answers.interview.ai_clarification_consent = true;
+  await page.addInitScript(savedAnswers => {
+    const now = Date.now();
+    localStorage.setItem("cls-desired-client-v2", JSON.stringify({
+      schemaVersion: 2, answers: savedAnswers, currentStage: 1,
+      lastEditedAt: new Date(now).toISOString(), expiresAt: new Date(now + 7 * 86400000).toISOString(),
+    }));
+  }, answers);
+
+  const submissions: unknown[] = [];
+  await page.route("**/api/tools/desired-client-matter/analyze", async route => {
+    if (route.request().method() === "GET") return route.fulfill({ json: { enabled: true } });
+    submissions.push(route.request().postDataJSON());
+    return route.fulfill({ status: 503, json: { ok: false, error: { code: "AI_UNAVAILABLE" } } });
   });
 
   await page.goto("/tools/best-cases-profile");
-  await page.getByRole("button",{name:"Build my profile"}).first().click();
-  await expect(page.getByRole("status").filter({hasText:"AI follow-ups are unavailable"})).toBeVisible();
-  await expect(page.getByRole("checkbox",{name:/Allow up to three short AI follow-up questions/})).toHaveCount(0);
-  await page.getByRole("group",{name:"What do you want this profile to help your firm do?"}).getByRole("radio").last().check();
-  await page.getByRole("button",{name:"Continue",exact:true}).click();
-  await expect(page.getByText(STAGE_DEFINITIONS[1].explanation)).toBeVisible();
-  expect(postRequests).toBe(0);
-});
-
-test("a saved follow-up opt-in is reset on resume and works again after fresh opt-in",async({page})=>{
-  let postRequests=0;
-  await page.route("**/api/tools/desired-client-matter/analyze",async apiRoute=>{
-    if(apiRoute.request().method()==="GET"){
-      await apiRoute.fulfill({status:200,contentType:"application/json",body:JSON.stringify({enabled:true})});
-      return;
-    }
-    postRequests+=1;
-    await apiRoute.fulfill({status:503,contentType:"application/json",body:JSON.stringify({ok:false,error:{code:"AI_DISABLED"}})});
-  });
-
-  const answers=completeAnswers();answers.interview.ai_clarification_consent=true;
-  const now=Date.now();
-  await page.addInitScript(({key,savedAnswers,createdAt})=>{
-    localStorage.setItem(key,JSON.stringify({schemaVersion:2,answers:savedAnswers,currentStage:1,lastEditedAt:new Date(createdAt).toISOString(),expiresAt:new Date(createdAt+7*86400000).toISOString()}));
-  },{key:"cls-desired-client-v2",savedAnswers:answers,createdAt:now});
-  await page.goto("/tools/best-cases-profile");
-  await page.getByRole("button",{name:"Continue my saved draft",exact:true}).click();
-
-  const consent=page.getByRole("checkbox",{name:/Allow up to three short AI follow-up questions/});
-  await expect(consent).not.toBeChecked();
-  const persisted=await page.evaluate(()=>JSON.parse(localStorage.getItem("cls-desired-client-v2")??"null"));
-  expect(persisted.answers.interview.ai_clarification_consent).toBe(false);
-  await page.getByRole("button",{name:"Continue",exact:true}).click();
-  await expect(page.getByText(STAGE_DEFINITIONS[1].explanation)).toBeVisible();
-  expect(postRequests).toBe(0);
-
-  await page.getByRole("button",{name:STAGE_DEFINITIONS[0].label}).click();
-  await consent.check();
-  await page.getByRole("button",{name:"Continue",exact:true}).click();
-  await expect(page.locator(".dc-stage > .dc-alert")).toContainText("AI follow-ups are unavailable");
-  expect(postRequests).toBe(1);
-});
-
-test("an explicit AI_DISABLED follow-up response updates availability without spending a question",async({page})=>{
-  let postRequests=0;
-  await page.route("**/api/tools/desired-client-matter/analyze",async apiRoute=>{
-    if(apiRoute.request().method()==="GET"){
-      await apiRoute.fulfill({status:200,contentType:"application/json",body:JSON.stringify({enabled:true})});
-      return;
-    }
-    postRequests+=1;
-    await apiRoute.fulfill({status:503,contentType:"application/json",body:JSON.stringify({ok:false,error:{code:"AI_DISABLED"}})});
-  });
-
-  await page.goto("/tools/best-cases-profile");
-  await page.getByRole("button",{name:"Build my profile"}).first().click();
-  await page.getByRole("checkbox",{name:/Allow up to three short AI follow-up questions/}).check();
-  await page.getByRole("group",{name:"What do you want this profile to help your firm do?"}).getByRole("radio").last().check();
-  await page.getByRole("button",{name:"Continue",exact:true}).click();
-  await expect(page.getByText(STAGE_DEFINITIONS[1].explanation)).toBeVisible();
-  await expect(page.locator(".dc-stage > .dc-alert")).toContainText("AI follow-ups are unavailable");
-  expect(postRequests).toBe(1);
-
-  await page.getByRole("button",{name:STAGE_DEFINITIONS[0].label}).click();
-  await expect(page.getByRole("status").filter({hasText:"AI follow-ups are unavailable"})).toBeVisible();
-  await expect(page.getByRole("checkbox",{name:/Allow up to three short AI follow-up questions/})).toHaveCount(0);
-  await page.getByRole("button",{name:"Continue",exact:true}).click();
-  await expect(page.getByText(STAGE_DEFINITIONS[1].explanation)).toBeVisible();
-  expect(postRequests).toBe(1);
-});
-
-test("a spent local follow-up budget is explained accurately and wraps at every supported width", async ({ page }, testInfo) => {
-  let clarificationRequests = 0;
-  await page.route("**/api/tools/desired-client-matter/analyze", async apiRoute => {
-    if (apiRoute.request().method() === "GET") {
-      await apiRoute.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ enabled: true }) });
-      return;
-    }
-    clarificationRequests += 1;
-    await apiRoute.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ ok: false, error: { code: "AI_UNAVAILABLE" } }) });
-  });
-
-  await page.setViewportSize({ width: 768, height: 1000 });
-  await page.goto("/tools/best-cases-profile");
-  await page.getByRole("button", { name: "Build my profile" }).first().click();
-  await page.locator('[data-ui-component-content="desired-client-ai-follow-up"] input[type="checkbox"]').check();
-
-  const group = (name: string) => page.getByRole("group", { name, exact: true });
-  const chooseLast = async (name: string, role: "radio" | "checkbox" = "radio") => group(name).getByRole(role).last().check();
-  const continueToNext = async (stage: number) => {
+  await page.getByRole("button", { name: "Continue my saved draft", exact: true }).click();
+  for (const stage of STAGE_DEFINITIONS.slice(0, 6)) {
+    await expect(page.getByText(stage.explanation)).toBeVisible();
+    await expect(page.getByRole("checkbox", { name: /AI follow-up/i })).toHaveCount(0);
+    await expect(page.getByText(/AI follow-ups?/i)).toHaveCount(0);
     await page.getByRole("button", { name: "Continue", exact: true }).click();
-    if (stage < 7) await expect(page.getByText(STAGE_DEFINITIONS[stage - 1].explanation)).toBeVisible();
-    else await expect(page.getByRole("heading", { name: STAGE_DEFINITIONS[stage - 1].heading })).toBeVisible();
-  };
-
-  await chooseLast("What do you want this profile to help your firm do?");
-  await continueToNext(2);
-  await page.getByLabel("Practice area for the work list").selectOption({ label: "Business & commercial" });
-  await chooseLast("Which type of legal work should we focus on?");
-  await chooseLast("How much experience does the firm have with this type of work?");
-  await chooseLast("Who is the client in this situation?");
-  await chooseLast("What event or situation creates the need for legal help?");
-  await chooseLast("At what stage does the client usually contact a lawyer?");
-  await page.getByLabel("Which specific matter and legal work would the firm welcome again?").fill("A buyer of an established business needs an asset purchase agreement reviewed before final terms are agreed.");
-  await chooseLast("What progress does this client want?");
-  await continueToNext(3);
-  await chooseLast("Why would the firm choose this work again?", "checkbox");
-  await chooseLast("How does the fee compare with the effort?");
-  await continueToNext(4);
-  await chooseLast("What is most likely to matter to this client when choosing a firm?", "checkbox");
-  await chooseLast("Which strength can your firm bring to this matter?");
-  await continueToNext(5);
-  await chooseLast("Which early signs would make this matter worth a closer look?", "checkbox");
-  await continueToNext(6);
-  await chooseLast("What evidence has the firm seen for this type of work?", "checkbox");
-  await chooseLast("What would the firm want to review over time? (optional)");
-  await continueToNext(7);
-  expect(clarificationRequests).toBe(6);
-
-  // The practice-area and matter choices intentionally start a fresh
-  // clarification run, so the first stage's earlier failed request is not
-  // part of this run's six-request budget. Revisit Focus once to spend the
-  // sixth request, then revisit it again to verify the local cap.
-  await page.getByRole("button", { name: STAGE_DEFINITIONS[0].label }).click();
-  await page.getByRole("button", { name: "Continue", exact: true }).click();
-  await expect(page.getByText(STAGE_DEFINITIONS[1].explanation)).toBeVisible();
-  expect(clarificationRequests).toBe(7);
-
-  await page.getByRole("button", { name: STAGE_DEFINITIONS[0].label }).click();
-  await page.getByRole("button", { name: "Continue", exact: true }).click();
-  const notice = page.locator(".dc-stage > .dc-alert");
-  await expect(notice.locator("p")).toHaveText([
-    "The local follow-up request budget has reached its limit.",
-    "Your answers are saved.",
-    "Continue without AI follow-up.",
-  ]);
-  expect(clarificationRequests).toBe(7);
-
-  for (const width of [1440, 1024, 768, 640, 390, 375, 320]) {
-    await page.setViewportSize({ width, height: 1000 });
-    await expect(notice).toBeVisible();
-    await layout(page, ".dc-stage > .dc-alert--notice p");
-    if (width === 1440 || width === 320) await page.screenshot({ path: testInfo.outputPath(`follow-up-limit-${width}.png`), fullPage: true });
   }
+  await expect(page.getByRole("heading", { name: "Review your direction" })).toBeVisible();
+  const persisted = await page.evaluate(() => JSON.parse(localStorage.getItem("cls-desired-client-v2")!).answers);
+  expect(persisted.interview.ai_clarification_consent).toBe(false);
+  expect(submissions).toEqual([]);
+  await expect(page.getByText(/sends your answers to our external AI provider for this draft/i)).toBeVisible();
+  await page.getByRole("button", { name: "Create my Best Case Profile", exact: true }).click();
+  await expect.poll(() => submissions.length).toBe(1);
+  expect(submissions).toEqual([expect.objectContaining({
+    operation: "generate", aiConsent: true,
+    answers: expect.objectContaining({ interview: expect.objectContaining({ ai_clarification_consent: false }) }),
+  })]);
 });
 
 test("canonical branding spans the landing, questionnaire, review, failure, report and offline export", async ({ page }, testInfo) => {

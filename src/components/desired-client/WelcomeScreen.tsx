@@ -2,7 +2,7 @@
 
 import ToolPrivacyPolicyLink from "@/components/ToolPrivacyPolicyLink";
 import { useRef, useState, type KeyboardEvent, type ReactNode } from "react";
-import { WELCOME_COPY } from "@/lib/desired-client/copy";
+import { REVIEW_COPY, WELCOME_COPY } from "@/lib/desired-client/copy";
 import { PREVIEW_TOPICS } from "./preview-topics";
 import "./landing.css";
 
@@ -98,7 +98,7 @@ export function WelcomeScreen({ onStart, aiAvailable = null, hasDraft = false, r
       </div>
       <footer className="site-footer"><div className="container footer-inner"><div className="footer-brand">CaseLoad Select</div><div className="footer-copy" data-ui-component-content="desired-client-footer-copy">
         <p data-ui-copy="supporting">{WELCOME_COPY.draftNotice}</p><p data-ui-copy="supporting">{WELCOME_COPY.privacy}</p>
-        {aiAvailable === false ? <p className="dc-availability" role="status" data-ui-copy="supporting">AI-assisted drafting and follow-up questions are currently unavailable. You can still complete the exercise and create a structured Desired Client Blueprint from your answers.</p> : <p data-ui-copy="supporting">{WELCOME_COPY.aiDisclosure} If you request AI assistance, our external AI provider processes the answers you submit. <ToolPrivacyPolicyLink /></p>}
+        {aiAvailable === false ? <p className="dc-availability" role="status" data-ui-copy="supporting">AI-assisted drafting is currently unavailable. You can still create a structured Best Case Profile from your answers.</p> : <p data-ui-copy="supporting">{WELCOME_COPY.aiDisclosure} Selecting “{REVIEW_COPY.prepareAI}” sends your answers to our external AI provider for drafting. <ToolPrivacyPolicyLink /></p>}
         <details className="dc-details"><summary>About the exercise</summary><div data-ui-component-content="desired-client-exercise-details"><p data-ui-copy="body">{WELCOME_COPY.description}</p><p data-ui-copy="body">{WELCOME_COPY.time}</p><p data-ui-copy="body">{WELCOME_COPY.process}</p><p data-ui-copy="body">{WELCOME_COPY.preparation}</p><p data-ui-copy="body">{WELCOME_COPY.outcome}</p><p data-ui-copy="supporting">{WELCOME_COPY.supporting}</p></div></details>
       </div></div></footer>
     </div>
