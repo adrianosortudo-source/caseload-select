@@ -36,7 +36,8 @@ import type { WizardData } from "@/lib/why-your-firm/screens";
 import ComplianceNote from "./ComplianceNote";
 
 import type { AiProvider } from "@/lib/ai/openai";
-import { providerName, WRITING_PROVIDER_HEADER } from "@/lib/ai/writing-provider-policy";
+import ToolPrivacyPolicyLink from "@/components/ToolPrivacyPolicyLink";
+import { WRITING_PROVIDER_HEADER } from "@/lib/ai/writing-provider-policy";
 
 interface Props {
   provider: AiProvider;
@@ -203,7 +204,7 @@ export default function CustomClaimEntry({ provider, category, data, onPatch }: 
         )}
 
         <div className="mt-3">
-          <p className="text-xs text-muted mb-2">Tightening a claim sends that claim and its proof line to {providerName(provider)}.</p>
+          <p className="text-xs text-muted mb-2">Tightening a claim sends that claim and its proof line to our external AI provider. <ToolPrivacyPolicyLink /></p>
           <button
             type="button"
             className="btn-ghost text-sm"

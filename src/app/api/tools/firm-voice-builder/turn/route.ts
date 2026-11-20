@@ -88,7 +88,7 @@ export async function POST(req: NextRequest) {
   const provider = voiceTurnProvider(req.headers);
   if (!provider) {
     return NextResponse.json<TurnResponseBody>(
-      { ok: false, error: "The interview provider changed. Reload the guide to review the new provider and resume." },
+      { ok: false, error: "Our external AI provider for this interview has changed. Reload the guide to review your choices before resuming." },
       { status: 409 },
     );
   }
@@ -122,7 +122,7 @@ export async function POST(req: NextRequest) {
     metrics.finish("failed", result.reason === "pilot_capacity" ? "voice_capacity" : undefined);
     if (provider === "openai" && result.reason === "pilot_capacity") {
       return NextResponse.json<TurnResponseBody>(
-        { ok: false, error: "GPT interview capacity is currently unavailable. Your previous answers are still in this browser. Please try again later." },
+        { ok: false, error: "Our external AI provider is temporarily unavailable for this interview. Your previous answers are still in this browser. Please try again later." },
         { status: 503 },
       );
     }

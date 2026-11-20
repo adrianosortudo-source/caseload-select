@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { OPENING_MESSAGE, parseSectionTag } from "@/lib/firm-voice-builder/system-prompt";
 import type { AiProvider } from "@/lib/ai/openai";
-import { providerName, WRITING_PROVIDER_HEADER } from "@/lib/ai/writing-provider-policy";
+import ToolPrivacyPolicyLink from "@/components/ToolPrivacyPolicyLink";
+import { WRITING_PROVIDER_HEADER } from "@/lib/ai/writing-provider-policy";
 import ProgressRail from "./ProgressRail";
 import ProfileReveal from "./ProfileReveal";
 
@@ -226,13 +227,13 @@ export default function FirmVoiceBuilder({ assignment }: { assignment: VoiceAssi
         </p>
         {previousProvider !== provider && (
           <p className="text-sm text-body mb-5">
-            This interview began with {providerName(previousProvider)}. If you resume and send another answer,
-            {providerName(provider)} will receive the saved interview and your new answer.
+            Our external AI provider for this interview has changed. If you resume and send another answer,
+            the new provider will receive your saved interview and that answer. <ToolPrivacyPolicyLink />
           </p>
         )}
         <div className="flex gap-2 justify-center">
           <button type="button" className="btn-gold" onClick={resumeSaved}>
-            {previousProvider === provider ? "Resume" : `Resume with ${providerName(provider)}`}
+            {previousProvider === provider ? "Resume" : "Resume with the new provider"}
           </button>
           <button type="button" className="btn-ghost" onClick={() => { clearSavedSession(); savedSessionRef.current = null; setActive(assignment); setPhase("intro"); }}>
             Start over
@@ -248,17 +249,16 @@ export default function FirmVoiceBuilder({ assignment }: { assignment: VoiceAssi
         <p className="label mb-2">Free tool, about 25 minutes</p>
         <h1 className="text-2xl font-primary font-extrabold text-navy mb-3">Tone of Voice Guide</h1>
         <p className="text-sm text-body leading-relaxed mb-3">
-          Ask an AI to draft a client email and what comes back is stiff and generic. This tool interviews
-          you, studies how you actually write and speak, and builds a Firm Voice Profile you paste into any
-          AI so its drafts finally sound like you wrote them.
+          This interview uses examples of how you write and speak to build a Firm Voice Profile.
+          Use it when you draft a client email, update your website or review a colleague’s wording.
         </p>
         <p className="text-sm text-body leading-relaxed mb-3">
           It works entirely through conversation, about 25 questions, 25 minutes. There is nothing to paste
           and nothing to upload; every answer you type back is itself a writing sample.
         </p>
         <p className="text-sm text-body leading-relaxed mb-3">
-          Each time you send an answer, {providerName(provider)} processes the interview so far.
-          Your draft is saved in this browser. Describe situations in general terms and leave out real client names.
+          Each time you send an answer, our external AI provider processes the interview so far.
+          Your draft is saved in this browser. Describe situations in general terms and leave out real client names. <ToolPrivacyPolicyLink />
         </p>
         <p className="text-sm text-body leading-relaxed mb-3">
           The finished profile also carries two things quietly built in: the Law Society&apos;s advertising

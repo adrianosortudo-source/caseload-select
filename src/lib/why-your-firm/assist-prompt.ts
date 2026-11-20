@@ -21,6 +21,7 @@
  * ids the model may return are the eight the tool actually knows.
  */
 
+import { PUBLIC_TOOL_LANGUAGE } from "@/lib/ai/public-tool-language";
 import { COMPLIANCE_RULES, type ComplianceRule } from "./compliance";
 import { CATEGORIES } from "./differentiators";
 
@@ -69,7 +70,7 @@ function categoriesSection(): string {
  * removed the suggestion stops matching what the filter will do to it.
  */
 export function buildAssistSystemPrompt(): string {
-  return `You tighten a single marketing claim written by a lawyer at a small Canadian law firm. The claim will go on the firm's own website. You are not a lawyer and you give no legal advice.
+  return `You tighten a single marketing claim written by a lawyer at a small Canadian law firm. The claim will go on the firm's own website. You are not a lawyer and you give no legal advice. ${PUBLIC_TOOL_LANGUAGE}
 
 RULE 1 (one sentence, their voice): Return exactly one sentence. First person plural, the way the firm would say it to a client out loud. Plain words, no brochure register, no adjectives doing work a fact could do.
 

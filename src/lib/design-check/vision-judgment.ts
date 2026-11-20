@@ -1,3 +1,4 @@
+import { PUBLIC_TOOL_LANGUAGE } from "@/lib/ai/public-tool-language";
 import { createHash } from "node:crypto";
 import { requestDesignJudgments } from "./vision-provider";
 import { websiteReviewProvider } from "@/lib/ai/website-review-rollout";
@@ -101,6 +102,7 @@ function buildSystemPrompt(): string {
     items,
     "",
     "Rules:",
+    PUBLIC_TOOL_LANGUAGE,
     "- Grade only what a real visitor would see in this screenshot. Do not invent detail you cannot see.",
     "- A deterministic findings summary is provided below. Use it as corroborating evidence where relevant (for example, if the summary reports 4 H1 tags, that supports a lower hierarchy score), but the screenshot is the primary evidence for every judgment item.",
     "- Do not repeat or re-score the deterministic findings themselves; they are already scored elsewhere. Score only the 7 rubric items above.",

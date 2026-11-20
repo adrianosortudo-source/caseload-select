@@ -1,3 +1,4 @@
+import { PUBLIC_TOOL_LANGUAGE } from "@/lib/ai/public-tool-language";
 import "server-only";
 import { requestPublicToolOpenAI } from "@/lib/ai/public-tool-pilot-budget";
 import { GoogleGenerativeAI, type GenerationConfig } from "@google/generative-ai";
@@ -28,10 +29,11 @@ interface GenerationSettings {
 
 export async function generateDesiredClientText(
   input: string,
-  { instructions, schema, maxOutputTokens, thinkingBudget, timeoutMs }: GenerationSettings,
+  { instructions: task, schema, maxOutputTokens, thinkingBudget, timeoutMs }: GenerationSettings,
   provider = getProvider("DESIRED_CLIENT_PROVIDER"),
 ): Promise<{ text: string; finishReason?: string }> {
   const model = desiredClientModelId(provider);
+  const instructions = `${task}\n\n${PUBLIC_TOOL_LANGUAGE}`;
   if (provider === "openai") {
     return requestPublicToolOpenAI({
       model, instructions, input, maxOutputTokens,

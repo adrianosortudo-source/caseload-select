@@ -81,7 +81,7 @@ export default async function SeoCheckPage({ searchParams }: PageProps) {
               Areas for review<span className="ts" />
             </h2>
             <p className="seo-categories-intro">
-              The report uses five core check types: page titles, successful page responses, Google search instructions, crawl rules and secure connections. It introduces strengths, priorities and next steps, with other observations available for context. It does not assign an overall SEO or AI grade.
+              The report uses five core check types: page titles, successful page responses, page-level search instructions, crawl rules and secure connections. It introduces strengths, priorities and next steps, with other observations available for context. It does not assign an overall SEO or AI grade.
             </p>
           </div>
           <div className="seo-categories-grid">

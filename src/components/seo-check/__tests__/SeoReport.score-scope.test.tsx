@@ -53,7 +53,7 @@ describe("SeoReport score scope", () => {
     fireEvent.click(screen.getByText("Five basic checks and counts"));
     expect(screen.getByText("Description and heading observations prompt editorial review; they are not validated ranking tests.")).toBeTruthy();
     expect(screen.getByText("A separate review should assess:")).toBeTruthy();
-    expect(screen.getByText("Google indexing", { exact: true })).toBeTruthy();
+    expect(screen.getByText("Indexing status", { exact: true })).toBeTruthy();
     expect(screen.getByText("Search performance", { exact: true })).toBeTruthy();
     expect(screen.getByText("Enquiry quality", { exact: true })).toBeTruthy();
   });
@@ -140,7 +140,7 @@ describe("SeoReport score scope", () => {
     const { container } = render(<SeoReport result={{ ...result, pagesScanned: 1, pages: [unsafePage] }} onReset={vi.fn()} hideCta />);
     const disclosure = screen.getByText("View evidence for 1 affected page");
     expect(disclosure.tagName).toBe("SUMMARY");
-    const pageEvidence = screen.getByText(/Google exclusion observed/);
+    const pageEvidence = screen.getByText(/Search exclusion observed/);
     expect(pageEvidence.tagName).toBe("P");
     expect(pageEvidence.getAttribute("data-ui-copy")).toBe("supporting");
     expect(pageEvidence.closest("details")?.open).toBe(false);
