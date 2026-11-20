@@ -20,7 +20,7 @@ export default async function PipelinePage() {
 
   return (
     <div>
-      <PageHeader title="Lead Pipeline" subtitle="Drag a card to another stage. Your changes save automatically." />
+      <PageHeader title="Lead Pipeline" subtitle="Drag cards between stages. Changes persist to Supabase." />
       <div className="p-6">
         {leadsRes.error && (
           <div className="card p-4 border-red-300 bg-red-50 text-sm text-red-700 mb-4">

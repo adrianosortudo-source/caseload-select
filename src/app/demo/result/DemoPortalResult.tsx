@@ -598,7 +598,7 @@ export default function DemoPortalResult({ session }: { session: Record<string, 
             <div className="px-4 py-2.5 border-b border-black/5 flex items-center justify-between"
               style={{ backgroundColor: "#F8F8F8" }}>
               <div>
-                <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">CRM</div>
+                <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">GoHighLevel</div>
                 <div className="text-xs font-semibold text-gray-700">Hartwell Law · Intake Pipeline</div>
               </div>
               <svg className="w-5 h-5 text-gray-300" viewBox="0 0 40 40" fill="currentColor">
@@ -702,7 +702,7 @@ export default function DemoPortalResult({ session }: { session: Record<string, 
             <div className="px-4 pb-4 flex gap-2">
               <div className="flex-1 py-2 rounded-lg text-[11px] font-semibold text-white text-center cursor-default"
                 style={{ backgroundColor: cfg.color }}
-                title="Opens the contact’s CRM record in the live portal">
+                title="Opens contact record in GoHighLevel">
                 Open Contact
               </div>
               <div className="flex-1 py-2 rounded-lg text-[11px] font-semibold text-center cursor-default border"
@@ -897,7 +897,7 @@ export default function DemoPortalResult({ session }: { session: Record<string, 
                   </div>
                 </div>
                 <p className="text-[11px] text-gray-400">
-                  In the live portal, these actions start the firm’s CRM workflows.
+                  Action buttons trigger GHL automations in the live portal.
                 </p>
               </div>
 

@@ -367,7 +367,7 @@ export default async function SubmissionDetailPage({
             label="Number decision"
             value={
               row.whatsapp_number_decision === "provision_new_ghl_number"
-                ? "New intake number for voice, SMS, and WhatsApp"
+                ? "Provision new GHL number (Voice AI + SMS + WhatsApp on the same line)"
                 : row.whatsapp_number_decision === "different_carrier_line"
                   ? "Different number (coordinate separately)"
                   : row.whatsapp_number_decision

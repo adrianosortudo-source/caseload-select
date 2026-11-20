@@ -116,7 +116,7 @@ export function OnboardingNotificationPanel({
       {status === "failed" && optimisticError ? (
         <div className="mt-3 text-xs text-black/80 whitespace-pre-wrap bg-white border border-red-200 px-3 py-2 font-mono">
           <p className="text-[10px] uppercase tracking-wider font-semibold text-red-700 mb-1 font-sans">
-            Email delivery error
+            Resend error
           </p>
           {optimisticError}
         </div>
@@ -150,7 +150,7 @@ export function OnboardingNotificationPanel({
               {result.messageId ? (
                 <>
                   {" "}
-                  · Email delivery ID <code>{result.messageId}</code>
+                  · Resend id <code>{result.messageId}</code>
                 </>
               ) : null}
             </>

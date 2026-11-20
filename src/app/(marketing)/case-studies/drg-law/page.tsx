@@ -68,9 +68,9 @@ export default function DRGLawCaseStudyPage() {
             <div className="cs-finding">
               <span className="cs-finding-num">01</span>
               <div>
-                <h3 className="cs-finding-title">Employer mismatch on a professional profile</h3>
+                <h3 className="cs-finding-title">Employer mismatch on LinkedIn</h3>
                 <p className="cs-finding-body">
-                  Damaris&apos;s professional profile listed LexTransact Law, not DRG
+                  Damaris&apos;s LinkedIn profile listed LexTransact Law, not DRG
                   Law. Every referred prospect who searched her name saw a
                   different firm.
                 </p>
@@ -79,10 +79,10 @@ export default function DRGLawCaseStudyPage() {
             <div className="cs-finding">
               <span className="cs-finding-num">02</span>
               <div>
-                <h3 className="cs-finding-title">Business listing linked to the wrong domain</h3>
+                <h3 className="cs-finding-title">GBP linked to the wrong domain</h3>
                 <p className="cs-finding-body">
-                  The local business listing pointed to drglegalservices.com,
-                  not drglaw.ca. Anyone clicking the listing’s website link could land
+                  The Google Business Profile pointed to drglegalservices.com,
+                  not drglaw.ca. Anyone clicking the GBP website link could land
                   on an inactive domain.
                 </p>
               </div>
@@ -90,9 +90,9 @@ export default function DRGLawCaseStudyPage() {
             <div className="cs-finding">
               <span className="cs-finding-num">03</span>
               <div>
-                <h3 className="cs-finding-title">Phone number missing from the business listing</h3>
+                <h3 className="cs-finding-title">Phone number missing from GBP</h3>
                 <p className="cs-finding-body">
-                  No phone number in the local business listing. The
+                  No phone number in the Google Business Profile. The
                   &ldquo;Add place&apos;s phone number&rdquo; prompt was visible on the
                   profile page.
                 </p>
@@ -106,18 +106,18 @@ export default function DRGLawCaseStudyPage() {
                   DRG Law did not appear in any niche, geographic, or
                   practice-area search. Visible only on branded queries. The
                   Brazil-Canada corporate niche had no corporate lawyer in any
-                  result on the search engine reviewed at all.
+                  Google result at all.
                 </p>
               </div>
             </div>
             <div className="cs-finding">
               <span className="cs-finding-num">05</span>
               <div>
-                <h3 className="cs-finding-title">Three reviews against a local competitors with over 100 reviews</h3>
+                <h3 className="cs-finding-title">Three reviews against a 100-plus-review Maps Pack</h3>
                 <p className="cs-finding-body">
                   Competitors in the local pack carried 100 to 1,700 reviews.
                   At three reviews, DRG Law was invisible to any client
-                  comparing options in local search.
+                  comparing options on Maps.
                 </p>
               </div>
             </div>
@@ -135,7 +135,7 @@ export default function DRGLawCaseStudyPage() {
             <div className="cs-finding">
               <span className="cs-finding-num">07</span>
               <div>
-                <h3 className="cs-finding-title">No company page on the professional network</h3>
+                <h3 className="cs-finding-title">No LinkedIn company page</h3>
                 <p className="cs-finding-body">
                   DRG Law Professional Corporation had no company page. The last
                   personal post was nine months earlier, announcing a position at
@@ -245,7 +245,7 @@ export default function DRGLawCaseStudyPage() {
                 <h3 className="cs-timeline-title">Capture</h3>
                 <ul className="cs-timeline-list">
                   <li>GBP claimed and corrected: domain updated to drglaw.ca, phone number added, category confirmed</li>
-                  <li>First round of listings submitted to six legal, local search, and business directories</li>
+                  <li>Wave 1 citations submitted: LSO directory, GBP, Bing Places, Apple Business Connect, Canadian Law List, Yellow Pages Canada</li>
                   <li>NAP locked across all surfaces: 647-598-2537 and drglaw.ca everywhere</li>
                   <li>Full schema markup: LegalService JSON-LD on every practice page, FAQPage schema on FAQ sections, BreadcrumbList on inner pages</li>
                   <li>Metadata audit: all title tags corrected, descriptions written to query intent, canonical tags added</li>
@@ -259,7 +259,7 @@ export default function DRGLawCaseStudyPage() {
                 <h3 className="cs-timeline-title">Target</h3>
                 <ul className="cs-timeline-list">
                   <li>
-                    Paid search account structure designed for Phase 2{" "}
+                    Google Ads account structure designed for Phase 2{" "}
                     <span className="cs-status-label cs-status-scheduled">
                       Scheduled, pending client budget approval
                     </span>
@@ -278,8 +278,8 @@ export default function DRGLawCaseStudyPage() {
                   <li>CaseLoad Screen widget embedded at the contact route, replacing the Wix booking form</li>
                   <li>AI intake engine: auto-detects 29 practice areas, extracts 21 data points, scores each inquiry on a 0-100 Case Priority Index</li>
                   <li>Lawyer triage portal: Damaris reads each brief, decides Take or Pass from a single screen</li>
-                  <li>Voice intake assistant live at 647-584-0998, post-call transcripts screened and scored by the same engine</li>
-                  <li>Seven inbound channels active: web widget, mobile chat, text messages, direct messages, page inbox, business listing chat, and voice</li>
+                  <li>Voice intake channel: GHL Voice AI agent live at 647-584-0998, post-call transcripts screened and scored by the same engine</li>
+                  <li>Seven inbound channels active: web widget, WhatsApp, SMS, Instagram DM, Facebook Messenger, Google Business Profile, and voice</li>
                   <li>Post-OTP matter system: client portal, matter threads, document hub, review automation</li>
                 </ul>
               </div>
@@ -393,7 +393,7 @@ export default function DRGLawCaseStudyPage() {
               </div>
               <div className="cs-result-card">
                 <span className="cs-result-num">7</span>
-                <span className="cs-result-label">Inbound channels live across website, voice, and messaging</span>
+                <span className="cs-result-label">Inbound channels live (web, voice, WhatsApp, Instagram, Messenger, SMS, GBP)</span>
               </div>
               <div className="cs-result-card">
                 <span className="cs-result-num">18</span>

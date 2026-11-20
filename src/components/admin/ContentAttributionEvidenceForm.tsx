@@ -7,7 +7,7 @@ const SELF_REPORT_CATEGORIES: { value: string; label: string }[] = [
   { value: "referral", label: "Referral" },
   { value: "search", label: "Search" },
   { value: "social", label: "Social media" },
-  { value: "ai_tool", label: "AI assistant" },
+  { value: "ai_tool", label: "AI tool (e.g. ChatGPT)" },
   { value: "event", label: "Event" },
   { value: "existing_client", label: "Existing client" },
   { value: "other", label: "Other" },

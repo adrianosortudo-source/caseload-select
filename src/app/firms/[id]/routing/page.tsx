@@ -31,7 +31,7 @@ export default async function FirmRoutingPage({
     <div>
       <PageHeader
         title={`Matter Routing  -  ${firm.name}`}
-        subtitle="Choose a CRM pipeline and staff assignment for each case sub-type."
+        subtitle="Maps case sub-types to specific GHL pipelines and staff assignments."
       />
       <div className="p-8 max-w-5xl space-y-4">
         <div className="flex items-center gap-2 text-xs text-black/40 mb-2">
@@ -42,7 +42,7 @@ export default async function FirmRoutingPage({
           <span>Routing</span>
         </div>
         <div className="text-xs text-black/50 bg-sky-50 border border-sky-200 rounded-lg px-4 py-3">
-          When a lead finishes intake and has a matched sub-type, these rules override the default CRM pipeline, stage, and staff assignment.
+          When a lead finishes intake and has a matched sub-type, these rules override the default GHL pipeline/stage and staff assignment.
           Leave fields blank to use the default routing for that sub-type.
         </div>
         <RoutingEditor firmId={id} initial={rows} />

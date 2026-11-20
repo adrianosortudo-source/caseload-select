@@ -601,7 +601,7 @@ export default function FirmOnboardingForm({ token, firmLabel }: Props) {
 
         <Field
           label="Calendar booking link (optional)"
-          hint="Enter the link clients use to book a consultation. If you don't have one yet, leave this blank and we'll set one up together."
+          hint="Where clients book consultations with you (Calendly, Cal.com, or similar). If you don't have one yet, leave blank and we'll set one up together."
         >
           <input
             type="url"

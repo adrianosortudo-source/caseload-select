@@ -34,7 +34,7 @@ const FAQS: FaqItem[] = [
   },
   {
     q: "What does the retainer cover?",
-    a: "Strategy and execution across all four ACTS phases. Positioning, content, local listings and SEO, paid search, CaseLoad Screen intake AI, voice AI agent, review automation, and weekly reporting. One flat monthly fee. We do not bill by the hour or invoice per deliverable.",
+    a: "Strategy and execution across all four ACTS phases. Positioning, content, GBP and local SEO, Google Ads, CaseLoad Screen intake AI, voice AI agent, review automation, and weekly reporting. One flat monthly fee. We do not bill by the hour or invoice per deliverable.",
   },
   {
     q: "What happens in the first 30 days?",
@@ -42,7 +42,7 @@ const FAQS: FaqItem[] = [
   },
   {
     q: "Does the intake screen handle clients who don't speak English?",
-    a: "Yes. The intake supports multiple languages. It detects the lead's language and continues the conversation in that language. The brief the lawyer reads is always in English. The Toronto market is the most multilingual in Canada; filtering intake by language at the door cuts the addressable market by 30 to 60 percent before legal merit is considered.",
+    a: "Yes. The screen accepts intake in any language Gemini can handle. It detects the lead's language and continues the conversation in that language. The brief the lawyer reads is always in English. The Toronto market is the most multilingual in Canada; filtering intake by language at the door cuts the addressable market by 30 to 60 percent before legal merit is considered.",
   },
 ];
 

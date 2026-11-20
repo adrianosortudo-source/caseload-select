@@ -95,7 +95,7 @@ export default async function AdminMarketingLeadsPage() {
                 <th className="px-3 py-2 font-semibold">Asset</th>
                 <th className="px-3 py-2 font-semibold">Locale</th>
                 <th className="px-3 py-2 font-semibold">Consent version</th>
-                <th className="px-3 py-2 font-semibold text-right">CRM contact</th>
+                <th className="px-3 py-2 font-semibold text-right">GHL</th>
               </tr>
             </thead>
             <tbody>
@@ -152,7 +152,7 @@ function Header({ total }: { total: number }) {
         <h1 className="text-2xl font-bold text-navy mt-1">Marketing leads</h1>
         <p className="text-xs text-black/50 mt-1">
           Checklist and lead-magnet captures across every firm. Rows link to the contact&rsquo;s
-          history in the connected CRM.
+          journey in GHL.
         </p>
       </div>
       <div className="text-xs text-black/50 uppercase tracking-wider whitespace-nowrap">
@@ -181,7 +181,7 @@ function GhlCell({ contactId, locationId }: { contactId: string | null; location
         rel="noopener noreferrer"
         className="inline-flex items-center gap-1 text-navy hover:underline font-semibold"
       >
-        Open in HighLevel
+        Open in GHL
         <span aria-hidden>&rarr;</span>
       </a>
     );
@@ -192,13 +192,13 @@ function GhlCell({ contactId, locationId }: { contactId: string | null; location
     // the capture succeeded, only the link is unavailable.
     return (
       <span className="text-[10px] uppercase tracking-wider text-black/40">
-        Linked contact (location missing)
+        In GHL (no location on file)
       </span>
     );
   }
   return (
     <span className="inline-flex items-center justify-center font-bold text-[10px] uppercase tracking-wider px-2 py-0.5 border border-amber-300 bg-amber-50 text-amber-900">
-      No linked contact
+      Not in GHL
     </span>
   );
 }

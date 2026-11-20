@@ -45,7 +45,7 @@ describe("SeoReport score scope", () => {
   it("uses the same plain-language Google indexability limit in operator mode", () => {
     render(<SeoCheckTool variant="operator" />);
     expect(screen.getByText(/reviews the available website categories per page/i)).toBeTruthy();
-    expect(screen.getByText(/If we cannot tell whether a page asks the primary search engine to exclude it, that check is not scored/i)).toBeTruthy();
+    expect(screen.getByText(/If we cannot tell whether a page tells Google not to index it, that check is not scored/i)).toBeTruthy();
   });
 
   it("keeps editorial observations separate from the topics for a separate review", () => {

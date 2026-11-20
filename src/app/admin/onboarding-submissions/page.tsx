@@ -129,7 +129,7 @@ export default async function OnboardingSubmissionsListPage() {
                   <td className="px-3 py-2 align-top text-black/70">
                     {row.whatsapp_number_decision === "provision_new_ghl_number" ? (
                       <span className="text-[10px] uppercase tracking-wider font-semibold text-emerald-700">
-                        New intake number
+                        New GHL #
                       </span>
                     ) : row.whatsapp_number_decision === "different_carrier_line" ? (
                       <span className="text-[10px] uppercase tracking-wider font-semibold text-amber-700">

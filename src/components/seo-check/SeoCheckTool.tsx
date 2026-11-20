@@ -259,7 +259,7 @@ export default function SeoCheckTool({
           )}
           <p className="seo-input-hint">
             {isOperator
-              ? "Internal diagnostic. Runs a bounded crawl and reviews the available website categories per page. The score reflects five limited check types, not a whole-site SEO grade. If we cannot tell whether a page asks the primary search engine to exclude it, that check is not scored. The report includes a prospecting summary and outreach angles for internal use."
+              ? "Internal diagnostic. Runs a bounded crawl and reviews the available website categories per page. The score reflects five limited check types, not a whole-site SEO grade. If we cannot tell whether a page tells Google not to index it, that check is not scored. The report includes a prospecting summary and outreach angles for internal use."
               : "Enter a public law firm website. Review confirmed findings, affected pages and priorities for SEO and AI search. The report does not assign overall grades."}
           </p>
         </div>

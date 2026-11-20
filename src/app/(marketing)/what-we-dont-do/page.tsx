@@ -42,7 +42,7 @@ export default function WhatWeDontDoPage() {
           <h2 className="wwd-h2">Organic social media production</h2>
 
           <p className="wwd-p">
-            The audience that follows a law firm on social media is not
+            The audience that follows a law firm on Instagram or LinkedIn is not
             in the market for legal services the day they see the post. They
             might be in six months. They might never be. Organic social earns
             attention from people who are not yet buyers, then attempts to
@@ -102,12 +102,12 @@ export default function WhatWeDontDoPage() {
               There are three paths that deliver more return per marketing dollar
               than organic social for a sole practitioner or two-lawyer firm.
               First, a junior writer hired in-house or on contract to maintain
-              the local business listing, respond to reviews, and keep the
+              the Google Business Profile, respond to reviews, and keep the
               website content current. Second, a specialist contractor on a
               narrow brief, typically under C$1,500 per month, who handles one
               channel well rather than spreading across five channels poorly.
               Third, a pure paid acquisition model where budget goes entirely to
-              paid search targeting in-market buyers with active legal intent, and
+              Google Ads targeting in-market buyers with active legal intent, and
               organic is left to the lawyer&apos;s own discretion.
             </p>
             <p className="wwd-p wwd-p-recommend">

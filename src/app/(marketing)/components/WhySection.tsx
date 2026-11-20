@@ -153,7 +153,7 @@ export default function WhySection() {
             icon={<IconToronto />}
             tag="Toronto-Native"
             title="Built for the GTA market"
-            body="Local SEO tuned for Ontario practice areas. Local business listings, directory citations, and voice intake assistants trained on the legal terms your clients actually use in Toronto, Mississauga, and the GTA."
+            body="Local SEO tuned for Ontario practice areas. Google Business Profile, BrightLocal citations, and Voice AI agents trained on the legal terms your clients actually use in Toronto, Mississauga, and the GTA."
             delay={4}
           />
         </div>
