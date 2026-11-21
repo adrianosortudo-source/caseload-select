@@ -1,4 +1,4 @@
-import { getProvider } from '../ai/openai';
+import type { AiProvider } from '../ai/openai';
 import { createIntakeJsonGenerator, isTransientGenerationError, hasGenerationKey } from '../ai/intake-generation';
 import {
   ANSWER_MODEL,
@@ -20,10 +20,6 @@ export interface GenerateAnswerResult {
   response?: AnswerModelResponse;
   model?: string;
   reason?: string;
-}
-
-export function hasAnswerKey(): boolean {
-  return hasGenerationKey(getProvider('FIRM_ASSIST_ANSWER_AI_PROVIDER'));
 }
 
 async function sleep(ms: number): Promise<void> {
@@ -55,8 +51,8 @@ export async function generateAnswer(
   question: string,
   firmName: string,
   chunks: RetrievedChunk[],
+  provider: AiProvider,
 ): Promise<GenerateAnswerResult> {
-  const provider = getProvider('FIRM_ASSIST_ANSWER_AI_PROVIDER');
   if (!hasGenerationKey(provider)) {
     return { mode: 'disabled', reason: 'Firm Assist generation key missing' };
   }

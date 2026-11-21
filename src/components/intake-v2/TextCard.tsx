@@ -26,6 +26,7 @@ interface Props {
   minChars?: number;
   /** When true, show the voice-record button beside the textarea. Used for kickoff. */
   enableVoice?: boolean;
+  transcriptionOffer?: string;
   /** Optional short starter phrases shown below the textarea. Visually
    *  quiet, secondary. Used on the kickoff prompt to help visitors
    *  start without legal vocabulary. */
@@ -46,6 +47,7 @@ export function TextCard({
   submitLabel = "Continue",
   minChars = 1,
   enableVoice = false,
+  transcriptionOffer,
   examplePrompts,
   examplePromptsLabel = "You can start with:",
   voiceHint = "speak your answer instead of typing it",
@@ -121,8 +123,9 @@ export function TextCard({
 
       {enableVoice && (
         <div className="flex flex-col gap-2 -mt-2">
-          <div className="flex items-center gap-3">
+          <div className={transcriptionOffer ? "flex flex-col items-start gap-2" : "flex items-center gap-3"}>
             <VoiceInput
+              transcriptionOffer={transcriptionOffer}
               onTranscript={handleTranscript}
               onError={setVoiceError}
               onAvailabilityChange={setVoiceAvailable}

@@ -6,7 +6,8 @@
  * Returns: { ok: true, text } or { ok: false, error }.
  */
 
-import { getProvider } from "@/lib/ai/openai";
+import { validTranscriptionOffer } from "@/lib/ai/transcription-offer";
+import { transcriptionConsentVersion } from "@/lib/ai/transcription-consent";
 import { NextResponse } from "next/server";
 import { checkRateLimit, ipFromRequest, rateLimitHeaders } from "@/lib/rate-limit";
 
@@ -130,7 +131,13 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: "audio exceeds 25 MB limit" }, { status: 413 });
   }
 
-  const provider = getProvider("SCREEN_TRANSCRIPTION_AI_PROVIDER");
+  const offer = req.headers.get("x-caseload-transcription-offer");
+  const consent = req.headers.get("x-caseload-transcription-consent");
+  const choosesOpenAI = offer !== null || consent !== null;
+  if (choosesOpenAI && (consent !== transcriptionConsentVersion || !validTranscriptionOffer(offer))) {
+    return NextResponse.json({ ok: false, error: "The OpenAI recording option expired or is unavailable. Refresh the form or type your answer." }, { status: 409 });
+  }
+  const provider = choosesOpenAI ? "openai" : "gemini";
   const apiKey = provider === "openai"
     ? process.env.CASELOAD_OPENAI_API_KEY?.trim()
     : process.env.GOOGLE_AI_API_KEY ?? process.env.GEMINI_API_KEY;

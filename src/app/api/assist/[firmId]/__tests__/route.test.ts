@@ -19,6 +19,7 @@ const mocks = vi.hoisted(() => ({
 const state = vi.hoisted(() => ({
   firmRow: null as Record<string, unknown> | null,
   pageRows: [] as Array<Record<string, unknown>>,
+  pageReadError: false,
   insertCalls: [] as unknown[],
   insertShouldThrow: false,
   dailyCount: 0 as number | null,
@@ -57,7 +58,19 @@ vi.mock('@/lib/supabase-admin', () => {
     if (table === 'assist_corpus_pages') {
       return {
         select: () => ({
-          in: () => Promise.resolve({ data: state.pageRows, error: null }),
+          eq: (field: string, id: string) => ({
+            eq: (included: string, flag: boolean) => {
+              if (field !== 'firm_id' || included !== 'include' || flag !== true) throw Error('Expected firm and inclusion filters');
+              const pages = state.pageRows.filter(page => (page.firm_id ?? FIRM_ID) === id && (page.include ?? true) === true);
+              return {
+                count: pages.length,
+                in: (_key: string, ids: string[]) => Promise.resolve({
+                  data: pages.filter(page => ids.includes(String(page.id))),
+                  error: state.pageReadError ? { message: 'fixture unavailable' } : null,
+                }),
+              };
+            },
+          }),
         }),
       };
     }
@@ -82,6 +95,7 @@ vi.mock('@/lib/supabase-admin', () => {
 });
 
 import { POST, OPTIONS } from '../route';
+import { GET as getConfig } from '../config/route';
 import type { NextRequest } from 'next/server';
 
 const ALLOWED = { ok: true, active: false, remaining: 8, reset: 0, limit: 8 };
@@ -113,6 +127,7 @@ beforeEach(() => {
     custom_domain: null,
   };
   state.pageRows = [];
+  state.pageReadError = false;
   state.insertCalls = [];
   state.insertShouldThrow = false;
   state.dailyCount = 0;
@@ -125,6 +140,83 @@ beforeEach(() => {
 });
 afterEach(() => {
   consoleWarnSpy.mockRestore();
+  vi.unstubAllEnvs();
+});
+
+describe('scoped Firm Assist answer provider', () => {
+  const version = 'firm-assist-openai-answer-v1';
+  const question = 'When is the fictional office open?';
+
+  beforeEach(() => {
+    vi.stubEnv('FIRM_ASSIST_ANSWER_AI_PROVIDER', 'openai');
+    vi.stubEnv('FIRM_ASSIST_OPENAI_FIRM_IDS', 'other-id, firm-1');
+    vi.stubEnv('CASELOAD_OPENAI_API_KEY', 'fixture');
+    vi.stubEnv('GOOGLE_AI_API_KEY', 'fixture');
+    state.firmRow = { id: FIRM_ID, name: 'Example Office', branding: null, embed_origins: ['https://demo.example'] };
+    state.pageRows = [
+      { id: 'hours', firm_id: FIRM_ID, include: true, title: 'Hours', url: 'https://demo.example/hours' },
+      { id: 'hidden', firm_id: FIRM_ID, include: false },
+      { id: 'foreign', firm_id: 'second-firm', include: true },
+    ];
+    mocks.embedQuery.mockResolvedValue({ mode: 'live', vectors: [[1]] });
+    mocks.retrieveChunks.mockResolvedValue(state.pageRows.map(page => ({ page_id: page.id, chunk_text: page.id })));
+    mocks.generateAnswer.mockResolvedValue({ mode: 'live', response: { intent: 'case_specific', answer_html: 'fixture', source_page_ids: [] } });
+  });
+
+  const req = (extra = {}) => makeRequest({ question, ...extra }, 'https://demo.example');
+
+  it('advertises both providers and permits only the enrolled firm’s included sources on an affirmative request', async () => {
+    const config = await (await getConfig(req(), makeParams())).json();
+    expect(config.openaiAnswerOption).toMatchObject({ consentVersion: version });
+    expect(config.openaiAnswerOption.disclosure).toMatch(/Google.+OpenAI/);
+    const res = await POST(req({ openaiAnswerConsent: version }), makeParams());
+    expect((await res.json()).exit).toBe('screen_handoff');
+    expect(mocks.generateAnswer).toHaveBeenCalledWith(question, 'Example Office', [{ page_id: 'hours', chunk_text: 'hours' }], 'openai');
+    expect(mocks.retrieveChunks).toHaveBeenCalledWith(FIRM_ID, [1]);
+  });
+
+  it('uses Gemini for an existing widget, including at an enrolled firm', async () => {
+    await POST(req({provider: 'openai'}), makeParams());
+    expect(mocks.generateAnswer).toHaveBeenCalledWith(question, 'Example Office', expect.any(Array), 'gemini');
+  });
+
+  it('rejects a stale choice and cross-firm provider override before embedding', async () => {
+    expect((await POST(req({ openaiAnswerConsent: 'old' }), makeParams())).status).toBe(409);
+    state.firmRow = { ...state.firmRow, id: 'second-firm' };
+    const before = await (await getConfig(req(), {params:Promise.resolve({firmId:'second-firm'})})).json();
+    expect(before).toEqual({ ok: true, enabled: true });
+    expect((await POST(req({ openaiAnswerConsent: version, firmId: FIRM_ID }), {params:Promise.resolve({firmId:'second-firm'})})).status).toBe(409);
+    expect(mocks.embedQuery).not.toHaveBeenCalled();
+    expect(mocks.generateAnswer).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['FIRM_ASSIST_OPENAI_FIRM_IDS', ''],
+    ['FIRM_ASSIST_OPENAI_FIRM_IDS', '*'],
+    ['FIRM_ASSIST_ANSWER_AI_PROVIDER', 'gemini'],
+    ['CASELOAD_OPENAI_API_KEY', ''],
+  ])('omits an unavailable option when %s is %s', async (key, value) => {
+    vi.stubEnv(key, value);
+    expect(await (await getConfig(req(), makeParams())).json()).toEqual({ok:true, enabled:true});
+    expect((await POST(req({openaiAnswerConsent:version}), makeParams())).status).toBe(409);
+    expect(mocks.embedQuery).not.toHaveBeenCalled();
+  });
+
+  it('sends no chunks when the current source-page check fails', async () => {
+    state.pageReadError = true;
+    expect((await POST(req({ openaiAnswerConsent: version }), makeParams())).status).toBe(502);
+    expect(mocks.generateAnswer).not.toHaveBeenCalled();
+  });
+
+  it('returns fixed no-coverage copy if GPT cites only a retired or different firm’s page', async () => {
+    mocks.generateAnswer.mockResolvedValue({
+      mode: 'live',
+      response: { intent: 'informational', answer_html: '<p>Unsupported answer</p>', source_page_ids: ['hidden', 'foreign'] },
+    });
+    const res = await POST(req({ openaiAnswerConsent: version }), makeParams());
+    expect(await res.json()).toMatchObject({ok:true, exit:'no_coverage'});
+    expect(state.insertCalls).toMatchObject([{intent:'out_of_corpus', answer_html:null}]);
+  });
 });
 
 describe('OPTIONS /api/assist/[firmId]', () => {
