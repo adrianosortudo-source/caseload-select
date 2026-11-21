@@ -31,6 +31,7 @@ import { redirect } from "next/navigation";
 import { getPreviewIntent, type PreviewIntent } from "./preview-mode";
 import { isLocalOrPreviewHost, isOperatorHost } from "./app-origins";
 import { CRM_AGENT_COOKIE } from "./crm-agent-policy";
+import { CRM_TASK_COOKIE, CRM_SYNTHETIC_COOKIE } from "./crm-task-policy";
 import { PREVIEW_QA_COOKIE_NAME } from "./preview-qa-policy";
 export { createSessionCookie } from "./portal-session-cookie";
 
@@ -197,7 +198,8 @@ export async function getPortalSession(): Promise<PortalSession | null> {
   // A preview QA principal is never also a portal principal.  Middleware
   // enforces the route/method allowlist first; this is the route-level
   // backstop in case a future matcher or rewrite accidentally skips it.
-  if ((await cookies()).get(PREVIEW_QA_COOKIE_NAME) || (await cookies()).get(CRM_AGENT_COOKIE)) return null;
+  const principalCookies = await cookies();
+  if ([PREVIEW_QA_COOKIE_NAME, CRM_AGENT_COOKIE, CRM_TASK_COOKIE, CRM_SYNTHETIC_COOKIE].some(name => principalCookies.get(name))) return null;
   const session = await getRawPortalSession();
   if (!session || session.role !== "operator") return session;
   if (!await isTrustedOperatorRequestHost()) return null;

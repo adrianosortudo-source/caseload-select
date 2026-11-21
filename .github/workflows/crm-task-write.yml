@@ -1,0 +1,50 @@
+name: CRM approved task operations
+on:
+  workflow_dispatch:
+    inputs:
+      task_id:
+        description: Previously approved, expiring task UUID
+        required: true
+        type: string
+permissions:
+  contents: read
+  id-token: write
+concurrency:
+  group: crm-task-write
+  cancel-in-progress: false
+jobs:
+  task:
+    if: >-
+      vars.CRM_AGENT_TASK_WRITES_WORKFLOW_ENABLED == 'true' &&
+      github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' &&
+      github.repository == 'adrianosortudo-source/caseload-select' && github.repository_id == '1206232496'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    environment:
+      name: CRM task writes
+    steps:
+      - name: Check out reviewed main
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+      - name: Install locked dependencies
+        shell: bash
+        run: |
+          if ! npm ci --ignore-scripts --no-audit --no-fund >/dev/null 2>&1; then
+            echo 'CRM_TASK_SETUP_FAIL'; exit 1
+          fi
+      - name: Execute exact approved task
+        shell: bash
+        env:
+          CRM_TASK_ID: ${{ inputs.task_id }}
+        run: |
+          if node scripts/crm-task-write.mjs >/dev/null 2>&1; then
+            echo 'CRM_TASK_PASS'
+          else
+            echo 'CRM_TASK_FAIL'; exit 1
+          fi
