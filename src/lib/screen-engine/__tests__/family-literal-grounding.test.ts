@@ -74,11 +74,13 @@ describe('literal family evidence', () => {
     expect(s.slots.family_existing_order).toBe('Neither');
     expect(s.slot_meta.family_existing_order.source).toBe('answered');
   });
-  it('does not reduce a proposed Both answer to just a court order', () => {
-    const text = 'We have a parenting court order and a written agreement.';
+  it.each([
+    ['We have a parenting court order and a written agreement.', true],
+    ['We have a parenting court order.', false],
+  ] as const)('confirms a proposed Both answer only when both documents are stated: %s', (text, confirmed) => {
     const initial = proposed(text, { family_existing_order: 'Both' });
     const s = groundFamilyConversationFacts(initial, text);
     expect(s.slots.family_existing_order).toBe('Both');
-    expect(isUserAnswered(s, 'family_existing_order')).toBe(false);
+    expect(isUserAnswered(s, 'family_existing_order')).toBe(confirmed);
   });
 });

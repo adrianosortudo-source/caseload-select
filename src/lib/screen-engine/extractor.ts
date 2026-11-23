@@ -639,6 +639,9 @@ function detectInScopeArea(input: string): InScopeAreaMatch | null {
   if (/\bmy employer\b/.test(t) && /\b(?:pay|wages)\b/.test(t) && /\brelease\b/.test(t)) {
     return { area: 'employment', signal: 'employer pay and release' };
   }
+  if (/\bmy (?:employer|boss) (?:has |just )?(?:changed|cut|reduced|cancelled|canceled) my (?:work(?:ing)? )?(?:shifts?|hours|schedule)\b/i.test(t)) {
+    return { area: 'employment', signal: 'employer changed working hours' };
+  }
   if ((m = hit(EMPLOYMENT_SIGNALS))) return { area: 'employment', signal: m };
   return null;
 }
@@ -1004,6 +1007,47 @@ export function classificationForMatterType(mt: MatterType): {
     dispute_family: 'unknown',
     advisory_subtrack: 'unknown',
   };
+}
+
+// A description of someone's own restricted contact with children identifies the
+// issue. It says nothing about the visitor's relationship, an order or a remedy.
+export function describesRestrictedChildContact(input: string): boolean {
+  const children = /\b(?:the|my|our)\s+(?:(?:one|two|three|four|\d+)\s+)?(?:kids?|children|child|sons?|daughters?)\b/gi;
+  const permission = /\b(?:(?:(?:does not|doesn't|doesnt|won't|wont|will not|did not|didn't|didnt) (?:allow|let|permit)|(?:isn't|isnt|is not|not) (?:allowing|letting|permitting)|refus(?:es|ed|ing) to (?:let|allow)) me (?:to )?|i (?:(?:haven't|havent|have not) been allowed|(?:am|was) (?:not allowed|not being allowed)) to |i'm (?:not allowed|not being allowed) to )$/i;
+  const prevention = /\b(?:(?:prevent(?:s|ed|ing)?|stop(?:s|ped|ping)?|keep(?:s|ing)?) me from |i(?: am|'m| was) (?:being )?prevented from )$/i;
+  const contact = /\b(?:see(?:ing)?|visit(?:ing)?|pick(?:ing)? up|spend(?:ing)? time with|hav(?:e|ing) contact with)\s+$/i;
+  return input.replace(/[’‘]/g, "'").split(/[.!?;\n]|\bbut\b/i).some(clause =>
+    Array.from(clause.matchAll(children)).some(target => {
+      const before = clause.slice(0, target.index).replace(/\s+/g, ' ');
+      const after = clause.slice(target.index + target[0].length);
+      // “The kids’ medical records” names records as the object, not children.
+      if (/^'|^\s+(?:(?:medical|school|health|court)\s+)?(?:records?|photos?|pictures?|files?|reports?)\b/i.test(after)) return false;
+      if (/\b(?:if|whether|maybe|might|perhaps|hypothetically|not true|does(?:n't|nt| not) (?:stop|prevent|refuse)|no longer (?:stops|prevents|refuses)|not (?:stopping|preventing|refusing))\b/i.test(before)) return false;
+      if (/\b(?:said|texted|wrote)\s*[:,]?\s*["“][^"”]*$/i.test(before)) return false;
+      if (/\bkeep(?:s|ing)? me away from $/i.test(before)) return true;
+      if (/\bkeep(?:s|ing)? $/i.test(before) && /^\s+(?:away )?from (?:me|seeing me|visiting me)\b/i.test(after)) return true;
+      const verb = contact.exec(before);
+      if (!verb) return false;
+      const lead = before.slice(0, verb.index);
+      return permission.test(lead) || prevention.test(lead);
+    }),
+  );
+}
+
+/** Retain the visitor's stated practice area when their words alone leave the matter unknown. */
+export function applySelectedPracticeArea(state: EngineState, selected: PracticeArea): EngineState {
+  if (state.matter_type !== 'unknown' || (state.family_only && selected !== 'family')) return state;
+  if (selected === 'family') {
+    return state.family_enabled
+      ? { ...state, practice_area: 'family', matter_type: 'family_general', matter_type_provenance: 'user_routing_answer' }
+      : state;
+  }
+  const lanes: Partial<Record<PracticeArea, MatterType>> = {
+    corporate: 'corporate_general', real_estate: 'real_estate_general',
+    employment: 'employment_general', estates: 'estates_general',
+  };
+  const lane = lanes[selected];
+  return lane ? { ...state, ...classificationForMatterType(lane), matter_type_provenance: 'user_routing_answer' } : state;
 }
 
 const ALL_CANONICAL_MATTER_TYPES: ReadonlyArray<MatterType> = [

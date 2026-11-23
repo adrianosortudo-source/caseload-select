@@ -26,6 +26,59 @@ beforeEach(() => {
 });
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
+describe("family website widget", () => {
+  const opening = "she doesnt allow me to see the kids";
+
+  it.each(["demo", "demo-live-ai"] as const)("uses the opening before asking a family question in %s", async (runtime) => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("Extraction unavailable")));
+    const views: ScreenDemoView[] = [];
+    render(<ScreenEnginePublicWidget firmId="fictional" firmName="Example" runtime={runtime}
+      configuredPracticeAreas={["family"]} initialDescription={opening} onDemoStateChange={view => views.push(view)} />);
+    fireEvent.click(screen.getByRole("button", { name: "Continue matter review" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Confirm details and continue" }));
+    expect(await screen.findByRole("heading", { name: "Do you have a written agreement or court order?" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Business and contracts" })).toBeNull();
+    expect(views.at(-1)?.state?.slots.family_existing_order).toBeUndefined();
+    expect(views.at(-1)?.report?.matter_snapshot).toContain(opening);
+  });
+
+  it("preserves the opening when the visitor chooses Family in an opted-in mixed profile", async () => {
+    const original = "I would like to learn more about how you can help me";
+    const views: ScreenDemoView[] = [];
+    render(<ScreenEnginePublicWidget firmId="fictional" firmName="Example" runtime="demo"
+      configuredPracticeAreas={["family", "corporate"]} initialDescription={original} onDemoStateChange={view => views.push(view)} />);
+    fireEvent.click(screen.getByRole("button", { name: "Continue matter review" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Family law" }));
+    await waitFor(() => expect(views.at(-1)?.currentQuestion?.id).toBe("family_help_sought"));
+    expect(views.at(-1)?.report?.matter_snapshot).toContain(original);
+    expect(views.at(-1)?.state?.questionHistory).toContain("clarify_area");
+  });
+
+  it("uses the same family facts when the visitor types them into a later clarification", async () => {
+    const original = "Could someone help me?";
+    const views: ScreenDemoView[] = [];
+    render(<ScreenEnginePublicWidget firmId="fictional" firmName="Example" runtime="demo"
+      configuredPracticeAreas={["family", "corporate"]} initialDescription={original} onDemoStateChange={view => views.push(view)} />);
+    fireEvent.click(screen.getByRole("button", { name: "Continue matter review" }));
+    fireEvent.click(await screen.findByRole("button", { name: /Something else/ }));
+    fireEvent.change(screen.getByPlaceholderText("Describe what happened in your situation..."), { target: { value: opening } });
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    expect(await screen.findByRole("heading", { name: "Do you have a written agreement or court order?" })).toBeTruthy();
+    expect(views.at(-1)?.state?.input).toBe(original);
+    expect(views.at(-1)?.state?.slot_meta.family_help_sought?.evidence).toBe(opening);
+  });
+
+  it("keeps family screening behind the configured profile", async () => {
+    const views: ScreenDemoView[] = [];
+    render(<ScreenEnginePublicWidget firmId="fictional" firmName="Example" runtime="demo"
+      configuredPracticeAreas={["corporate"]} initialDescription={opening} onDemoStateChange={view => views.push(view)} />);
+    fireEvent.click(screen.getByRole("button", { name: "Continue matter review" }));
+    await waitFor(() => expect(views.at(-1)?.stage).toBe("questions"));
+    expect(screen.queryByRole("button", { name: "Family law" })).toBeNull();
+    expect(views.at(-1)?.state?.matter_type).not.toBe("family_general");
+  });
+});
+
 describe("Meta family conversation", () => {
   it("opens a blank family composer with a family example", () => {
     render(<Harness views={[]} description="" />);
@@ -43,9 +96,9 @@ describe("Meta family conversation", () => {
   it("retains literal family facts when live AI is unavailable", async () => {
     vi.mocked(fetch).mockResolvedValueOnce({ ok: true, json: async () => ({ mode: "error", extracted: {} }) } as Response);
     const views: ScreenDemoView[] = []; render(<Harness views={views} />); send(); await useContact();
-    await waitFor(() => expect(views.at(-1)?.currentQuestion?.id).toBe("family_help_sought"));
+    await waitFor(() => expect(views.at(-1)?.currentQuestion?.id).toBe("family_existing_order"));
     expect(views.at(-1)?.state?.slot_meta.family_children.source).toBe("explicit");
-    expect(views.at(-1)?.state?.slot_meta.family_help_sought?.source).not.toBe("explicit");
+    expect(views.at(-1)?.state?.slot_meta.family_help_sought).toMatchObject({ source: "explicit", evidence: inquiry });
     expect(views.at(-1)?.extraction.status).toBe("fallback");
   });
   it("reads the exact fictional inquiry, grounds only literal facts, then asks contact before missing facts", async () => {

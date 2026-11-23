@@ -5,7 +5,7 @@ import { Shell, type ShellLayout } from "@/components/intake-v2/Shell";
 import { TextCard } from "@/components/intake-v2/TextCard";
 import { DecisionCard } from "@/components/intake-v2/DecisionCard";
 import type { ScreenItem } from "@/components/intake-v2/types";
-import { initialiseState } from "@/lib/screen-engine/extractor";
+import { applySelectedPracticeArea, initialiseState } from "@/lib/screen-engine/extractor";
 import { runEvidencePass } from "@/lib/screen-engine/slotEvidence";
 import { computeBand } from "@/lib/screen-engine/band";
 import { computeCoreCompleteness, getDecisionGap } from "@/lib/screen-engine/selector";
@@ -35,7 +35,7 @@ import { DemoFactReview } from "./DemoFactReview";
 import { DemoConversation, type DemoConversationMessage } from "./DemoConversation";
 import { groundDemoConversationFacts } from "@/lib/screen-demo-conversation-grounding";
 import { prepareFamilyDemoState } from "@/lib/screen-demo-family";
-import { groundFamilyOrderReplies } from "@/lib/screen-engine/family";
+import { groundFamilyConversationFacts, groundFamilyOrderReplies } from "@/lib/screen-engine/family";
 import { applyPendingSlotReply } from "@/lib/pending-slot-reply";
 import { meetsDiscoveryFloor } from "@/lib/discovery-floor";
 import { selectNextSlot } from "@/lib/screen-engine/selector";
@@ -469,8 +469,8 @@ export function ScreenEnginePublicWidget({
 
     if (policy.usesFixtureEngine) {
       let fixtureState = prepareFamilyDemoState(startDemoState(text), configuredPracticeAreas);
-      if (metaWorkflow) fixtureState = scoreState(groundDemoConversationFacts(fixtureState, text));
-      setState(fixtureState);
+      fixtureState = metaWorkflow ? groundDemoConversationFacts(fixtureState, text) : groundFamilyConversationFacts(fixtureState, text);
+      setState(scoreState(fixtureState));
       setPendingDemoReview(!metaWorkflow && demoCapturedFacts(fixtureState).length > 0);
       setStage("questions");
       setIsReading(false);
@@ -482,6 +482,7 @@ export function ScreenEnginePublicWidget({
     if (isDemo) nextState = prepareFamilyDemoState(nextState, configuredPracticeAreas);
     nextState = runEvidencePass(text, nextState);
     if (metaWorkflow) nextState = groundDemoConversationFacts(nextState, text);
+    else if (nextState.family_enabled) nextState = groundFamilyConversationFacts(nextState, text);
     nextState = scoreState(nextState);
     setState(nextState);
     setStage("questions");
@@ -546,6 +547,7 @@ export function ScreenEnginePublicWidget({
         if (run === extractionRun.current) setIsReading(false);
       }
     }
+    if (updated.family_enabled) updated = groundFamilyConversationFacts(updated, text);
     if (attempts >= 2 && updated.matter_type === "unknown") {
       setClarifyFallback(true);
       mutate(startContactCapture(updated));
@@ -579,7 +581,8 @@ export function ScreenEnginePublicWidget({
     if (!asked || asked.id !== slotId) return;
     const finishWritten = (updated: EngineState) => {
       setHistory((items) => [...items, state]);
-      mutate(metaWorkflow ? groundFamilyOrderReplies(updated, demoUserEvidence.current) : updated);
+      const grounded = updated.family_enabled ? groundFamilyConversationFacts(updated, text) : updated;
+      mutate(metaWorkflow ? groundFamilyOrderReplies(grounded, demoUserEvidence.current) : grounded);
     };
     const selectedWrittenAnswer = !metaWorkflow || writtenChoiceFor.current === slotId;
     writtenChoiceFor.current = null;
@@ -1245,9 +1248,13 @@ export function ScreenEnginePublicWidget({
     function handleClarifySelect(picked: string | string[]) {
       const value = Array.isArray(picked) ? picked[0] : picked;
       if (!value) return;
-      if (isDemo && value === "family_general" && configuredPracticeAreas.includes("family")) {
-        const augmented = `${description}\n\nPractice area selected by the person: family law.`;
-        setDescription(augmented); void runStart(augmented); return;
+      if (isDemo && value === "family_general" && state?.family_enabled) {
+        setHistory((items) => [...items, state]);
+        mutate(groundFamilyConversationFacts({
+          ...applySelectedPracticeArea(state, "family"),
+          questionHistory: [...state.questionHistory, "clarify_area"],
+        }, state.input));
+        return;
       }
       if (value.startsWith("other:")) {
         const text = value.slice("other:".length).trim();

@@ -1,4 +1,5 @@
 import type { EngineState, PracticeArea } from './types';
+import { describesRestrictedChildContact } from './extractor';
 import { familyNegativeIsGrounded } from './llm/extractor';
 
 /** Enable the family pack only when the firm profile explicitly includes it. */
@@ -8,7 +9,9 @@ export function configureFirmPracticeAreas(state: EngineState, areas: readonly P
   const familyOnly = areas.every(area => area === 'family');
   // Preserve the established narrow deterministic matches; semantic classification also runs through the provider.
   const familySignal = /\b(?:other parent|former partner|ex-spouse|spouse and I are living separately|parenting|child custody|custody of (?:my|our|the) (?:child|children)|access to (?:my|our) (?:child|children|kids)|child support|spousal support|divorce|marital separation|family separation|separat(?:ed|ing) from my (?:spouse|husband|wife|partner)|family court|family lawyer|family law)\b/i.test(state.input);
-  if (familySignal && (state.matter_type === 'unknown' || state.matter_type === 'out_of_scope')) return { ...state, family_enabled: true, family_only: familyOnly, practice_area: 'family', matter_type: 'family_general' };
+  const canRouteFamily = state.matter_type === 'unknown' ||
+    (state.matter_type === 'out_of_scope' && state.practice_area === 'family');
+  if (canRouteFamily && (familySignal || describesRestrictedChildContact(state.input))) return { ...state, family_enabled: true, family_only: familyOnly, practice_area: 'family', matter_type: 'family_general' };
   // This minimal profile represents a family-only firm. Preserve the identified
   // area for referral; never force an unrelated matter into the family pack.
   if (familyOnly && state.matter_type !== 'unknown' && state.matter_type !== 'family_general') return { ...state, family_enabled: true, family_only: true, matter_type: 'out_of_scope' };
@@ -21,15 +24,21 @@ export function groundFamilyConversationFacts(state: EngineState, input: string)
   const text = input.trim();
   const candidates: Record<string, string> = {};
   if (state.matter_type === "family_general") {
+    const childContact = describesRestrictedChildContact(text);
+    if (childContact) {
+      candidates.family_children = 'Yes';
+      const source = state.slot_meta.family_help_sought?.source;
+      if (!state.slots.family_help_sought || source === 'unknown' || source === 'llm_inferred') {
+        candidates.family_help_sought = 'Parenting or decision-making';
+      }
+    }
     const hasChildClause = text.split(/[.!?;\n]+/).find((part) =>
       !/\b(?:no|not|never|without|don't|do not|doesn't|does not)\b/i.test(part) &&
       /\b(?:i|we)\s+(?:have|share)\s+[^.!?;\n]{0,45}\b(?:son|daughter|child|children|kids)\b/i.test(part));
     if (/\b(?:my|our)\s+(?:(?:[1-9]\d*|one|two|three|four|five|six|seven|eight|nine|ten)\s+)?(?:son|daughter|child|children|kids)\b/i.test(text) || hasChildClause) candidates.family_children = "Yes";
     else if (/\b(?:no (?:children|kids)|(?:do not|don't|dont) have (?:any )?(?:children|kids))\b/i.test(text)) candidates.family_children = "No";
     const parentingClause = text.split(/[.!?;\n]+/).find((part) => /\b(?:parenting|custody|access to (?:my|our) (?:son|daughter|child|children|kids))\b/i.test(part) && !/\b(?:not seeking|do not want|don't want|no need for|not about)\b/i.test(part));
-    if (state.slots.family_help_sought === "Parenting or decision-making" && (parentingClause ||
-        /\b(?:not|won't|wont|refus(?:es|ing)|prevent(?:s|ing)?|stopp?ed)\b[^.!?\n]{0,80}\bsee\b[^.!?\n]{0,40}\b(?:my|our)\s+(?:son|daughter|child|children|kids)\b/i.test(text) ||
-        /\bkeep(?:s|ing)?\s+me\s+away\s+from\s+(?:my|our)\s+(?:son|daughter|child|children|kids)\b/i.test(text))) {
+    if (state.slots.family_help_sought === "Parenting or decision-making" && parentingClause) {
       candidates.family_help_sought = "Parenting or decision-making";
     }
     // Confirm a proposed help category only when this clause explicitly asks
@@ -76,13 +85,29 @@ export function groundFamilyConversationFacts(state: EngineState, input: string)
     if (ptResidence && priorAllows('family_jurisdiction', 'Ontario')) candidates.family_jurisdiction = 'Ontario';
     const orderValue = state.slots.family_existing_order;
     if (familyNegativeIsGrounded("family_existing_order", "Neither", text)) candidates.family_existing_order = "Neither";
-    const orderSentence = text.split(/[.!?;\n]+/).find((part) =>
-      !/\b(?:no|not|never|without|unsure|maybe|if)\b/i.test(part) &&
-      /\b(?:(?:i|we) have (?:an? |the |existing )?(?:(?:court|parenting) )?order|there is (?:an? |the |existing )?(?:(?:court|parenting) )?order|(?:a |the )?(?:judge|court) (?:made|issued) (?:an? |the )?order|(?:court|parenting) order (?:is |was )?(?:in place|issued|dated))\b/i.test(part));
-    const compoundOrder = clauses.some((part) =>
-      !/\b(?:no|not|never|without|unsure|uncertain|maybe|might|perhaps|could|if|whether|don't know|do not know)\b/i.test(part) &&
-      /\b(?:(?:i|we) have|we live in\s+[a-z][a-z .'-]{0,40},\s*ontario,\s*have) (?:a |the |an existing )?parenting court order\b/i.test(part));
-    if ((orderSentence && orderValue !== "Both") || (compoundOrder && orderValue !== 'Both' && priorAllows('family_existing_order', 'Court order'))) candidates.family_existing_order = "Court order";
+    // Match what the person says already exists. Wishes and a partial denial
+    // do not establish the absence or presence of either document.
+    const statements = text.split(/[.!?;\n]|\bbut\b/i).filter(part =>
+      !/\b(?:no|not|never|without|unsure|uncertain|maybe|might|perhaps|could|if|whether|don['’]?t know)\b/i.test(part));
+    const documentNoun = /^(?:a |an |the )?(?:existing |signed )?(?:(?:written |parenting |separation |court )+)(order|agreement)\b/i;
+    const documents = new Set<string>();
+    for (const part of statements) {
+      const possession = /\b(?:(?:i|we) (?:already )?have|there (?:is|are)(?: already)?|we live in\s+[a-z][a-z .'-]{0,40},\s*ontario,\s*have)\s+/i.exec(part);
+      if (possession) {
+        // A conjunction may carry the same verb: “We have a court order
+        // and a written agreement.” Do not match a separately requested item.
+        const items = part.slice(possession.index + possession[0].length).split(/\s+and\s+/i);
+        for (const item of items) {
+          const named = documentNoun.exec(item.trim());
+          if (named) documents.add(named[1].toLowerCase());
+          else break;
+        }
+      }
+      if (/\b(?:(?:a |the )?(?:judge|court) (?:made|issued) (?:an? |the )?order|(?:court|parenting) order (?:is |was )?(?:in place|issued|dated))\b/i.test(part)) documents.add('order');
+      if (/\b(?:written|parenting|separation) agreement (?:is |was )?(?:in place|signed)\b/i.test(part)) documents.add('agreement');
+    }
+    const existing = documents.size === 2 ? 'Both' : documents.has('order') ? 'Court order' : documents.has('agreement') ? 'Written agreement' : undefined;
+    if (existing && (orderValue !== 'Both' || existing === 'Both') && priorAllows('family_existing_order', existing)) candidates.family_existing_order = existing;
     const noDateSentence = text.split(/[.!?;\n]+/).map((part) => part.trim()).find((part) =>
       /\bno\s+(?:upcoming\s+)?(?:court\s+)?(?:date|hearing|deadline)\b/i.test(part) &&
       !/\b(?:not sure|unsure|maybe|if|whether|don't know|do not know)\b/i.test(part));
@@ -102,6 +127,8 @@ export function groundFamilyConversationFacts(state: EngineState, input: string)
   const slots = { ...state.slots }; const slot_meta = { ...state.slot_meta };
   for (const [id, value] of Object.entries(candidates)) {
     const previous = state.slot_meta[id];
+    // Grounding cannot demote a direct answer to an interpretation of the same choice.
+    if (id === 'family_existing_order' && state.slots[id] === value && previous?.source === 'answered') continue;
     // A later parenting-agreement answer is not a new statement of the help
     // requested. Retain the person's original supporting words for that fact.
     if (id === 'family_help_sought' && state.slots[id] === value &&
