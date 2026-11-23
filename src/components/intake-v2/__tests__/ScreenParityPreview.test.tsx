@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import ScreenParityPreview from "../ScreenParityPreview";
 import { ScreenEnginePublicWidget } from "../ScreenEnginePublicWidget";
 import { initialiseState } from "@/lib/screen-engine/extractor";
@@ -20,16 +20,21 @@ beforeEach(() => {
 });
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
+async function submitOpening() {
+  // Flush the fetch response and question-change effects before the visitor's next tap.
+  await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Continue matter review" })); });
+}
+
 describe("private SCREEN preview transport", () => {
   it.each([true, false])("runs the normal web intake and captures only its final payload, comparison=%s", async comparison => {
     render(<ScreenParityPreview practiceArea="corporate" channel="website" comparison={comparison} externalReport={false}>
       {comparison ? <ScreenEnginePublicWidget firmId="fictional-screen-preview" firmName="Example Law Firm" /> : undefined}
     </ScreenParityPreview>);
     fireEvent.change(screen.getByRole("textbox", { name: "Tell us how a lawyer can help you today." }), { target: { value: opening } });
-    fireEvent.click(screen.getByRole("button", { name: "Continue matter review" }));
+    await submitOpening();
     fireEvent.click(await screen.findByRole("button", { name: /Something else/i }));
     const written = "I have an offer that I want reviewed.";
-    fireEvent.change(screen.getByPlaceholderText("Describe what happened in your situation..."), { target: { value: written } });
+    fireEvent.change(await screen.findByPlaceholderText("Describe what happened in your situation..."), { target: { value: written } });
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
     const date = await screen.findByRole("textbox", { name: "Is there a date the lawyer should take into account?" });
     fireEvent.change(date, { target: { value: "Next Tuesday." } });
@@ -65,7 +70,7 @@ describe("private SCREEN preview transport", () => {
     }));
     render(<ScreenParityPreview practiceArea="corporate" channel="website" comparison={false} externalReport={false} />);
     fireEvent.change(screen.getByRole("textbox", { name: "Tell us how a lawyer can help you today." }), {target:{value:opening}});
-    fireEvent.click(screen.getByRole("button", {name:"Continue matter review"}));
+    await submitOpening();
     await screen.findByRole("button", {name:/Something else/i});
     if (failure === "follow-up") expect(screen.queryByText(/AI was unavailable/)).toBeNull();
     fireEvent.click(screen.getByRole("button", {name:/Something else/i}));
@@ -80,7 +85,7 @@ describe("private SCREEN preview transport", () => {
       {comparison ? <ScreenEnginePublicWidget firmId="fictional-screen-preview" firmName="Example Law Firm" /> : undefined}
     </ScreenParityPreview>);
     fireEvent.change(screen.getByRole("textbox", {name:"Tell us how a lawyer can help you today."}), {target:{value:opening+" My fictional email is fixture@example.test."}});
-    fireEvent.click(screen.getByRole("button", {name:"Continue matter review"}));
+    await submitOpening();
     await screen.findByRole("button", {name:/Something else/i});
     expect(String(requests[0].body.description).includes("fixture@example.test")).toBe(comparison);
   });
