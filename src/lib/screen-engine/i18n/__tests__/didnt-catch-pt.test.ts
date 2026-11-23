@@ -27,8 +27,10 @@ describe('widget_strings.didnt_catch (pt.json)', () => {
     expect(label.toLowerCase()).not.toContain('não consegui entender');
   });
 
-  it('still asks for a numbered reply, matching the English source\'s intent', () => {
-    expect(label.toLowerCase()).toMatch(/número/);
+  it('offers a written clarification and keeps numbered replies available on the question', () => {
+    expect(label).toMatch(/outra resposta/i);
+    expect(label).toMatch(/próprias palavras/i);
+    expect(ptBundle.prompts.numbered_reply_hint).toMatch(/número/i);
   });
 
   it('contains no em dashes (brand rule)', () => {
