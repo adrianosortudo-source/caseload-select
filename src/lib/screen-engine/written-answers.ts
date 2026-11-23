@@ -7,11 +7,48 @@ const documentName = /\b(?:agreements?|contracts?|offers?|releases?|leases?|will
 const reviewAction = /\b(?:sign(?:ing|ature)?|review(?:ed|ing)?|submit(?:ting)?|fil(?:e|ing)|draft(?:ed|ing)?|respond(?:ing)?|reply|due|deadline)\b/i;
 const negativeAction = /\b(?:nothing to (?:sign|review)|(?:do not|don't|don’t|did not|didn't|didn’t|no longer) (?:need|want|have|plan|intend|expect|require)|(?:not|never) (?:signing|asked to sign|going to sign)|no (?:review|reply|response|signature) (?:is )?(?:needed|required))\b/i;
 const deadlineReference = /\b(?:by|before|due|deadline|respond|reply|submit|sign|file|meeting|hearing|appointment|court date)\b/i;
-const negativeTiming = /\b(?:no (?:fixed |specific )?(?:date|deadline)|not time[- ]sensitive|no rush|no time limit)\b/i;
+const negativeTiming = /\b(?:no\s+(?:(?:immediate|fixed|specific|known|reported|upcoming|set|scheduled|court|hearing|filing|response|payment|signing)\s+)*(?:dates?|deadlines?)|(?:date|deadline) (?:has not been|hasn't been|is not|isn't|not yet) (?:set|scheduled|reported|given|known)|not time[- ]sensitive|no rush|no time limit)\b/i;
+const pastDeadline = /\b(?:was|were|had been) (?:already )?due\b|\b(?:due|deadline)\b[^.!?;]{0,50}\b(?:ago|passed|expired|yesterday)\b/i;
+const changedDeadline = /\b(?:now|new|revised|changed|since then|just (?:been )?given)\b/i;
+const splitClauses = (text: string) => text.split(/[.!?;\n]|\b(?:but|however)\b/i);
 const timing = /\b(?:today|tomorrow|yesterday|tonight|(?:mon|tues|wednes|thurs|fri|satur|sun)day|(?:next|last|this) (?:week|month|year)|(?:in|within) (?:\d+|one|two|three|four|five|a few) (?:days?|weeks?|months?)|jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may \d|june?|july?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?|\d{1,4}[-/]\d{1,2}[-/]\d{1,4})\b/i;
 const uncertain = /^(?:(?:i(?:'m| am)? )?(?:do(?:n't| not) know|unsure|not (?:sure|certain))|unknown|prefer not to (?:say|answer)|skip)[\s.!?]*$/i;
 const unclearGoal = /\b(?:sort (?:it|this|things|everything) out|formaliz[es]?|formalise|make (?:this|it|things) official|figure (?:it|this) out|not sure (?:where|how) to start)\b/i;
 const askingToChoosePriority = /\b(?:both|more than one|several (?:things|issues)|two (?:different )?(?:things|issues))\b/i;
+
+// Date statements can concern different events within the same enquiry.
+function timingSubject(clause: string): string | undefined {
+  if (/\b(?:respond|response|reply)\b/i.test(clause)) return 'response';
+  if (/\b(?:file|filing|submit|submission)\b/i.test(clause)) return 'filing';
+  if (/\b(?:hearing|court date|appearance|trial)\b/i.test(clause)) return 'hearing';
+  if (/\b(?:sign|signing|signature)\b/i.test(clause)) return 'signature';
+  if (/\b(?:invoice|payment|rent)\b/i.test(clause)) return 'payment';
+  return undefined;
+}
+
+function asksForTiming(turn: string[], history: string[], previouslyAsked: boolean): boolean {
+  return turn.some((clause, index) => {
+    if (negativeTiming.test(clause) || negativeAction.test(clause) || pastDeadline.test(clause)) return false;
+    const explicitDeadline = /\b(?:deadline|due)\b/i.test(clause);
+    if (!reviewAction.test(clause) || (!documentName.test(clause) && !explicitDeadline && !/\bsign\b/i.test(clause))) return false;
+    if (timing.test(clause) && deadlineReference.test(clause)) return false;
+
+    const changed = explicitDeadline && changedDeadline.test(clause);
+    if (previouslyAsked && !changed) return false;
+    const scope = timingSubject(clause);
+    const resolves = (other: string, earlier: boolean): boolean => {
+      if (earlier && changed) return false;
+      const subject = timingSubject(other);
+      if (subject && subject !== scope) return false;
+      // An earlier denial does not cancel a subsequently asserted deadline.
+      // A later general response such as “No immediate deadline reported” can.
+      if (negativeTiming.test(other)) return !(earlier && explicitDeadline);
+      return !pastDeadline.test(other) && timing.test(other) && deadlineReference.test(other);
+    };
+    return ![...history, ...turn.slice(0, index)].some(other => resolves(other, true)) &&
+      !turn.slice(index + 1).some(other => resolves(other, false));
+  });
+}
 
 /** Select a single missing detail using the current turn, previously supplied facts and the original enquiry. */
 export function selectWrittenFollowUp(state: EngineState): SlotDefinition | undefined {
@@ -24,10 +61,10 @@ export function selectWrittenFollowUp(state: EngineState): SlotDefinition | unde
   if (!turn || uncertain.test(turn)) return;
   const statements = [state.input, ...Object.values(state.written_answers ?? {}), ...Object.values(state.slots)]
     .filter((value): value is string => !!value);
-  const clauses = statements.flatMap(value => value.split(/[.!?;\n]|\bbut\b/i));
-  const hasTime = !!state.slots.written_timing || clauses.some(clause =>
-    negativeTiming.test(clause) || (timing.test(clause) && deadlineReference.test(clause)));
-  const relevant = turn.split(/[.!?;\n]|\bbut\b/i).filter(clause => !negativeAction.test(clause)).join(' ');
+  const clauses = statements.flatMap(splitClauses);
+  const prior = statements.filter(value => value !== turn).flatMap(splitClauses);
+  const current = splitClauses(turn);
+  const relevant = current.filter(clause => !negativeAction.test(clause)).join(' ');
   // An established practice pack can ask its own first question when the
   // visitor wants counsel to review papers, rather than facing a request to act.
   const receivingRequest = /\b(?:asked|asking|told|want|need|expect) (?:me|us) to (?:sign|review)|\b(?:i|we) (?:must|will|have to|need to) sign\b/i.test(relevant);
@@ -41,9 +78,9 @@ export function selectWrittenFollowUp(state: EngineState): SlotDefinition | unde
     id = 'written_order';
   } else if (clarifyDocument && unspecifiedDocument.test(relevant) && !documentName.test(relevant) && !documentAlreadyNamed) {
     id = 'written_document';
-  } else if (reviewAction.test(relevant) && !hasTime &&
-      (documentName.test(relevant) || /\b(?:deadline|due|sign)\b/i.test(relevant))) {
-    if (lastId || /\b(?:deadline|due)\b/i.test(relevant)) id = 'written_timing';
+  } else if ((lastId || /\b(?:deadline|due)\b/i.test(relevant)) &&
+      asksForTiming(current, prior, !!state.slots.written_timing || state.questionHistory.includes('written_timing'))) {
+    return getSlotById('written_timing');
   } else if (askingToChoosePriority.test(relevant) ||
       (unclearGoal.test(relevant) && (lastId || state.matter_type.endsWith('_general') || state.matter_type === 'unknown')) ||
       (state.written_answers?.[lastId] && state.matter_type.endsWith('_general') && previous &&

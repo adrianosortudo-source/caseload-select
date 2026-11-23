@@ -140,3 +140,28 @@ it('keeps both rounds of clarification and ignores an immediate retry', () => {
     'Enquiry clarification 2': 'The letter arrived in an unmarked envelope.',
   });
 });
+
+describe('Timing statements in the same enquiry', () => {
+  const overdue = 'A client has not paid a $28,000 invoice for completed work. The invoice was due two weeks ago and the client now disputes the scope.';
+  it.each([
+    '', 'No immediate deadline reported.', 'No known date.', 'No upcoming deadline.',
+  ])('continues the invoice questions when its payment deadline is historical (%s)', answer => {
+    expect(getNextStep(initialiseState(overdue + ' ' + answer)).slot?.id).not.toBe('written_timing');
+  });
+  it.each([
+    'There was no immediate deadline. They have now given me a deadline to respond.',
+    'There is no known court date, but I must meet a filing deadline.',
+    'I have been given a deadline to respond. There is no court date.',
+    'The invoice was due two weeks ago. I was given a deadline to respond.',
+  ])('asks when a separate deadline is still open: %s', text => {
+    const state = applyWrittenAnswer(start('employment_general'), 'employment_problem_type', text);
+    expect(getNextStep(state).slot?.id).toBe('written_timing');
+  });
+  it('uses the new deadline when an earlier timing answer was superseded', () => {
+    let state = applyAnswer(start('employment_general'), 'written_timing', 'No immediate deadline reported.');
+    state = applyWrittenAnswer(state, 'employment_problem_type', 'They have now given me a deadline to respond.');
+    expect(getNextStep(state).slot?.id).toBe('written_timing');
+    state = applyAnswer(state, 'written_timing', 'The reply is due Friday.');
+    expect(getNextStep(state).slot?.id).not.toBe('written_timing');
+  });
+});
