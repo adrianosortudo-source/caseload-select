@@ -1,4 +1,4 @@
-import { classify, extractRawSignals } from './extractor';
+import { classify, describesRestrictedChildContact, extractRawSignals } from './extractor';
 import { getSlotById } from './slotRegistry';
 import type { EngineState, SlotDefinition } from './types';
 
@@ -118,6 +118,9 @@ export function interpretWrittenAnswer(
 
 /** A follow-up can identify the matter without changing the original enquiry. */
 export function refineWrittenRoute(state: EngineState, answer: string): EngineState {
+  if (state.matter_type === 'unknown' && state.family_enabled && describesRestrictedChildContact(answer)) {
+    return { ...state, practice_area: 'family', matter_type: 'family_general', matter_type_provenance: 'deterministic' };
+  }
   const updated = { ...state };
   const isGeneral = state.matter_type.endsWith('_general') || state.matter_type === 'unknown';
   const relevant = answer.split(/[.!?;\n]|\bbut\b/i).filter(clause => !negativeAction.test(clause)).join(' ').trim();
