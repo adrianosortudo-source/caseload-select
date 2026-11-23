@@ -23,7 +23,9 @@ async function step(cursor: MessagingCursor, input: string): Promise<MessagingTu
   const text = typeof input === 'string' ? input.trim() : '';
   if (!text || text.length > 4000) return { replies: [], error: 'Enter a message of up to 4,000 characters.' };
   const limit = await checkRateLimit('extract', ipFromHeaders(await headers()));
-  if (!limit.ok) return { replies: [], error: 'Please try again in a minute.' };
+  if (!limit.ok) return { replies: [], error: limit.active
+    ? 'The preview has reached its request limit. Please try again later.'
+    : 'The AI preview is unavailable. Your message has not been processed.' };
 
   const result = await runFictionalMessage(cursor, text);
   if (result.unavailable) return { replies: [], error: 'AI is unavailable. Please retry your message.' };

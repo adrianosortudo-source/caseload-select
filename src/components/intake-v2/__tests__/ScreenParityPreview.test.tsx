@@ -57,6 +57,34 @@ describe("private SCREEN preview transport", () => {
     expect(JSON.stringify(requests)).not.toContain("alex@example.test");
   });
 
+  it.each(["opening", "follow-up"])("labels fallback when AI is unavailable during a %s", async failure => {
+    let count = 0;
+    vi.stubGlobal("fetch", vi.fn(async () => {
+      const mode = ++count === (failure === "opening" ? 1 : 2) ? "error" : "live";
+      return { ok: true, json: async () => ({ mode, extracted: {} }) };
+    }));
+    render(<ScreenParityPreview practiceArea="corporate" channel="website" comparison={false} externalReport={false} />);
+    fireEvent.change(screen.getByRole("textbox", { name: "Tell us how a lawyer can help you today." }), {target:{value:opening}});
+    fireEvent.click(screen.getByRole("button", {name:"Continue matter review"}));
+    await screen.findByRole("button", {name:/Something else/i});
+    if (failure === "follow-up") expect(screen.queryByText(/AI was unavailable/)).toBeNull();
+    fireEvent.click(screen.getByRole("button", {name:/Something else/i}));
+    fireEvent.change(await screen.findByPlaceholderText("Describe what happened in your situation..."), {target:{value:"I have an offer that I want reviewed."}});
+    fireEvent.click(screen.getByRole("button", {name:"Continue"}));
+    await screen.findByRole("textbox", {name:"Is there a date the lawyer should take into account?"});
+    expect(screen.getByText(/AI was unavailable for part of this enquiry/)).toBeTruthy();
+  });
+
+  it.each([false, true])("preserves the operational request on the reference only: comparison=%s", async comparison => {
+    render(<ScreenParityPreview practiceArea="corporate" channel="website" comparison={comparison} externalReport={false}>
+      {comparison ? <ScreenEnginePublicWidget firmId="fictional-screen-preview" firmName="Example Law Firm" /> : undefined}
+    </ScreenParityPreview>);
+    fireEvent.change(screen.getByRole("textbox", {name:"Tell us how a lawyer can help you today."}), {target:{value:opening+" My fictional email is fixture@example.test."}});
+    fireEvent.click(screen.getByRole("button", {name:"Continue matter review"}));
+    await screen.findByRole("button", {name:/Something else/i});
+    expect(String(requests[0].body.description).includes("fixture@example.test")).toBe(comparison);
+  });
+
   it("strips structured contact values from the model request and preserves answers in local state", async () => {
     const state = initialiseState("A client owes my business money. Email Alex Example at alex@example.test.");
     Object.assign(state.slots, { client_email:"alex@example.test", client_name:"Alex Example",

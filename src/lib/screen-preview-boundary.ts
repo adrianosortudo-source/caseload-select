@@ -12,6 +12,7 @@ export interface PreviewSubmission {
 
 export interface ScreenPreviewBoundary {
   startImmediately: boolean;
+  comparison: boolean;
   phone?: string;
   onExtraction?: (available: boolean) => void;
   onSubmission: (payload: PreviewSubmission) => void;

@@ -313,7 +313,7 @@ export function ScreenEnginePublicWidget({
   const previewBoundary = useContext(ScreenPreviewTransport);
   const policy = SCREEN_WIDGET_EXECUTION_POLICY[runtime];
   const isDemo = policy.isGuidedDemo;
-  const extractInquiry = previewBoundary ? extractPreviewInquiry : llmExtract;
+  const extractInquiry = previewBoundary && !previewBoundary.comparison ? extractPreviewInquiry : llmExtract;
   const metaWorkflow = isDemo && demoContinuation?.workflow === "meta";
   const [stage, setStage] = useState<Stage>("kickoff");
   const [pendingDemoReview, setPendingDemoReview] = useState(false);
@@ -567,9 +567,11 @@ export function ScreenEnginePublicWidget({
       try {
         const result = await extractInquiry(`${state.input}\n\n${text}`, updated);
         if (run !== extractionRun.current) return;
+        previewBoundary?.onExtraction?.(result.mode === "live");
         if (result.mode === "live") updated = mergeLlmResults(updated, result.extracted);
       } catch {
         if (run !== extractionRun.current) return;
+        previewBoundary?.onExtraction?.(false);
       } finally {
         if (run === extractionRun.current) setIsReading(false);
       }
@@ -633,6 +635,7 @@ export function ScreenEnginePublicWidget({
         : [state.input, ...Object.values(state.written_answers ?? {}), text].join("\n\n");
       const result = await extractInquiry(context, state, { pendingSlotId: slotId, reply: text });
       if (run !== extractionRun.current) return;
+      previewBoundary?.onExtraction?.(result.mode === "live" && (!result.mapping_mode || result.mapping_mode === "live"));
       if (result.mode !== "live" && !result.mapped_answer) {
         setExtraction({ status: "fallback", reason: result.reason });
         finishWritten(applyWrittenAnswer(state, slotId, text));
@@ -650,6 +653,7 @@ export function ScreenEnginePublicWidget({
       setExtraction({ status: "live" });
     } catch {
       if (run !== extractionRun.current) return;
+      previewBoundary?.onExtraction?.(false);
       setExtraction({ status: "fallback", reason: "The answer could not be read." });
       finishWritten(applyWrittenAnswer(state, slotId, text));
     } finally {

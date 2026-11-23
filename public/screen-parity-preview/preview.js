@@ -121,9 +121,14 @@
     frame.addEventListener('load', () => {
       if (!frame.isConnected || !frame.contentDocument?.body) return;
       const doc = frame.contentDocument;
-      const resize = () => { frame.style.height = Math.ceil(doc.body.getBoundingClientRect().height) + 'px'; };
+      const article = doc.querySelector('.brief-frame') || doc.body.firstElementChild || doc.body;
+      const resize = () => {
+        const bounds = article.getBoundingClientRect();
+        const bottom = Math.max(bounds.bottom, bounds.top + article.scrollHeight);
+        frame.style.height = Math.max(1, Math.ceil(bottom + doc.documentElement.scrollTop)) + 'px';
+      };
       reportObserver = new ResizeObserver(resize);
-      reportObserver.observe(doc.body); resize();
+      reportObserver.observe(article); resize();
       doc.fonts.ready.then(resize);
     });
     frame.srcdoc = html; report.hidden = false; reportHost.replaceChildren(frame);

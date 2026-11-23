@@ -23,9 +23,11 @@ function reportDocument(fragment: string) {
     doc.head.append(copy);
   }
   const article = doc.createElement("article");
-  article.className = "brief-frame";
+  doc.documentElement.style.cssText = "height:auto;min-height:0;";
+  doc.body.style.cssText = "height:auto;min-height:0;margin:0;";
+  article.className = "brief-frame px-2 md:px-4";
+  article.style.cssText = "display:flow-root;box-sizing:border-box;width:100%;padding:8px;overflow-wrap:anywhere;";
   article.innerHTML = fragment;
-  doc.body.style.margin = "0";
   doc.body.append(article);
   return "<!doctype html>" + doc.documentElement.outerHTML;
 }
@@ -40,10 +42,11 @@ function VisibleBrief({ html }: { html: string }) {
     onLoad={() => {
       observer.current?.disconnect();
       const doc = frame.current?.contentDocument;
-      if (!doc?.body) return;
-      const fit = () => setHeight(Math.max(100, Math.ceil(doc.body.getBoundingClientRect().height)));
+      const article = doc?.querySelector<HTMLElement>(".brief-frame");
+      if (!doc || !article) return;
+      const fit = () => setHeight(Math.max(100, Math.ceil(article.getBoundingClientRect().bottom + doc.documentElement.scrollTop), article.scrollHeight));
       observer.current = new ResizeObserver(fit);
-      observer.current.observe(doc.body); fit();
+      observer.current.observe(article); fit();
     }} />;
 }
 
@@ -54,7 +57,8 @@ export default function ScreenParityPreview({ practiceArea, channel, comparison,
   const [phase, setPhase] = useState({ stage: "kickoff", step: null as string | null, question: null as string | null });
   const [submission, setSubmission] = useState<PreviewSubmission | null>(null);
   const [brief, setBrief] = useState("");
-  const [modelAvailable, setModelAvailable] = useState<boolean | null>(null);
+  const [usedFallback, setUsedFallback] = useState(false);
+  const noteExtraction = useCallback((available: boolean) => { if (!available) setUsedFallback(true); }, []);
   const [messagingReport, setMessagingReport] = useState<LawyerReport | null>(null);
 
   useEffect(() => {
@@ -101,8 +105,8 @@ export default function ScreenParityPreview({ practiceArea, channel, comparison,
     setPhase(previous => previous.stage === stage && previous.step === step && previous.question === question ? previous : { stage, step, question });
   }, []);
   const boundary = useMemo<ScreenPreviewBoundary>(() => ({
-    startImmediately: handoff.start, phone: handoff.phone, onExtraction: setModelAvailable, onSubmission: captured, onStage,
-  }), [handoff.start, handoff.phone, captured, onStage]);
+    comparison, startImmediately: handoff.start, phone: handoff.phone, onExtraction: noteExtraction, onSubmission: captured, onStage,
+  }), [comparison, handoff.start, handoff.phone, noteExtraction, captured, onStage]);
   const onMessagingReport = useCallback(({ report, html }: { report: LawyerReport; html: string }) => {
     setMessagingReport(report);
     setPhase({ stage: "done", step: "stop", question: null });
@@ -112,6 +116,9 @@ export default function ScreenParityPreview({ practiceArea, channel, comparison,
   return <main ref={root} data-parity-path={comparison ? "production" : "embedded"}
     data-parity-stage={phase.stage} data-parity-step={phase.step} data-parity-question={phase.question} data-parity-channel={channel}>
     {(comparison || !externalReport) && <p className="px-5 py-3 text-sm">Use fictional details. Screen sends your enquiry and written follow-up answers to its AI provider to prepare the brief.</p>}
+    {usedFallback && <p role="status" className="border-l-4 border-[#1e2f58] bg-[#f4f3ef] p-4 text-[#101923]">
+      AI was unavailable for part of this enquiry. Screen used its built-in questions for that step.
+    </p>}
     <ScreenPreviewTransport.Provider value={boundary}>
     {children ?? (channel === "website" || channel === "sms"
       ? <ScreenEnginePublicWidget firmId="fictional-screen-preview" firmName="Example Law Firm" runtime="live"
@@ -120,7 +127,6 @@ export default function ScreenParityPreview({ practiceArea, channel, comparison,
       : <ScreenParityMessaging practiceArea={practiceArea} channel={channel} comparison={comparison}
           opening={handoff.opening} onReport={onMessagingReport} />)}
     </ScreenPreviewTransport.Provider>
-    {modelAvailable === false && <p role="status" className="p-4">The AI service was unavailable for this enquiry. Screen used its built-in questions.</p>}
     {messagingReport && <script id="parity-submission" type="application/json">{JSON.stringify({ brief_json: messagingReport }).replace(/</g, "\\u003c")}</script>}
     {submission && <script id="parity-submission" type="application/json">{JSON.stringify(submission).replace(/</g, "\\u003c")}</script>}
     {brief && (!externalReport || comparison) && <section className="mx-auto w-full max-w-6xl p-5">
