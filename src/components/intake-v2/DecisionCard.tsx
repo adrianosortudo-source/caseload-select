@@ -31,6 +31,10 @@ interface Props {
 
 export function DecisionCard({ item, value, onChange, contained = false }: Props) {
   const multi = !!item.multiSelect;
+  const showWrittenAnswer = item.allowFreeText && !multi && Boolean(item.options?.length);
+  const options = showWrittenAnswer
+    ? item.options?.filter((option) => !/^(other|something else)$/i.test(option.value.trim()))
+    : item.options;
   const explanationId = useId();
   const selected = multi
     ? Array.isArray(value) ? value : []
@@ -189,7 +193,7 @@ export function DecisionCard({ item, value, onChange, contained = false }: Props
           first dismissing the textarea via Cancel. handleTap auto-closes
           the textarea when a structured option is tapped. */}
       <div className={contained ? "grid grid-cols-1 gap-3" : "grid grid-cols-1 sm:grid-cols-2 gap-3"}>
-        {item.options?.map(opt => {
+        {options?.map(opt => {
           const isOn = isSelected(opt.value);
           const isPressed = pressedValue === opt.value;
           return (
@@ -252,9 +256,10 @@ export function DecisionCard({ item, value, onChange, contained = false }: Props
           );
         })}
 
-        {item.allowFreeText && !multi && item.options && item.options.length > 0 && (
+        {showWrittenAnswer && (
           <button
             type="button"
+            aria-expanded={otherMode}
             onClick={() => handleTap(OTHER_VALUE)}
             className={[
               "group relative flex items-center min-h-[64px] px-5 py-4 rounded-xl text-left",
@@ -263,7 +268,7 @@ export function DecisionCard({ item, value, onChange, contained = false }: Props
             ].join(" ")}
             style={{ fontFamily: fontBody }}
           >
-            <span className="flex-1 text-[16px] font-medium leading-snug">{item.freeTextLabel ?? "Something else (I will explain)"}</span>
+            <span className="flex-1 text-[16px] font-medium leading-snug">{item.freeTextLabel ?? "Something else"}</span>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="ml-2 opacity-60">
               <path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z" />
             </svg>

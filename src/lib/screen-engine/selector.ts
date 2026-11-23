@@ -1,4 +1,5 @@
 import type { EngineState, SlotDefinition, DecisionGap } from './types';
+import { selectWrittenFollowUp } from './written-answers';
 import { SLOT_REGISTRY } from './slotRegistry';
 
 const CORPORATE_DETAIL_SLOT_BY_CATEGORY: Readonly<Record<string, string>> = {
@@ -527,7 +528,11 @@ function slotIsAnswered(state: EngineState, slot: SlotDefinition): boolean {
   // Provenance-aware: only user-answered slots are filtered out of the
   // candidate pool. LLM guesses leave the slot available so the engine
   // can still ask the user to confirm.
-  return isUserAnswered(state, slot.id);
+  // After a person described their goal in response to our clarification,
+  // a broad help menu would ask them to classify the same answer again.
+  const repeatsGoal = !!state.slots.written_goal && state.matter_type.endsWith('_general') &&
+    (slot.question_group === 'routing_category' || slot.question_group === 'routing' || slot.id === 'family_help_sought');
+  return repeatsGoal || !!state.written_answers?.[slot.id] || isUserAnswered(state, slot.id);
 }
 
 // ─── Subtrack applicability ───────────────────────────────────────────────
@@ -739,7 +744,7 @@ function pickByExplicitOrder(state: EngineState): SlotDefinition | null {
     // explicit order is authoritative. resolves:'none' slots are already
     // exempted from group-dedup, and matter-specific resolvers won't
     // collide because each slot ID appears at most once in the order.
-    if (isUserAnswered(state, slot.id)) continue;
+    if (slotIsAnswered(state, slot)) continue;
     return slot;
   }
   // Order exhausted: every listed slot is either answered or N/A. Fall
@@ -750,6 +755,9 @@ function pickByExplicitOrder(state: EngineState): SlotDefinition | null {
 // ─── Select next slot ─────────────────────────────────────────────────────
 
 export function selectNextSlot(state: EngineState): SlotDefinition | null {
+  if (state.matter_type === 'out_of_scope') return null;
+  const clarification = selectWrittenFollowUp(state);
+  if (clarification) return clarification;
   if (state.matter_type === 'unknown') return null;
 
   // Matter-aware explicit order takes precedence over scoreSlot for the

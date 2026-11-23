@@ -7,6 +7,11 @@
     "audit": "Authored after the DRG WhatsApp PT smoke test surfaced the i18n propagation gap. Brand voice: direct, professional, Damaris-tone. No em-dashes. No time-relative reply promises. Ontario legal terminology preserved where direct PT equivalent exists; ambiguous legal terms left in English with PT scaffolding."
   },
   "slot_questions": {
+    "written_agreement": "Há um acordo por escrito em vigor?",
+    "written_order": "Há uma ordem judicial em vigor?",
+    "written_document": "Qual documento pediram que você assine ou revise?",
+    "written_timing": "Há alguma data que o advogado deva levar em conta?",
+    "written_goal": "Com o que você gostaria que o advogado ajudasse primeiro?",
     "client_name": "Qual é o seu nome?",
     "client_phone": "Qual é o melhor telefone para contato?",
     "client_email": "Qual e-mail o escritório deve usar para retornar?",
@@ -1191,6 +1196,8 @@
     "ip_protection": "Marca ou propriedade intelectual a proteger"
   },
   "prompts": {
+    "written_answer_choice": "Para escrever uma resposta diferente, envie “Outra resposta”.",
+    "written_answer_prompt": "Como você responderia a essa pergunta com suas próprias palavras?",
     "numbered_reply_hint": "Responda com um número, ou escreva com suas próprias palavras.",
     "multi_pick_ack": "Certo, registrei sua primeira escolha. Pode acrescentar o resto com suas próprias palavras quando quiser."
   },
@@ -1231,7 +1238,7 @@
     "done_body_template": "Um advogado em {firmName} vai ler o que você compartilhou e entrar em contato diretamente para conversar sobre a parte jurídica.",
     "free_text_other_label": "Outra coisa (vou explicar)",
     "status_submitted": "enviado",
-    "didnt_catch": "Obrigado, quero ter certeza de registrar isso corretamente. Pode responder com o número da opção que mais se encaixa?",
+    "didnt_catch": "Obrigado, quero ter certeza de registrar isso corretamente. Pode explicar um pouco mais ou enviar “Outra resposta” para responder com suas próprias palavras?",
     "intro_first_ask": "Obrigado por entrar em contato. Para que um advogado possa avaliar a sua situação, vou fazer algumas perguntas rápidas. Você pode responder com o número de uma opção ou escrever com suas próprias palavras.",
     "describe_situation": "Obrigado por entrar em contato. Antes de um advogado revisar isso, pode descrever em uma ou duas frases do que se trata a sua situação?",
     "describe_situation_short": "Para começar, pode descrever em uma ou duas frases do que se trata a sua situação?",
@@ -1287,6 +1294,11 @@
     "convo_channel_voice": "Boas-vindas à demonstração da transcrição de voz. Use dados fictícios. Nada é salvo e nenhum escritório será contatado."
   },
   "recap_templates": {
+    "written_agreement": "Sobre o acordo escrito, você disse “{answer}”",
+    "written_order": "Sobre a ordem judicial, você disse “{answer}”",
+    "written_document": "Sobre o documento, você disse “{answer}”",
+    "written_timing": "Sobre o prazo, você disse “{answer}”",
+    "written_goal": "Você descreveu a ajuda que procura assim: “{answer}”",
     "client_name": "Você descreveu seu nome assim: “{answer}”.",
     "client_phone": "Você descreveu o melhor telefone para entrar em contato com você assim: “{answer}”.",
     "client_email": "Você descreveu o e-mail para retorno assim: “{answer}”.",

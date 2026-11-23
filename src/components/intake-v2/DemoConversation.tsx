@@ -25,12 +25,13 @@ interface DemoConversationProps {
   minChars?: number;
   disabled?: boolean;
   actionsDisabled?: boolean;
+  onRequestWrittenAnswer?: () => void;
   status?: string | null;
   actions?: readonly DemoConversationAction[];
 }
 
 /** Local presentation only. The widget owns the engine and all session state. */
-export function DemoConversation({ messages, onSend, placeholder, initialDraft = "", minChars = 1, disabled = false, actionsDisabled = false, status, actions = [] }: DemoConversationProps) {
+export function DemoConversation({ messages, onSend, placeholder, initialDraft = "", minChars = 1, disabled = false, actionsDisabled = false, onRequestWrittenAnswer, status, actions = [] }: DemoConversationProps) {
   const [draft, setDraft] = useState(initialDraft);
   const history = useRef<HTMLDivElement>(null);
   const input = useRef<HTMLTextAreaElement>(null);
@@ -82,7 +83,9 @@ export function DemoConversation({ messages, onSend, placeholder, initialDraft =
       </div>)}
       {status && <p className={styles.status} role="status">{status}</p>}
     </div>
-    {actions.length > 0 && <div className={styles.actions}>{actions.map((action) => <button type="button" key={action.label} className={styles.action} onClick={action.onClick} disabled={actionsDisabled}>{action.label}</button>)}</div>}
+    {(actions.length > 0 || onRequestWrittenAnswer) && <div className={styles.actions}>
+      {onRequestWrittenAnswer && <button type="button" className={styles.action} onClick={() => { onRequestWrittenAnswer(); input.current?.focus(); }} disabled={actionsDisabled}>Something else</button>}
+      {actions.map((action) => <button type="button" key={action.label} className={styles.action} onClick={action.onClick} disabled={actionsDisabled}>{action.label}</button>)}</div>}
     {draft.trim().length > 0 && draft.trim().length < minChars && <p className={styles.status} role="status">Please enter at least {minChars} characters.</p>}
     <form className={styles.composer} onSubmit={submit}>
       <label className="sr-only" htmlFor="demo-conversation-reply">Your fictional message</label>

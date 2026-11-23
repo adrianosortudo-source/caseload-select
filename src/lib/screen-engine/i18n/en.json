@@ -897,6 +897,8 @@
     "sms_reply_instruction": "Reply with the number of your choice.",
     "gbp_reply_instruction": "Reply with the number of your choice.",
     "clarify_message": "To route this correctly, could you tell me a bit more about what's happening? A few examples of the buckets we handle: starting a business, partner dispute, contract issue, money owed, real estate matter.",
+    "written_answer_choice": "To write a different answer, reply “Something else”.",
+    "written_answer_prompt": "How would you answer that question in your own words?",
     "numbered_reply_hint": "Reply with a number, or answer in your own words.",
     "multi_pick_ack": "Got it, I recorded your first pick. You can add the rest in your own words anytime."
   },
@@ -954,6 +956,11 @@
     }
   },
   "slot_questions": {
+    "written_agreement": "Is there a written agreement in place?",
+    "written_order": "Is there a court order in place?",
+    "written_document": "What document have you been asked to sign or review?",
+    "written_timing": "Is there a date the lawyer should take into account?",
+    "written_goal": "What would you like the lawyer to help you do first?",
     "client_name": "What is your name?",
     "client_phone": "What is the best phone number for the lawyer to reach you?",
     "client_email": "What email address should the lawyer use to follow up?",
@@ -1134,6 +1141,11 @@
     "convo_channel_voice": "Welcome to the voice transcript demonstration. Please use fictional details. Nothing is saved, and no firm is contacted."
   },
   "recap_templates": {
+    "written_agreement": "About the written agreement, you said “{answer}”",
+    "written_order": "About the court order, you said “{answer}”",
+    "written_document": "About the document, you said “{answer}”",
+    "written_timing": "On timing, you said “{answer}”",
+    "written_goal": "You described the help you want as “{answer}”",
     "client_name": "You described your name this way: “{answer}”.",
     "client_phone": "You described the best phone number to reach you this way: “{answer}”.",
     "client_email": "You described the email address for follow-up this way: “{answer}”.",

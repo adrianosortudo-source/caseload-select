@@ -38,7 +38,7 @@
  *    The pointer stays so the engine re-asks the same slot.
  */
 
-import { applyAnswer } from './screen-engine/control';
+import { applyAnswer, applyWrittenAnswer } from './screen-engine/control';
 import { SLOT_REGISTRY } from './screen-engine/slotRegistry';
 import type { EngineState, SlotDefinition } from './screen-engine/types';
 import { fuzzyMatchOption } from './option-fuzzy-match';
@@ -181,14 +181,18 @@ export function applyPendingSlotReply(
   if (slot.input_type === 'single_select') {
     const optionValue = matchSingleSelectOption(trimmed, slot);
     if (!optionValue) return state;
-    const next = applyAnswer(state, slotId, optionValue);
+    const exactChoice = /^[^\p{L}\p{N}]*\d+[^\p{L}\p{N}]*$/u.test(trimmed) ||
+      optionValue.toLowerCase() === trimmed.toLowerCase();
+    const next = exactChoice
+      ? applyAnswer(state, slotId, optionValue)
+      : applyWrittenAnswer(state, slotId, trimmed, optionValue);
     return { ...next, pendingAskedSlotId: null };
   }
 
   if (slot.input_type === 'free_text') {
-    const value = matchFreeTextReply(trimmed);
+    const value = slot.id.startsWith('written_') ? trimmed : matchFreeTextReply(trimmed);
     if (!value) return state;
-    const next = applyAnswer(state, slotId, value);
+    const next = value === trimmed ? applyWrittenAnswer(state, slotId, trimmed) : applyAnswer(state, slotId, value);
     return { ...next, pendingAskedSlotId: null };
   }
 

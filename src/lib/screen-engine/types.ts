@@ -420,6 +420,10 @@ export interface EngineState {
   dispute_family: DisputeFamily;
   advisory_subtrack: AdvisorySubtrack;
   slots: Record<string, string | null>;
+  /** Original responses to choice questions. A written answer need not match an option. */
+  written_answers?: Record<string, string>;
+  /** Persisted while a messaging client waits for the text after a Something else selection. */
+  pendingWrittenSlotId?: string | null;
   slot_meta: Record<string, SlotMeta>;
   slot_evidence: Record<string, SlotEvidence>;
   raw: RawSignals;

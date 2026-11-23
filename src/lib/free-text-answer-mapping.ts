@@ -144,6 +144,8 @@ export function applyFreeTextAnswerMapping(
   const slot = next.slot;
   if (!slot) return state;
   if (slot.input_type !== 'free_text') return state;
+  // A detail suggested by this message has not necessarily been asked yet.
+  if (slot.id.startsWith('written_') && state.pendingAskedSlotId !== slot.id) return state;
   // Don't fire on contact slots — they have a dedicated extractor
   // (applyContactExtractionToState) that runs upstream and handles
   // the email / phone / bare-name shapes correctly. Catching

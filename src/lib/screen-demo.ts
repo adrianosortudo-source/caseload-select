@@ -1,5 +1,5 @@
 import { computeBand } from "./screen-engine/band";
-import { applyAnswer } from "./screen-engine/control";
+import { applyAnswer, applyWrittenAnswer } from "./screen-engine/control";
 import { initialiseState } from "./screen-engine/extractor";
 import { buildReport } from "./screen-engine/report";
 import {
@@ -38,7 +38,10 @@ export function answerDemoState(
   value: string | string[],
 ): EngineState {
   const normalized = Array.isArray(value) ? value.join(", ") : value;
-  return scoreDemoState(applyAnswer(state, slotId, normalized));
+  const updated = normalized.startsWith("other:")
+    ? applyWrittenAnswer(state, slotId, normalized.slice(6))
+    : applyAnswer(state, slotId, normalized);
+  return scoreDemoState(updated);
 }
 
 export function buildDemoReport(state: EngineState): LawyerReport {

@@ -1,6 +1,6 @@
 import { extractRawSignals, initialiseState } from "./screen-engine/extractor";
 import { runEvidencePass } from "./screen-engine/slotEvidence";
-import { applyAnswer, getNextStep } from "./screen-engine/control";
+import { applyAnswer, applyWrittenAnswer, getNextStep } from "./screen-engine/control";
 import { computeBand } from "./screen-engine/band";
 import { computeCoreCompleteness, getDecisionGap } from "./screen-engine/selector";
 import type { EngineState } from "./screen-engine/types";
@@ -53,6 +53,11 @@ const SUMMARY_LABELS: Record<string, string> = {
   precon_documents: "Documents available", mortgage_documents: "Documents available",
 };
 const plainAnswer = (value: string) => value.startsWith("other:") ? value.slice(6).trim() : value;
+function applyContinuationAnswer(state: EngineState, slotId: string, value: string): EngineState {
+  return value.startsWith("other:")
+    ? applyWrittenAnswer(state, slotId, plainAnswer(value))
+    : applyAnswer(state, slotId, value);
+}
 const displayAnswer = (slotId: string, value: string) => SLOT_REGISTRY.find(slot => slot.id === slotId)?.options?.find(option => option.value === value)?.label ?? plainAnswer(value);
 function answerLabel(answer: ContinuationAnswer): string {
   const id = SLOT_REGISTRY.find(slot => answer.slotId ? slot.id === answer.slotId : slot.question === answer.question)?.id;
@@ -237,7 +242,7 @@ export function transitionContinuation(session: ContinuationSession, payload: un
         if (answer.superseded || !slot || (fieldId === "deadline" && /deadline|timing|timeline|urgency/.test(slot.id)) ||
             !(slot.applies_to as readonly string[]).some(matter => matter === state.matter_type || matter === "*") ||
             (state.slots[slot.id] && state.slots[slot.id] !== (answer.engineValue ?? answer.answer))) return { ...answer, superseded: true };
-        state = applyAnswer(state, slot.id, answer.answer === "Skipped by caller" ? "Not sure" : answer.engineValue ?? answer.answer);
+        state = applyContinuationAnswer(state, slot.id, answer.answer === "Skipped by caller" ? "Not sure" : answer.engineValue ?? answer.answer);
         return answer;
       });
       if (fieldId === "deadline" || review.corrections?.some(correction => correction.fieldId === "deadline")) {
@@ -272,7 +277,7 @@ export function transitionContinuation(session: ContinuationSession, payload: un
     if (!body.skip && next.slot.options?.length && !next.slot.options.some(option => option.value === value) && !explained) {
       throw new ContinuationError("invalid_answer", 400);
     }
-    state = scoreContinuationState(applyAnswer(state, next.slot.id, value));
+    state = scoreContinuationState(applyContinuationAnswer(state, next.slot.id, value));
     const answer = body.skip ? "Skipped by caller" : displayAnswer(next.slot.id, value);
     answers.push({ question: next.slot.question, answer, source: "screen", at: now, slotId: next.slot.id, ...(answer !== value ? { engineValue: value } : {}) });
   }

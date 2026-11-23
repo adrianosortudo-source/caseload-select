@@ -89,6 +89,7 @@ function BriefSection({
 }
 
 export function ScreenDemoWidget() {
+  const [writtenReply, setWrittenReply] = useState("");
   const [situation, setSituation] = useState(DEMO_SEED);
   const [state, setState] = useState<EngineState | null>(null);
   const [history, setHistory] = useState<EngineState[]>([]);
@@ -103,6 +104,7 @@ export function ScreenDemoWidget() {
   );
 
   function reset() {
+    setWrittenReply("");
     setSituation(DEMO_SEED);
     setState(null);
     setHistory([]);
@@ -116,10 +118,12 @@ export function ScreenDemoWidget() {
   function answer(slotId: string, value: string | string[]) {
     if (!state) return;
     setHistory((previous) => [...previous, state]);
+    setWrittenReply("");
     setState(answerDemoState(state, slotId, value));
   }
 
   function back() {
+    setWrittenReply("");
     const previous = history.at(-1);
     if (!previous) return reset();
     setHistory((items) => items.slice(0, -1));
@@ -350,10 +354,18 @@ export function ScreenDemoWidget() {
       onBack={back}
       onSkip={() => answer(currentItem.id, "Not sure")}
     >
-      <DecisionCard
-        item={currentItem}
-        onChange={(value) => answer(currentItem.id, value)}
-      />
+      {currentItem.options?.length ? (
+        <DecisionCard item={currentItem} onChange={(value) => answer(currentItem.id, value)} />
+      ) : (
+        <TextCard
+          item={currentItem}
+          value={writtenReply}
+          onChange={setWrittenReply}
+          onSubmit={() => answer(currentItem.id, `other:${writtenReply.trim()}`)}
+          submitLabel="Continue"
+          minChars={1}
+        />
+      )}
     </Shell>
   );
 }

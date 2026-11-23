@@ -171,6 +171,7 @@ export async function persistScreenedLead(
       slots: state.slots,
       slot_meta: state.slot_meta,
       slot_evidence: state.slot_evidence,
+      written_answers: state.written_answers,
       raw: state.raw,
       intent_family: state.intent_family,
       dispute_family: state.dispute_family,
