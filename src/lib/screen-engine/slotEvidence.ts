@@ -6,7 +6,16 @@ const lower = (s: string) => s.toLowerCase();
 function matchPattern(text: string, patterns: string[]): string | null {
   const t = lower(text);
   for (const p of patterns) {
-    if (t.includes(lower(p))) return p;
+    const phrase = lower(p);
+    let start = t.indexOf(phrase);
+    while (start !== -1) {
+      // 'I have not signed an agreement' also contains 'signed an agreement'.
+      // A negated affirmative phrase must not beat the slot's negative options.
+      const prefix = t.slice(0, start).split(/[.,!?;\n]|\bbut\b/).pop() ?? '';
+      const negated = /(?:\b(?:no|never|not|without)|n['’]t)\s+(?:(?:a|an|the|any|yet|ever|already|actually|personally|even|have|been)\s+){0,3}$/i.test(prefix);
+      if (!negated) return p;
+      start = t.indexOf(phrase, start + phrase.length);
+    }
   }
   return null;
 }

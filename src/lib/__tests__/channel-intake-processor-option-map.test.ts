@@ -86,6 +86,8 @@ vi.mock('@/lib/supabase-admin', () => {
   };
 });
 
+import { buildReport } from '../screen-engine/report';
+import type { EngineState } from '../screen-engine/types';
 import {
   processChannelInbound,
   type WhatsAppSender,
@@ -177,6 +179,29 @@ beforeEach(() => {
 });
 
 describe('LLM option-mapping fallback for off-list replies (C3)', () => {
+  it('keeps the written-answer choice on the pending question and uses the next message in the brief', async () => {
+    const session = advisoryPathPendingSession();
+    mocks.loadOpenChannelSession.mockResolvedValueOnce(session as never);
+    const request = await processChannelInbound({
+      firmId: FIRM_ID, text: 'Something else', sender: whatsappSender(),
+    });
+    expect(request.reason).toBe('awaiting_written_answer');
+    expect(mocks.sendChannelMessage.mock.calls.at(-1)![0].text).toContain('in your own words');
+    const lastSaved = () => (mocks.updateChannelSession.mock.calls.at(-1) as unknown as [{ engineState: EngineState }])[0].engineState;
+    const waiting = lastSaved();
+    expect(waiting.pendingWrittenSlotId).toBe('advisory_path');
+    expect(waiting.slots.advisory_path).toBeUndefined();
+    mocks.loadOpenChannelSession.mockResolvedValueOnce({ ...session, engine_state: waiting } as never);
+    const words = 'We already operate. I have a draft offer for our first employee and want it reviewed.';
+    await processChannelInbound({
+      firmId: FIRM_ID, text: words, sender: { ...whatsappSender(), messageMid: 'written-option-reply' },
+    });
+    const answered = lastSaved();
+    expect(answered.pendingAskedSlotId).not.toBe('advisory_path');
+    expect(answered.pendingWrittenSlotId).toBeNull();
+    expect(buildReport(answered).resolved_facts_v2.some((fact) => fact.value === words)).toBe(true);
+  });
+
   it('mapped: an off-list reply that clearly selects an option is applied with answered provenance; llmExtractServer is skipped; a NEW question is sent', async () => {
     mocks.loadOpenChannelSession.mockResolvedValueOnce(advisoryPathPendingSession() as never);
     mocks.llmMapOptionReply.mockResolvedValueOnce({

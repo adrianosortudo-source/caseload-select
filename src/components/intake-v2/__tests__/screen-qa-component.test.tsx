@@ -34,6 +34,8 @@ describe("Screen QA component contract", () => {
       });
       if (reportButton) break;
 
+      const field = document.querySelector<HTMLTextAreaElement>("main textarea");
+      if (field) fireEvent.change(field, { target: { value: "Next Tuesday." } });
       const option = document.querySelector<HTMLElement>("main button");
       expect(option, `missing answer control at step ${answer + 1}`).toBeTruthy();
       fireEvent.click(option!);

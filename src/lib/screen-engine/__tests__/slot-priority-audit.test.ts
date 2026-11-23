@@ -75,6 +75,12 @@ describe('Slot priority audit — free_text inventory', () => {
       'family_timing',
       'gca_specific_document',
       'ownership_percentage',
+      // Optional, unscored clarifications that only appear after a relevant detail.
+      'written_agreement',
+      'written_document',
+      'written_goal',
+      'written_order',
+      'written_timing',
     ]);
   });
 });

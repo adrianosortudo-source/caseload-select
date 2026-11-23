@@ -46,7 +46,8 @@ import { runEvidencePass } from '@/lib/screen-engine/slotEvidence';
 import { mergeLlmResults } from '@/lib/screen-engine/llm/extractor';
 import { buildReport } from '@/lib/screen-engine/report';
 import { computeBand } from '@/lib/screen-engine/band';
-import { getNextStep, applyAnswer } from '@/lib/screen-engine/control';
+import { getNextStep, applyWrittenAnswer } from '@/lib/screen-engine/control';
+import { selectWrittenFollowUp } from '@/lib/screen-engine/written-answers';
 import { llmExtractServer } from '@/lib/screen-llm-server';
 import { renderBriefHtmlServer } from '@/lib/screen-brief-html';
 import type { EngineState, Band, SlotDefinition, LawyerReport } from '@/lib/screen-engine/types';
@@ -174,7 +175,8 @@ function formatDiscoveryQuestion(
     .join('\n');
   const hint =
     i18n.prompts?.numbered_reply_hint || 'Reply with a number, or answer in your own words.';
-  return `${base}\n\n${labels}\n\n${hint}`;
+  const written = i18n.prompts?.written_answer_choice || 'To write a different answer, reply “Something else”.';
+  return `${base}\n\n${labels}\n\n${hint} ${written}`;
 }
 
 // ── Sender metadata ─────────────────────────────────────────────────────
@@ -531,6 +533,70 @@ export async function processChannelInbound(
     return intakeHistory;
   };
 
+  async function sendClarification(
+    clarificationText: string, slotId: string, reason: string, showOptions: boolean,
+  ): Promise<ProcessChannelInboundResult> {
+    captureCurrentAnswers();
+    const clarification = appendOutboundQuestion(intakeHistory, {
+      body: clarificationText,
+      occurredAt: new Date().toISOString(),
+      kind: 'clarification',
+      slotIds: [slotId],
+      options: showOptions ? optionSnapshotsForSlot(slotId, state.language) : undefined,
+    });
+    intakeHistory = clarification.history;
+    const pendingSave = await persistQuestionState({
+      sessionId,
+      firmId,
+      channel,
+      senderId,
+      engineState: state,
+      intakeExchanges: intakeHistory,
+      followUpCount: priorFollowUpCount,
+    });
+    if (!pendingSave.ok) {
+      console.error('[channel-intake] clarification not sent because session persistence failed');
+      return {
+        persisted: false,
+        reason: `session_persist_failed: ${pendingSave.error}`,
+        followUpSent: false,
+      };
+    }
+    sessionId = pendingSave.sessionId;
+    const sendResult = await sendChannelMessage({
+      firmId,
+      sender,
+      text: clarificationText,
+      authoritativeInboundAt,
+    });
+    intakeHistory = settleOutboundQuestion(intakeHistory, {
+      eventId: clarification.eventId,
+      sent: sendResult.sent,
+      deliveryUnknown: sendResult.deliveryUnknown,
+      providerMessageId: sendResult.messageId,
+      failureReason: sendResult.reason,
+    });
+    // The visitor is still answering the same question.
+    await persistSettledQuestion({
+      sessionId,
+      engineState: state,
+      intakeExchanges: intakeHistory,
+      followUpCount: priorFollowUpCount,
+    });
+    return { persisted: false, reason, followUpSent: sendResult.sent };
+  }
+
+  const pendingQuestion = SLOT_REGISTRY.find((slot) => slot.id === state.pendingAskedSlotId);
+  const writtenChoice = isResume && pendingQuestion?.tier !== 'contact' &&
+    pendingQuestion?.input_type === 'single_select' && Boolean(pendingQuestion.options?.length);
+  const requestsWrittenAnswer = /^(?:something else|other|outra resposta|outra opção|outro)[.!]?$/iu.test(trimmed);
+  if (writtenChoice && pendingQuestion && requestsWrittenAnswer) {
+    state = { ...state, pendingWrittenSlotId: pendingQuestion.id };
+    const prompt = getI18n(state.language).prompts?.written_answer_prompt ||
+      'How would you answer that question in your own words?';
+    return sendClarification(prompt, pendingQuestion.id, 'awaiting_written_answer', false);
+  }
+
   // Evidence pass: regex deepening on the NEW turn text. Slot
   // extraction layer; does not re-classify matter_type / practice_area
   // (those are owned by initialiseState on turn 1 and preserved on resume).
@@ -550,7 +616,15 @@ export async function processChannelInbound(
   // applyPendingSlotReply is a no-op when pendingAskedSlotId is absent
   // (fresh turn, legacy session, or web/voice path).
   const stateBeforePending = state;
-  state = applyPendingSlotReply(trimmed, state);
+  if (writtenChoice && pendingQuestion && state.pendingWrittenSlotId === pendingQuestion.id) {
+    state = {
+      ...applyWrittenAnswer(state, pendingQuestion.id, trimmed),
+      pendingWrittenSlotId: null,
+      pendingAskedSlotId: null,
+    };
+  } else {
+    state = applyPendingSlotReply(trimmed, state);
+  }
   const pendingConsumed = state !== stateBeforePending && !state.pendingAskedSlotId;
 
   // Name-capture context detection (#171, refined by #172).
@@ -635,65 +709,10 @@ export async function processChannelInbound(
   if (isResume && !nameCaptureConsumed && !pendingConsumed) {
     const oorDigit = detectOutOfRangeDigitReply(trimmed, state);
     if (oorDigit) {
-      const clarificationText = buildOutOfRangeDigitReply(oorDigit);
-      captureCurrentAnswers();
-      const clarification = appendOutboundQuestion(intakeHistory, {
-        body: clarificationText,
-        occurredAt: new Date().toISOString(),
-        kind: 'clarification',
-        slotIds: [oorDigit.slot.id],
-        options: optionSnapshotsForSlot(oorDigit.slot.id, state.language),
-      });
-      intakeHistory = clarification.history;
-      const pendingSave = await persistQuestionState({
-        sessionId,
-        firmId,
-        channel,
-        senderId,
-        engineState: state,
-        intakeExchanges: intakeHistory,
-        followUpCount: priorFollowUpCount,
-      });
-      if (!pendingSave.ok) {
-        console.error('[channel-intake] clarification not sent because session persistence failed');
-        return {
-          persisted: false,
-          reason: `session_persist_failed: ${pendingSave.error}`,
-          followUpSent: false,
-        };
-      }
-      sessionId = pendingSave.sessionId;
-      const sendResult = await sendChannelMessage({
-        firmId,
-        sender,
-        text: clarificationText,
-        authoritativeInboundAt,
-      });
-      intakeHistory = settleOutboundQuestion(intakeHistory, {
-        eventId: clarification.eventId,
-        sent: sendResult.sent,
-        deliveryUnknown: sendResult.deliveryUnknown,
-        providerMessageId: sendResult.messageId,
-        failureReason: sendResult.reason,
-      });
-      // Persist state UNCHANGED so the next inbound resumes from the
-      // same getNextStep slot. follow_up_count is NOT incremented —
-      // the lead's typo shouldn't count against the contact-capture
-      // budget or the discovery budget.
-      await persistSettledQuestion({
-        sessionId,
-        engineState: state,
-        intakeExchanges: intakeHistory,
-        followUpCount: priorFollowUpCount,
-      });
-      console.log(
-        `[channel-intake] out-of-range digit "${oorDigit.digit}" for slot=${oorDigit.slot.id} (max=${oorDigit.maxOption}); sent clarification`,
+      return sendClarification(
+        buildOutOfRangeDigitReply(oorDigit), oorDigit.slot.id,
+        `out_of_range_digit: ${oorDigit.digit} for slot ${oorDigit.slot.id}`, true,
       );
-      return {
-        persisted: false,
-        reason: `out_of_range_digit: ${oorDigit.digit} for slot ${oorDigit.slot.id}`,
-        followUpSent: sendResult.sent,
-      };
     }
   }
 
@@ -794,7 +813,7 @@ export async function processChannelInbound(
           language: state.language ?? 'en',
         });
         if (isValidOptionValue(mapped.value, pendingSlot.options)) {
-          state = applyAnswer(state, pendingId, mapped.value as string);
+          state = applyWrittenAnswer(state, pendingId, trimmed, mapped.value as string);
           state = { ...state, pendingAskedSlotId: null };
           pendingLlmMapped = true;
         }
@@ -863,6 +882,16 @@ export async function processChannelInbound(
   // clicks and every reply adapter route through it), where the answer
   // is user-grounded by construction. The engine-side reroute functions
   // also carry their own provenance gate as defense in depth.
+
+  // A natural reply can establish a new matter or identify the missing
+  // document or date even when it matches none of the numbered choices.
+  if (writtenChoice && pendingQuestion && state.pendingAskedSlotId === pendingQuestion.id &&
+      !pendingConsumed && !nameCaptureConsumed && !pendingLlmMapped) {
+    const candidate = applyWrittenAnswer(state, pendingQuestion.id, trimmed);
+    if (candidate.matter_type !== state.matter_type || selectWrittenFollowUp(candidate)) {
+      state = { ...candidate, pendingAskedSlotId: null };
+    }
+  }
 
   // ── Build the brief ─────────────────────────────────────────────────────
   // Resolve firm timezone so submitted_at renders firm-local, matching the
@@ -1377,7 +1406,7 @@ export async function processChannelInbound(
         // attempts to honor it did not work for this particular reply.
         const clarifier =
           i18n.widget_strings?.didnt_catch ||
-          "Thanks, I want to make sure I record this correctly. Could you reply with the number of the option that fits best?";
+          "Thanks, I want to make sure I record this correctly. Could you say a little more, or reply “Something else” to write a different answer?";
         questionText = `${clarifier}\n\n${questionText}`;
       }
       // WP-3c (DR-121): the prior turn named more than one option for a
@@ -1622,6 +1651,7 @@ export async function finalizeChannelLead(
     slots: state.slots,
     slot_meta: state.slot_meta,
     slot_evidence: state.slot_evidence,
+    written_answers: state.written_answers,
     channel,
     multi_turn: wasMultiTurn,
     follow_up_count: totalFollowUps,

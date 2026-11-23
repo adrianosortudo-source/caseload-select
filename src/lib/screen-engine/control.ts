@@ -12,7 +12,8 @@ import {
   rerouteFromEstatesGeneral,
   classificationForMatterType,
 } from './extractor';
-import { deriveAdvisorySpecificTask } from './slotEvidence';
+import { deriveAdvisorySpecificTask, runEvidencePass } from './slotEvidence';
+import { interpretWrittenAnswer, refineWrittenRoute, selectWrittenFollowUp } from './written-answers';
 import { buildClosingMessage } from './closing';
 import { getOptionDisplayLabel } from './i18n/display';
 import { buildFamilyRecapParagraphs, type FamilyRecapFact } from './family-recap';
@@ -1252,6 +1253,8 @@ export function getNextStep(state: EngineState): NextStep {
   }
 
   if (state.matter_type === 'unknown') {
+    const clarification = selectWrittenFollowUp(state);
+    if (clarification) return { type: 'continue', slot: clarification };
     // Structured clarify step (DR-112, extends DR-071). `reason` and
     // `options` let a surface render a warm, correctly-acknowledged menu;
     // `message` is kept verbatim for any caller that only reads it (the
@@ -1294,6 +1297,14 @@ export function applyAnswer(state: EngineState, slotId: string, value: string): 
   };
 
   const slot = SLOT_REGISTRY.find(s => s.id === slotId);
+  if (slot?.input_type === 'free_text' && slot.tier !== 'contact') {
+    updated = runEvidencePass(value, refineWrittenRoute(updated, value));
+  }
+  if (updated.written_answers?.[slotId]) {
+    const answers = { ...updated.written_answers };
+    delete answers[slotId];
+    updated.written_answers = answers;
+  }
   if (slot && !updated.answeredQuestionGroups.includes(slot.question_group)) {
     updated = { ...updated, answeredQuestionGroups: [...updated.answeredQuestionGroups, slot.question_group] };
   }
@@ -1393,6 +1404,41 @@ export function applyAnswer(state: EngineState, slotId: string, value: string): 
   };
 
   return updated;
+}
+
+/** Record a free response without treating an unmatched opinion as a canonical fact. */
+export function applyWrittenAnswer(
+  state: EngineState, slotId: string, text: string, mappedOptionValue?: string,
+): EngineState {
+  const answer = text.trim();
+  const slot = SLOT_REGISTRY.find(s => s.id === slotId);
+  if (!answer || (slotId !== '__clarify__' && (!slot || slot.tier === 'contact'))) return state;
+  if (slot?.input_type === 'free_text') return applyAnswer(state, slotId, answer);
+  const lastId = state.questionHistory[state.questionHistory.length - 1];
+  const isClarification = slotId === '__clarify__';
+  if ((lastId === slotId || (isClarification && lastId?.startsWith('__clarify__'))) &&
+      state.written_answers?.[lastId] === answer) return state;
+
+  // The unclassified path allows two independent clarifications. Keep both
+  // statements, even when neither identifies a supported matter.
+  const clarifications = isClarification
+    ? Object.keys(state.written_answers ?? {}).filter(id => id.startsWith('__clarify__')).length : 0;
+  const answerId = clarifications ? `__clarify__${clarifications + 1}` : slotId;
+  const interpreted = interpretWrittenAnswer(state, answerId, answer, slot, mappedOptionValue);
+  let updated = interpreted.state;
+  if (interpreted.value !== undefined) {
+    updated = applyAnswer(updated, slotId, interpreted.value);
+  } else {
+    // An unanswered factual question remains open in the brief, but do not
+    // offer the identical menu again after the visitor explained themselves.
+    updated = { ...updated, questionHistory: [...updated.questionHistory, answerId] };
+  }
+  updated = runEvidencePass(answer, { ...updated, written_answers: interpreted.state.written_answers });
+  const band = computeBand(updated);
+  return {
+    ...updated, coreCompleteness: computeCoreCompleteness(updated),
+    band: band.band, confidence: band.confidence, currentGap: getDecisionGap(updated),
+  };
 }
 
 export function markInsightShown(state: EngineState): EngineState {

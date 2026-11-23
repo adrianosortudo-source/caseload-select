@@ -125,7 +125,22 @@ export const IN_SCOPE_MATTER_TYPES: readonly InScopeMatterType[] =
 /** Concrete `applies_to` array for the universal contact slots. */
 const CONTACT_APPLIES_TO: MatterType[] = [...ALL_MATTER_TYPES];
 
+// The selector offers these only when a visitor's words raise the specific question.
+// An empty applies_to keeps them out of automatic scoring and extraction packs.
+const writtenFollowUps: SlotDefinition[] = [
+  { id: 'written_agreement', question: 'Is there a written agreement in place?' },
+  { id: 'written_order', question: 'Is there a court order in place?' },
+  { id: 'written_document', question: 'What document have you been asked to sign or review?' },
+  { id: 'written_timing', question: 'Is there a date the lawyer should take into account?' },
+  { id: 'written_goal', question: 'What would you like the lawyer to help you do first?' },
+].map(({ id, question }) => ({
+  id, question, input_type: 'free_text', applies_to: [], tier: 'qualification',
+  question_group: 'generic', resolves: 'none', decision_value: 0,
+  abstraction_level: 'concrete', required: false, priority: 0, llm_extractable: false,
+}));
+
 export const SLOT_REGISTRY: SlotDefinition[] = [
+  ...writtenFollowUps,
 
   // ─── CONTACT ──────────────────────────────────────────────────────────────
 

@@ -164,14 +164,13 @@ describe("Meta family conversation", () => {
     await waitFor(() => expect(views.at(-1)?.currentQuestion?.id).toBe("family_existing_order"));
     vi.mocked(fetch).mockResolvedValueOnce({ ok: true, json: async () => ({ mode: "live", extracted: {} }) } as Response);
     send("There is no court order that I know of.");
-    await screen.findByText(/That answer did not resolve this question/);
+    await waitFor(() => expect(views.at(-1)?.currentQuestion?.id).toBe("written_agreement"));
+    expect(views.at(-1)?.report?.resolved_facts_v2.some((fact) => fact.value === "There is no court order that I know of.")).toBe(true);
     await waitFor(() => expect((screen.getByLabelText("Your fictional message") as HTMLTextAreaElement).disabled).toBe(false));
     vi.mocked(fetch).mockResolvedValueOnce({ ok: true, json: async () => ({ mode: "live", extracted: { family_existing_order: "Neither" } }) } as Response);
     send("There is no written agreement either.");
     await waitFor(() => expect(views.at(-1)?.state?.slots.family_existing_order).toBe("Neither"));
-    const body = JSON.parse(vi.mocked(fetch).mock.calls[2][1]!.body as string);
-    expect(body.description).toContain("There is no court order that I know of.");
-    expect(body.description).toContain("There is no written agreement either.");
+    expect(views.at(-1)?.report?.resolved_facts_v2.some((fact) => fact.value === "There is no written agreement either.")).toBe(true);
     expect(views.at(-1)?.currentQuestion?.id).not.toBe("family_existing_order");
     expect(views.at(-1)?.state?.input).toBe(inquiry);
     expect(vi.mocked(fetch).mock.calls.every(([, init]) => !String(init?.body).includes("alex.morgan"))).toBe(true);

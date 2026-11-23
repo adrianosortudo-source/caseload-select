@@ -95,6 +95,36 @@ describe("ScreenEnginePublicWidget clarify menu render (DR-112)", () => {
     expect(screen.queryByText("We can get that arranged.")).toBeNull();
   });
 
+  it("submits a live widget's written reply and follow-up in the lawyer's rendered brief", async () => {
+    const submissions: { brief_html: string; slot_answers: { written_answers: Record<string, string> } }[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (url, init) => {
+      if (url === "/api/example-submit") submissions.push(JSON.parse(init.body));
+      return { ok: true, json: async () => ({ mode: "disabled", extracted: {}, persisted: true }) };
+    }));
+    render(<ScreenEnginePublicWidget firmId="test-firm" firmName="Example practice" submitEndpoint="/api/example-submit" />);
+    await submitKickoff("I need legal help with my business.");
+    await screen.findByRole("button", { name: /Something else/i });
+    const words = "I have an offer that I want reviewed.";
+    await submitOtherFreeText(words);
+    const date = await screen.findByRole("textbox", { name: "Is there a date the lawyer should take into account?" });
+    fireEvent.change(date, { target: { value: "Next Tuesday." } });
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    for (let turn = 0; turn < 8; turn += 1) {
+      const skip = screen.queryByRole("button", { name: "Skip this question" });
+      if (!skip) break;
+      fireEvent.click(skip);
+    }
+    const contact = screen.queryByRole("button", { name: /Share my contact details/i });
+    if (contact) fireEvent.click(contact);
+    fireEvent.change(await screen.findByRole("textbox", { name: "Full name" }), { target: { value: "Alex Example" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "Email" }), { target: { value: "alex@example.com" } });
+    fireEvent.click(screen.getByRole("button", { name: "Submit matter review" }));
+    await waitFor(() => expect(submissions).toHaveLength(1));
+    expect(Object.values(submissions[0].slot_answers.written_answers)).toContain(words);
+    expect(submissions[0].brief_html).toContain(words);
+    expect(submissions[0].brief_html).toContain("Next Tuesday.");
+  });
+
   it("Back after a chip tap returns to the clarify menu, not to kickoff", async () => {
     renderWidget();
     await submitKickoff(META_REQUEST);
@@ -158,9 +188,6 @@ describe("ScreenEnginePublicWidget clarify menu render (DR-112)", () => {
     await submitOtherFreeText(UNCLASSIFIABLE);
     await waitFor(() => expect(screen.queryByText("Even a topic works.")).not.toBeNull());
 
-    // Second free-text submission is an unconditional fallback in
-    // submitClarify (early-returns before re-running the engine), so
-    // there is no classification-drift risk on this call either.
     await submitOtherFreeText(UNCLASSIFIABLE);
 
     await waitFor(() =>

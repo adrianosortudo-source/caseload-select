@@ -27,6 +27,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
 import { isCronAuthorized } from '@/lib/cron-auth';
 import { initialiseState } from '@/lib/screen-engine/extractor';
+import { applyWrittenAnswer } from '@/lib/screen-engine/control';
 import { runEvidencePass } from '@/lib/screen-engine/slotEvidence';
 import { mergeLlmResults } from '@/lib/screen-engine/llm/extractor';
 import { buildReport } from '@/lib/screen-engine/report';
@@ -127,6 +128,9 @@ export async function POST(
       recording_url?: string | null;
     };
     channel?: string;
+    slots?: Record<string, string | null>;
+    written_answers?: Record<string, string>;
+    questionHistory?: string[];
   };
   const callerPhone = sa.voice_meta?.caller_phone ?? null;
   const callerName = sa.voice_meta?.caller_name ?? null;
@@ -168,6 +172,19 @@ export async function POST(
     } catch (err) {
       console.warn('[reclassify] llmExtractServer failed:', err);
     }
+  }
+
+  // A transcript may omit the widget's subsequent answers. Replay the
+  // saved written turns before rendering the brief again.
+  const history = Array.isArray(sa.questionHistory) ? sa.questionHistory : [];
+  const asked = new Set([...history, ...Object.keys(sa.written_answers ?? {})]);
+  for (const id of asked) {
+    if (typeof id !== 'string') continue;
+    const saved = sa.slots?.[id];
+    const words = sa.written_answers?.[id] ?? (id.startsWith('written_') ? saved : undefined);
+    if (typeof words !== 'string') continue;
+    const questionId = id.startsWith('__clarify__') ? '__clarify__' : id;
+    state = applyWrittenAnswer(state, questionId, words, saved ?? undefined);
   }
 
   // ── Build the new report + brief ───────────────────────────────────────

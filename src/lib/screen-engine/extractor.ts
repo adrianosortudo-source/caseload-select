@@ -7,7 +7,12 @@ const lower = (s: string) => s.toLowerCase();
 
 function matchesAny(text: string, patterns: string[]): boolean {
   const t = lower(text);
-  return patterns.some(p => t.includes(lower(p)));
+  return patterns.some(p => {
+    // A courtesy ('please'), release or parent is not a property enquiry.
+    if (p === 'lease') return /\bleases?\b/i.test(t);
+    if (p === 'rent') return /\brent(?:s|ed|ing)?\b/i.test(t);
+    return t.includes(lower(p));
+  });
 }
 
 // ─── Intent routing signals ────────────────────────────────────────────────
@@ -504,7 +509,7 @@ const EMPLOYMENT_SIGNALS = [
   'employment standards', 'esa claim', 'human rights at work',
   'workplace harassment', 'workplace discrimination',
   'constructive dismissal', 'wsib claim', 'wsib injury',
-  'unpaid wages', 'overtime not paid', 'overtime pay',
+  'unpaid wages', 'unpaid overtime', 'overtime not paid', 'overtime pay',
   'fired for no reason', 'let go from my job', 'laid off',
   'lost my job', 'i lost my job', 'just lost my job',
 ];
@@ -667,7 +672,7 @@ const EMPLOYMENT_HARASSMENT_SIGNALS = [
 ];
 
 const EMPLOYMENT_WAGES_SIGNALS = [
-  'unpaid wages', 'overtime not paid', 'overtime pay', 'wages owed',
+  'unpaid wages', 'unpaid overtime', 'overtime not paid', 'overtime pay', 'wages owed',
   'esa claim', 'employment standards', 'minimum wage', 'vacation pay owed',
   'not paying me', 'they owe me', 'paycheck bounced', 'final pay',
 ];
@@ -686,7 +691,10 @@ function classifyEmploymentSubType(input: string): MatterType {
   if (hit(EMPLOYMENT_TERMINATION_SIGNALS)) return 'wrongful_dismissal';
   if (hit(EMPLOYMENT_SEVERANCE_SIGNALS)) return 'severance_review';
   if (hit(EMPLOYMENT_HARASSMENT_SIGNALS)) return 'harassment_complaint';
-  if (hit(EMPLOYMENT_WAGES_SIGNALS)) return 'wage_recovery';
+  if (hit(EMPLOYMENT_WAGES_SIGNALS)) {
+    const employerSide = /\b(?:my|our) (?:former |current )?(?:employees?|workers?|staff)\b|\b(?:we|my company|our company) owe\b/i.test(input);
+    return employerSide ? 'employment_general' : 'wage_recovery';
+  }
   if (hit(EMPLOYMENT_CONTRACT_SIGNALS)) return 'employment_contract_review';
   return 'employment_general';
 }
@@ -1180,7 +1188,7 @@ function stripBotLinesForClassification(input: string): string {
 
 // ─── Main classifier ───────────────────────────────────────────────────────
 
-export function classify(input: string): {
+export function classify(input: string, selectedArea?: PracticeArea): {
   intent_family: IntentFamily;
   practice_area: PracticeArea;
   matter_type: MatterType;
@@ -1216,7 +1224,9 @@ export function classify(input: string): {
   // consideration; for now we treat both as in-scope universally because the
   // engine's current consumer (DRG and similar Toronto solo / 2-lawyer firms)
   // routinely handles both.
-  const inScopeArea = detectInScopeArea(input);
+  const detectedArea = detectInScopeArea(input);
+  const inScopeArea = detectedArea ?? ((selectedArea === 'employment' || selectedArea === 'estates')
+    ? { area: selectedArea } : null);
   if (inScopeArea) {
     if (inScopeArea.area === 'employment') {
       const subType = classifyEmploymentSubType(input);

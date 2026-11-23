@@ -49,6 +49,31 @@ describe("ScreenDemoWidget", () => {
     expect(screen.queryByText(/contact details/i)).toBeNull();
   });
 
+  it.each([
+    ["I was asked to sign something by Friday.", "What document have you been asked to sign or review?", "It is an offer letter."],
+    ["I have a draft offer that I want reviewed.", "Is there a date the lawyer should take into account?", "Next Tuesday."],
+  ])("uses a written reply to choose the next question and includes both answers in the visible brief: %s", async (reply, followUp, detail) => {
+    render(<ScreenDemoWidget />);
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "I need legal help with my business." } });
+    fireEvent.click(screen.getByRole("button", { name: "Run fictional Screen" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Something else" }));
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: reply } });
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    const detailInput = await screen.findByRole("textbox", { name: followUp });
+    fireEvent.change(detailInput, { target: { value: detail } });
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    for (let turn = 0; turn < 12; turn += 1) {
+      const skip = screen.queryByRole("button", { name: "Skip this question" });
+      if (!skip) break;
+      fireEvent.click(skip);
+    }
+    fireEvent.click(await screen.findByRole("button", { name: "See what the lawyer receives" }));
+    expect(screen.getByRole("heading", { name: "What the lawyer receives" })).toBeTruthy();
+    expect(screen.getAllByText(reply, { exact: false }).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(detail, { exact: false }).length).toBeGreaterThan(0);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
   it("continues reporting embedded height after the question shell becomes the lawyer report", async () => {
     const originalParent = window.parent;
     const postMessage = vi.fn();
@@ -81,9 +106,11 @@ describe("ScreenDemoWidget", () => {
 
         const main = document.querySelector("main");
         const previousQuestion = main?.querySelector("h2")?.textContent;
-        const option = main?.querySelector<HTMLButtonElement>("button");
-        expect(option).toBeTruthy();
-        fireEvent.click(option!);
+        if (main?.querySelector("textarea")) {
+          fireEvent.click(screen.getByRole("button", { name: "Skip this question" }));
+        } else {
+          fireEvent.click(main!.querySelector<HTMLButtonElement>("button")!);
+        }
         await waitFor(() =>
           expect(document.querySelector("main h2")?.textContent).not.toBe(
             previousQuestion,

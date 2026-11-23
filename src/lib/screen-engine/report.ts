@@ -960,6 +960,11 @@ export const SLOT_LABELS: Record<string, string> = {
   will_status_probate: 'Will status',
   estate_value_band: 'Estate value',
   executor_role: 'Executor role',
+  written_agreement: 'Written agreement in place',
+  written_order: 'Court order in place',
+  written_document: 'Document to sign or review',
+  written_timing: 'Timing the lawyer should know',
+  written_goal: 'What the person wants help with',
   estate_dispute_type: 'Dispute type',
   estate_dispute_role: 'Client role',
   estate_court_status: 'Court status',
@@ -981,23 +986,33 @@ function isReportableSlot(id: string): boolean {
   return !NON_REPORTABLE_ROUTING_SLOTS.has(id);
 }
 
+function writtenFacts(state: EngineState): ResolvedFact[] {
+  return Object.entries(state.written_answers ?? {}).map(([id, value]) => {
+    const question = SLOT_REGISTRY.find(slot => slot.id === id)?.question;
+    const round = id.slice('__clarify__'.length);
+    const label = question ? `Answer to “${question}”` : `Enquiry clarification${round ? ' ' + round : ''}`;
+    return { label, value, source: 'explicit_from_caller' };
+  });
+}
+
 function buildResolvedFacts(state: EngineState): Record<string, string> {
   const facts: Record<string, string> = {};
   for (const [id, val] of Object.entries(state.slots)) {
     if (!val) continue;
     if (!isReportableSlot(id)) continue;
-    if (!isConfirmed(state, id)) continue;
+    if (!isConfirmed(state, id) || state.written_answers?.[id]) continue;
     const label = SLOT_LABELS[id] ?? id;
     facts[label] = val;
   }
+  for (const { label, value } of writtenFacts(state)) facts[label] = value;
   return facts;
 }
 
 function buildResolvedFactsV2(state: EngineState): ResolvedFact[] {
-  const out: ResolvedFact[] = [];
+  const out = writtenFacts(state);
   for (const [id, val] of Object.entries(state.slots)) {
     if (!val) continue;
-    if (!isReportableSlot(id)) continue;
+    if (!isReportableSlot(id) || state.written_answers?.[id]) continue;
     const meta = state.slot_meta[id];
     if (!meta) continue;
     const label = SLOT_LABELS[id] ?? id;

@@ -11,6 +11,7 @@ import { computeBand } from "@/lib/screen-engine/band";
 import { computeCoreCompleteness, getDecisionGap } from "@/lib/screen-engine/selector";
 import {
   applyAnswer,
+  applyWrittenAnswer,
   applyClarifyChoice,
   buildLeadSummary,
   getNextStep,
@@ -320,20 +321,13 @@ export function ScreenEnginePublicWidget({
   const demoReplyHistory = useRef<string[]>([]);
   const demoUserEvidence = useRef<string[]>([]);
   const conversationBusy = useRef(false);
+  const writtenChoiceFor = useRef<string | null>(null);
   const [conversationVersion, setConversationVersion] = useState(0);
   const [conversation, setConversation] = useState<DemoConversationMessage[]>([
     { id: "welcome", role: "assistant", text: "Tell us what happened." },
   ]);
   useEffect(() => () => { extractionRun.current += 1; }, []);
-  // Clarify state (DR-071, 2026-06-11). When the engine cannot classify
-  // the lead's input (matter_type stays 'unknown' after the LLM merge,
-  // per the DR-070 no-force-fit rule), `getNextStep` returns
-  // `{ type: 'clarify', message }`. The widget renders a free-text card
-  // asking for more context, increments the counter, and re-runs `start`
-  // with the augmented text. After two unsuccessful clarify rounds the
-  // widget routes to contact capture with a calm "we can still get this
-  // to the team" message rather than looping. `clarifyFallback` flips
-  // the contact-capture heading to the softer copy.
+  // Give an unclassified enquiry two clarification attempts before contact capture.
   const [clarifyAttempts, setClarifyAttempts] = useState(0);
   const [clarifyFallback, setClarifyFallback] = useState(false);
   const [consentChecked, setConsentChecked] = useState(false);
@@ -462,15 +456,12 @@ export function ScreenEnginePublicWidget({
     await runStart(description);
   }
 
-  // Runs the engine pipeline against an arbitrary text. `start()` uses
-  // the kickoff description; the clarify handler concatenates the
-  // original description with the lead's clarification context and
-  // re-runs the pipeline. Same shape either way.
   async function runStart(rawText: string) {
     const text = rawText.trim();
     if (text.length < 10) return;
     demoReplyHistory.current = [];
     demoUserEvidence.current = [text];
+    writtenChoiceFor.current = null;
     setPendingDemoReview(false);
     setAnswerFeedback(null);
     setReadingAnswer(false);
@@ -535,32 +526,33 @@ export function ScreenEnginePublicWidget({
     }
   }
 
-  // Clarify handler (DR-071). Appends the lead's clarification context
-  // to the prior description and re-runs the engine. After two
-  // unsuccessful clarify rounds, routes to contact capture with the
-  // calm fallback copy: "We can still get this to the team."
   async function submitClarify(extra: string) {
-    const trimmed = extra.trim();
-    if (trimmed.length === 0) return;
-    const augmented = description ? `${description}\n\n${trimmed}` : trimmed;
-    setDescription(augmented);
-    const nextAttempts = clarifyAttempts + 1;
-    setClarifyAttempts(nextAttempts);
-
-    if (nextAttempts >= 2) {
-      // Two clarify rounds have been spent. Don't loop a third time;
-      // gracefully transition to contact capture so the lead lands in
-      // the triage queue and a lawyer scopes the matter on the call.
-      setClarifyFallback(true);
-      if (state) {
-        const cc = startContactCapture(state);
-        mutate(cc);
-        setStage("contact");
+    const text = extra.trim();
+    if (!state || isReading || !text) return;
+    const run = ++extractionRun.current;
+    const attempts = clarifyAttempts + 1;
+    setClarifyAttempts(attempts);
+    setHistory((items) => [...items, state]);
+    let updated = applyWrittenAnswer(state, "__clarify__", text);
+    if (updated.matter_type === "unknown" && policy.allowsExtraction) {
+      setIsReading(true);
+      try {
+        const result = await llmExtract(`${state.input}\n\n${text}`, updated);
+        if (run !== extractionRun.current) return;
+        if (result.mode === "live") updated = mergeLlmResults(updated, result.extracted);
+      } catch {
+        if (run !== extractionRun.current) return;
+      } finally {
+        if (run === extractionRun.current) setIsReading(false);
       }
+    }
+    if (attempts >= 2 && updated.matter_type === "unknown") {
+      setClarifyFallback(true);
+      mutate(startContactCapture(updated));
+      setStage("contact");
       return;
     }
-
-    await runStart(augmented);
+    mutate(updated);
   }
 
   function mutate(nextState: EngineState) {
@@ -576,7 +568,7 @@ export function ScreenEnginePublicWidget({
       demoUserEvidence.current = [...demoUserEvidence.current, reply];
     }
     setAnswerFeedback(null);
-    if (!metaWorkflow || !value.startsWith("other:")) {
+    if (!value.startsWith("other:")) {
       setHistory((items) => [...items, state]);
       mutate(policy.usesFixtureEngine ? answerDemoState(state, slotId, value) : applyAnswer(state, slotId, value));
       return;
@@ -585,58 +577,51 @@ export function ScreenEnginePublicWidget({
     if (!text) return;
     const asked = next?.slot;
     if (!asked || asked.id !== slotId) return;
+    const finishWritten = (updated: EngineState) => {
+      setHistory((items) => [...items, state]);
+      mutate(metaWorkflow ? groundFamilyOrderReplies(updated, demoUserEvidence.current) : updated);
+    };
+    const selectedWrittenAnswer = !metaWorkflow || writtenChoiceFor.current === slotId;
+    writtenChoiceFor.current = null;
     const matched = applyPendingSlotReply(text, { ...state, pendingAskedSlotId: slotId });
-    if (matched.slot_meta[slotId]?.source === "answered" && matched.slots[slotId] !== state.slots[slotId]) {
-      setHistory((items) => [...items, state]); mutate(matched); return;
+    if (matched.slot_meta[slotId]?.source === "answered" && !matched.pendingAskedSlotId) {
+      const canonical = matched.slots[slotId];
+      finishWritten(selectedWrittenAnswer
+        ? applyWrittenAnswer(state, slotId, text, canonical ?? undefined)
+        : matched);
+      return;
     }
-    if (asked.input_type === "free_text") {
-      setHistory((items) => [...items, state]); mutate(applyAnswer(state, slotId, text)); return;
-    }
-    if (!policy.allowsExtraction) {
-      setAnswerFeedback("Please choose the closest option, or switch to Live AI to answer in your own words."); return;
+    if (asked.input_type === "free_text" || !policy.allowsExtraction) {
+      finishWritten(applyWrittenAnswer(state, slotId, text));
+      return;
     }
     const run = ++extractionRun.current;
     setReadingAnswer(true); setIsReading(true); setExtraction({ status: "reading" });
     try {
-      const context = `${state.input}\n\n${demoReplyHistory.current.join("\n\n")}`;
+      const context = metaWorkflow
+        ? [state.input, ...demoReplyHistory.current].join("\n\n")
+        : [state.input, ...Object.values(state.written_answers ?? {}), text].join("\n\n");
       const result = await llmExtract(context, state, { pendingSlotId: slotId, reply: text });
       if (run !== extractionRun.current) return;
       if (result.mode !== "live" && !result.mapped_answer) {
         setExtraction({ status: "fallback", reason: result.reason });
-        setAnswerFeedback("AI could not read this answer. Please choose an option or try your answer again."); return;
+        finishWritten(applyWrittenAnswer(state, slotId, text));
+        return;
       }
       let updated = mergeLlmResults({ ...state, input: context }, result.extracted);
       // Keep the original inquiry intact while grounding this turn in its actual reply.
       updated = { ...updated, input: state.input };
       if (metaWorkflow) {
         updated = groundDemoConversationFacts(updated, text);
-        if (slotId === "family_existing_order") {
-          const prefix = `Question: ${asked.question}\nAnswer: `;
-          const recent = demoReplyHistory.current.slice(-2);
-          if (recent.length === 2 && recent.every((reply) => reply.startsWith(prefix))) {
-            updated = groundFamilyOrderReplies(updated, recent.map((reply) => reply.slice(prefix.length)));
-          }
-        }
       }
       const mapped = result.mapped_answer;
       const mappedAnswer = mapped?.slotId === slotId && asked.options?.some((option) => option.value === mapped.value);
-      if (mappedAnswer) updated = applyAnswer(updated, slotId, mapped!.value);
-      const captured = demoReviewFacts(updated).some((fact) => state.slots[fact.id] !== fact.value);
-      const directlyGrounded = updated.slot_meta[slotId]?.source === "explicit" && updated.slots[slotId] !== state.slots[slotId];
-      if (!captured && !mappedAnswer && !directlyGrounded) {
-        setExtraction({ status: "live" });
-        setAnswerFeedback("That answer did not resolve this question. Choose the closest option or add a little more detail."); return;
-      }
-      if (!metaWorkflow && !mappedAnswer && !directlyGrounded && updated.slots[slotId] && updated.slots[slotId] !== state.slots[slotId]) {
-        updated = { ...updated, pendingAskedSlotId: null, questionHistory: [...state.questionHistory, slotId] };
-      }
-      setHistory((items) => [...items, state]); mutate(updated);
-      if (metaWorkflow && !mappedAnswer && !directlyGrounded) setAnswerFeedback("That answer did not resolve this question. Choose the closest option or add a little more detail.");
-      setPendingDemoReview(!metaWorkflow && captured); setExtraction({ status: "live" });
+      finishWritten(applyWrittenAnswer(updated, slotId, text, mappedAnswer ? mapped!.value : undefined));
+      setExtraction({ status: "live" });
     } catch {
       if (run !== extractionRun.current) return;
       setExtraction({ status: "fallback", reason: "The answer could not be read." });
-      setAnswerFeedback("Please choose an option or try your answer again.");
+      finishWritten(applyWrittenAnswer(state, slotId, text));
     } finally {
       if (run === extractionRun.current) setIsReading(false);
     }
@@ -695,6 +680,7 @@ export function ScreenEnginePublicWidget({
         slots: finalState.slots,
         slot_meta: finalState.slot_meta,
         slot_evidence: finalState.slot_evidence,
+        written_answers: finalState.written_answers,
         raw: finalState.raw,
         intent_family: finalState.intent_family,
         dispute_family: finalState.dispute_family,
@@ -801,13 +787,23 @@ export function ScreenEnginePublicWidget({
       setConversation([{ id: "welcome", role: "assistant", text: "Edit your fictional inquiry. Earlier answers have been cleared." }]);
       setConversationVersion((version) => version + 1);
     }});
+    const requestWrittenAnswer = stage === "questions" && !awaitingContact && currentItem?.options?.length
+      ? () => {
+          writtenChoiceFor.current = currentItem.id;
+          setAnswerFeedback("Type your answer in your own words.");
+        } : undefined;
     return <DemoConversation key={conversationVersion} messages={conversation} actions={actions}
+      onRequestWrittenAnswer={requestWrittenAnswer}
       initialDraft={stage === "kickoff" ? description : ""} minChars={stage === "kickoff" ? 10 : 1}
       placeholder={stage === "kickoff" && familyOnly ? "I recently separated and need help agreeing on a parenting schedule. We live in Ontario." : "Type a fictional message"}
       disabled={isReading || awaitingContact || completed || Boolean(outOfScope)} actionsDisabled={isReading}
       status={isReading ? "Reading your message..." : answerFeedback}
       onSend={(text) => {
         if (conversationBusy.current) return;
+        if (requestWrittenAnswer && /^something else[.!]?$/i.test(text.trim())) {
+          requestWrittenAnswer();
+          return;
+        }
         conversationBusy.current = true;
         setConversation((items) => [...items, { id: `visitor:${crypto.randomUUID()}`, role: "visitor", text }]);
         void (async () => {
