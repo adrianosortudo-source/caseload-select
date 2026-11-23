@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en-CA">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#0d1520">
+  <title>The Screen | CaseLoad Select private preview</title>
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="referrer" content="no-referrer">
+  <meta name="description" content="Follow an enquiry from the first message through the Screen to the lawyer’s brief. Try a fictional enquiry and see the brief the Screen builds from your answers.">
+  <link rel="canonical" href="https://caseloadselect.ca/screen.html" />
+  <link rel="icon" href="/brand/logos/icon-light-transparent.png">
+  <meta property="og:title" content="The Screen | CaseLoad Select">
+  <meta property="og:description" content="Follow an enquiry from the first message through the Screen to the lawyer’s brief. Try a fictional enquiry and see the brief the Screen builds from your answers.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://caseloadselect.ca/screen.html">
+  <meta property="og:site_name" content="CaseLoad Select">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="The Screen | CaseLoad Select">
+  <meta name="twitter:description" content="Follow an enquiry from the first message through the Screen to the lawyer’s brief. Try a fictional enquiry and see the brief the Screen builds from your answers.">
+  <link rel="stylesheet" href="./website.css">
+  <link rel="stylesheet" href="./preview.css">
+</head>
+<body>
+<div data-site-header></div>
+<main id="main" class="full-page">
+  <section class="fp-hero"><div class="measure hero-layout">
+    <div><p class="kicker">ACTS / The Screen</p><h1>An enquiry becomes a lawyer’s <span class="last-word">brief<span class="terminal" aria-hidden="true"></span></span></h1>
+    <p class="hero-text">Someone calls, texts, or writes to your firm. The Screen brings their original request and follow-up answers together for the lawyer who will review it.</p>
+    <div class="hero-actions"><a class="fp-btn paper-btn" href="#journeys">Follow an enquiry</a><a class="text-link" href="#live-demo">Try the live demo</a></div></div>
+  </div></section>
+
+  <section id="journeys" class="section-block journey-section"><div class="measure">
+    <div class="section-heading"><div><p class="kicker">Enquiry journeys</p><h2>How does someone reach your firm?</h2></div><p>Choose a starting point. The screens show what the prospective consultee sees, which details carry over, and what reaches the lawyer.</p></div>
+    <div id="journey-controls"></div>
+    <div id="journey-strip"></div>
+    <div id="step-detail" class="step-detail"></div>
+    <noscript><p>Enable JavaScript to try an enquiry.</p></noscript>
+  </div></section>
+
+  <section class="section-block demo-section" id="live-demo" aria-labelledby="demo-heading"><span id="demo"></span><span id="example"></span><div class="measure" id="report">
+    <div class="section-heading"><div><p class="kicker">Live Screen demo</p><h2 id="demo-heading">Try an enquiry yourself.</h2></div><p>Try a fictional enquiry. See what the lawyer receives from your answers.</p></div>
+    <div id="demo-live">
+  <div class="preview-choices">
+    <div class="preview-pickers">
+      <div class="preview-picker"><label for="preview-area">Practice area</label>
+        <select id="preview-area" required aria-describedby="demo-scope"><option value="" disabled selected>Choose a practice area</option><option value="corporate">Business/corporate</option><option value="real_estate">Real estate</option><option value="employment">Employment</option><option value="estates">Wills/estates</option><option value="family">Family</option></select>
+      </div>
+      <div class="preview-picker"><label for="preview-example">Use an example</label><select id="preview-example" disabled><option value="">Choose an example…</option></select></div>
+      <button class="preview-reset" id="preview-reset" type="button" disabled>Start over</button>
+    </div>
+    <p id="demo-scope">The demo uses a few practice areas so you can try the follow-up questions and see the brief they produce. We configure your firm’s Screen around the matters you handle, the work you want to take on, and what your lawyers need to know before responding.</p>
+  </div>
+  <h3>Your client’s experience</h3>
+  <fieldset class="preview-channels">
+    <legend>Enquiry channel</legend>
+    <label><input type="radio" name="channel" value="website" checked><span>Website widget</span></label>
+    <label><input type="radio" name="channel" value="whatsapp"><span>WhatsApp</span></label>
+    <label><input type="radio" name="channel" value="sms"><span>SMS</span></label>
+    <label><input type="radio" name="channel" value="instagram"><span>Instagram Direct Messages</span></label>
+    <label><input type="radio" name="channel" value="facebook"><span>Facebook Messenger</span></label>
+  </fieldset>
+  <p id="preview-disclosure">Use fictional details. Google Gemini reads your enquiry and written follow-up answers to prepare the brief. <a href="https://caseloadselect.ca/privacy.html">Privacy policy</a></p>
+  <p id="preview-prompt">Choose a practice area to start.</p>
+  <div class="preview-workspace" id="preview-workspace" hidden>
+    <section id="preview-sms" class="preview-phone" aria-labelledby="preview-phone-heading" hidden>
+      <h4 id="preview-phone-heading">Text messages</h4>
+      <p class="preview-number">(416) 555-0148</p>
+      <div class="preview-messages" id="preview-messages" aria-live="polite"></div>
+      <form id="preview-send"><label for="preview-text">Your text to the firm</label>
+        <textarea id="preview-text" rows="3" maxlength="16000" required></textarea>
+        <button class="fp-btn" type="submit">Send text</button>
+      </form>
+    </section>
+    <div id="preview-widget-host" class="preview-widget-host" hidden></div>
+  </div>
+  <section id="preview-report" aria-labelledby="preview-report-heading" hidden>
+    <h3 id="preview-report-heading">What your firm receives</h3>
+    <p>When someone completes the Screen, your firm receives an email with a link to the full brief.</p>
+    <div id="preview-report-host"></div>
+  </section>
+</div>
+  </div></section>
+
+  <section class="section-block boundary-section"><div class="measure boundary-layout"><div><p class="kicker">Responsibility for the review</p><h2>The Screen prioritizes attention. The lawyer decides.</h2></div><dl class="scope-list">
+    <div><dt>What the Screen prepares</dt><dd>The original request, the source of each answer, the reason a detail needs attention, and questions for the callback.</dd></div>
+    <div><dt>What the lawyer decides</dt><dd>The lawyer checks conflicts, confirms the facts, considers capacity and decides whether and how the firm will respond.</dd></div>
+    <div><dt>What guides the review</dt><dd>Your firm defines the services, clients, and working conditions it wants to attract. <a href="https://caseloadselect.ca/tools/best-cases-profile.html">Define your Best Cases Profile</a>.</dd></div>
+  </dl></div></section>
+
+  <!-- FAQ-STANDARD:BEGIN (generated from content/faqs.json) -->
+  <section id="questions" class="section-block faq-section"><div class="measure faq-layout"><div><p class="kicker">Questions about the Screen</p><h2>Before the callback.</h2></div><div class="faq-list">
+    <details><summary>Can a firm keep its existing contact form?</summary><p>The contact-form journey shows how a firm can reply by email with a link to the Screen. The name, contact details, and original message appear in the follow-up. The handoff depends on how the firm’s form and replies are connected.</p></details>
+    <details><summary>What if someone calls instead of writing?</summary><p>The phone journey shows two routes. The prospective consultee can answer the AI intake assistant by voice, or the firm can send a text link after a missed call. In the second route, the person describes the matter after opening the link.</p></details>
+    <details><summary>What happens when information is missing or unclear?</summary><p>A missing answer stays open. An ambiguous answer becomes a question for the lawyer to confirm. A failed retrieval is recorded as a technical issue and does not trigger a rejection.</p></details>
+    <details><summary>What goes into the complete report?</summary><p>The report depends on the practice area and the information supplied. It can include the submitted facts, their sources, points that need attention, and questions for review. Family enquiries use an intake-only report.</p></details>
+    <details><summary>Who decides whether to offer a consultation?</summary><p>The lawyer reviews the enquiry, checks conflicts and capacity, and decides how the firm responds. Submitting information does not establish representation.</p></details>
+  </div></div></section>
+  <!-- FAQ-STANDARD:END -->
+
+  <section class="fp-close"><div class="measure close-layout"><div><p class="kicker">Your firm’s process</p><h2>What reaches your lawyer today?</h2><p>Review how your firm handles first contact, missing information, and the handoff to a lawyer. The exercise asks for no client or matter details.</p></div><div class="close-actions"><a class="fp-btn paper-btn" href="https://caseloadselect.ca/tools/intake-handoff-review.html">Review your handoff</a><a class="text-link" href="https://caseloadselect.ca/book-a-meeting.html">Book a conversation</a></div></div></section>
+</main>
+<div data-site-footer></div>
+<script src="./website.js" defer></script>
+<script src="./preview.js" defer></script>
+</body>
+</html>

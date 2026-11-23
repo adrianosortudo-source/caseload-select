@@ -41,7 +41,8 @@ import {
   clampAxis,
 } from '@/lib/intake-v2-derive';
 import { notifyLawyersOfNewLead } from '@/lib/lead-notify';
-import { initialiseState } from '@/lib/screen-engine/extractor';
+import { initialiseState, applySelectedPracticeArea } from '@/lib/screen-engine/extractor';
+import { configureFirmPracticeAreas, groundFamilyConversationFacts } from '@/lib/screen-engine/family';
 import { runEvidencePass } from '@/lib/screen-engine/slotEvidence';
 import { mergeLlmResults } from '@/lib/screen-engine/llm/extractor';
 import { buildReport } from '@/lib/screen-engine/report';
@@ -214,6 +215,8 @@ export type ChannelSender = MessengerSender | InstagramSender | WhatsAppSender;
 
 export interface ProcessChannelInboundArgs {
   firmId: string;
+  /** An area explicitly selected for this session, when supplied by the entry point. */
+  practiceArea?: EngineState['practice_area'];
   text: string;
   sender: ChannelSender;
   /** Authoritative provider event time supplied by the verified webhook. */
@@ -379,6 +382,67 @@ function seedSlots(state: EngineState, sender: ChannelSender): EngineState {
   return s;
 }
 
+// External effects are injected together so a fictional session can use the
+// same decisions, prompts and AI calls without writing to a firm's systems.
+async function resolveChannelFirmTimezone(
+  firmId: string,
+  channel: MetaChannel,
+  llmMode: 'live' | 'disabled' | 'error' | 'degraded' | null,
+) {
+  // Resolve firm timezone so submitted_at renders firm-local, matching the
+  // voice + reclassify paths (#140). Best effort: missing firm/location falls
+  // back to America/Toronto via resolveFirmTimezone(null).
+  const { data: firmRow } = await supabase
+    .from('intake_firms')
+    .select('name, location, gemini_disabled_alert_sent_at')
+    .eq('id', firmId)
+    .maybeSingle();
+  const firmTimezone = resolveFirmTimezone({ location: firmRow?.location ?? null });
+
+  // #128 (global): GEMINI_API_KEY missing/invalid disables LLM extraction on
+  // EVERY channel, not just voice. Alert the operator from the Meta pipeline
+  // too, throttled per firm via the shared gemini_disabled_alert_sent_at column.
+  // Awaited (best-effort) because this already runs inside the receiver's
+  // waitUntil; a floating promise could be cut off when processing returns.
+  if (
+    llmMode === 'disabled' &&
+    shouldAlertLlmDisabled(firmRow?.gemini_disabled_alert_sent_at ?? null)
+  ) {
+    const llmAlertStamp = new Date().toISOString();
+    console.error(
+      `[channel-intake][llm-disabled] GEMINI extraction disabled firm=${firmId} channel=${channel}`,
+    );
+    try {
+      const sendResult = await notifyOperatorOfLlmDisabled({
+        firmId,
+        firmName: firmRow?.name ?? null,
+        mode: 'disabled',
+        channel,
+        callId: null,
+        occurredAtIso: llmAlertStamp,
+      });
+      if (sendResult.email === 'sent') {
+        await supabase
+          .from('intake_firms')
+          .update({ gemini_disabled_alert_sent_at: llmAlertStamp })
+          .eq('id', firmId);
+      }
+    } catch (err) {
+      console.error('[channel-intake] notifyOperatorOfLlmDisabled failed:', err);
+    }
+  }
+
+  return firmTimezone;
+}
+
+const operationalChannelIO = {
+  loadOpenChannelSession, loadRecentFinalizedSession, persistQuestionState, persistSettledQuestion,
+  updateChannelSession, finalizeChannelSession, persistUnconfirmedInquiry, recordInboundConversationEvent,
+  sendChannelMessage, resolveChannelFirmTimezone, finalizeChannelLead, llmExtractServer, llmMapOptionReply,
+};
+
+export type ChannelIntakeIO = typeof operationalChannelIO;
+
 // ── Main processor ──────────────────────────────────────────────────────
 
 /**
@@ -391,6 +455,7 @@ function seedSlots(state: EngineState, sender: ChannelSender): EngineState {
  */
 export async function processChannelInbound(
   args: ProcessChannelInboundArgs,
+  io: ChannelIntakeIO = operationalChannelIO,
 ): Promise<ProcessChannelInboundResult> {
   const { firmId, text, sender } = args;
   const channel = sender.channel;
@@ -407,7 +472,7 @@ export async function processChannelInbound(
   // lead is mid-conversation. Restore engine state, run the new turn
   // through the slot-extraction layers (evidence + LLM), and KEEP the
   // turn-1 classification (matter_type, practice_area, intent_family).
-  const existing = await loadOpenChannelSession({ firmId, channel, senderId });
+  const existing = await io.loadOpenChannelSession({ firmId, channel, senderId });
 
   let state: EngineState;
   let priorFollowUpCount = 0;
@@ -430,6 +495,11 @@ export async function processChannelInbound(
   } else {
     // Fresh first turn — regex classification + raw signals.
     state = initialiseState(trimmed);
+    if (args.practiceArea) {
+      state = configureFirmPracticeAreas(state, [args.practiceArea]);
+      state = applySelectedPracticeArea(state, args.practiceArea);
+      state = groundFamilyConversationFacts(state, trimmed);
+    }
     state = { ...state, channel };
     state = seedSlots(state, sender);
 
@@ -447,7 +517,7 @@ export async function processChannelInbound(
     // Only "unknown" replies — questions, thank-yous, status pings —
     // route through the secretary path.
     if (state.matter_type === 'unknown') {
-      const recentFinalized = await loadRecentFinalizedSession({
+      const recentFinalized = await io.loadRecentFinalizedSession({
         firmId,
         channel,
         senderId,
@@ -469,7 +539,7 @@ export async function processChannelInbound(
           : buildPostFinalizationFollowUpMessage(recentFinalized.engine_state);
         const screenedLeadId = recentFinalized.screened_lead_id as string;
         if (authoritativeInboundAt) {
-          await recordInboundConversationEvent({
+          await io.recordInboundConversationEvent({
             firmId,
             screenedLeadId,
             channel,
@@ -478,7 +548,7 @@ export async function processChannelInbound(
             occurredAt: authoritativeInboundAt,
           });
         }
-        const sendResult = await sendChannelMessage({
+        const sendResult = await io.sendChannelMessage({
           firmId,
           sender,
           text: reply,
@@ -545,7 +615,7 @@ export async function processChannelInbound(
       options: showOptions ? optionSnapshotsForSlot(slotId, state.language) : undefined,
     });
     intakeHistory = clarification.history;
-    const pendingSave = await persistQuestionState({
+    const pendingSave = await io.persistQuestionState({
       sessionId,
       firmId,
       channel,
@@ -563,7 +633,7 @@ export async function processChannelInbound(
       };
     }
     sessionId = pendingSave.sessionId;
-    const sendResult = await sendChannelMessage({
+    const sendResult = await io.sendChannelMessage({
       firmId,
       sender,
       text: clarificationText,
@@ -577,7 +647,7 @@ export async function processChannelInbound(
       failureReason: sendResult.reason,
     });
     // The visitor is still answering the same question.
-    await persistSettledQuestion({
+    await io.persistSettledQuestion({
       sessionId,
       engineState: state,
       intakeExchanges: intakeHistory,
@@ -689,7 +759,7 @@ export async function processChannelInbound(
   // discovery question on the same webhook ACK.
   if (nameCaptureConsumed) {
     if (sessionId) {
-      await updateChannelSession({
+      await io.updateChannelSession({
         sessionId,
         engineState: { ...state, contactCaptureStarted: true },
         intakeExchanges: captureCurrentAnswers(),
@@ -806,7 +876,7 @@ export async function processChannelInbound(
       !isUserGroundedFill(state, pendingId)
     ) {
       try {
-        const mapped = await llmMapOptionReply({
+        const mapped = await io.llmMapOptionReply({
           questionLabel: pendingSlot.question,
           options: pendingSlot.options,
           reply: trimmed,
@@ -842,7 +912,7 @@ export async function processChannelInbound(
     !pendingLlmMapped
   ) {
     try {
-      const llm = await llmExtractServer(trimmed, state);
+      const llm = await io.llmExtractServer(trimmed, state);
       llmMode = llm.mode;
       const filledIds = Object.keys(llm.extracted).filter(
         (k) => llm.extracted[k] !== null && llm.extracted[k] !== '',
@@ -894,48 +964,7 @@ export async function processChannelInbound(
   }
 
   // ── Build the brief ─────────────────────────────────────────────────────
-  // Resolve firm timezone so submitted_at renders firm-local, matching the
-  // voice + reclassify paths (#140). Best effort: missing firm/location falls
-  // back to America/Toronto via resolveFirmTimezone(null).
-  const { data: firmRow } = await supabase
-    .from('intake_firms')
-    .select('name, location, gemini_disabled_alert_sent_at')
-    .eq('id', firmId)
-    .maybeSingle();
-  const firmTimezone = resolveFirmTimezone({ location: firmRow?.location ?? null });
-
-  // #128 (global): GEMINI_API_KEY missing/invalid disables LLM extraction on
-  // EVERY channel, not just voice. Alert the operator from the Meta pipeline
-  // too, throttled per firm via the shared gemini_disabled_alert_sent_at column.
-  // Awaited (best-effort) because this already runs inside the receiver's
-  // waitUntil; a floating promise could be cut off when processing returns.
-  if (
-    llmMode === 'disabled' &&
-    shouldAlertLlmDisabled(firmRow?.gemini_disabled_alert_sent_at ?? null)
-  ) {
-    const llmAlertStamp = new Date().toISOString();
-    console.error(
-      `[channel-intake][llm-disabled] GEMINI extraction disabled firm=${firmId} channel=${channel}`,
-    );
-    try {
-      const sendResult = await notifyOperatorOfLlmDisabled({
-        firmId,
-        firmName: firmRow?.name ?? null,
-        mode: 'disabled',
-        channel,
-        callId: null,
-        occurredAtIso: llmAlertStamp,
-      });
-      if (sendResult.email === 'sent') {
-        await supabase
-          .from('intake_firms')
-          .update({ gemini_disabled_alert_sent_at: llmAlertStamp })
-          .eq('id', firmId);
-      }
-    } catch (err) {
-      console.error('[channel-intake] notifyOperatorOfLlmDisabled failed:', err);
-    }
-  }
+  const firmTimezone = await io.resolveChannelFirmTimezone(firmId, channel, llmMode);
 
   const report = buildReport(state);
 
@@ -1003,7 +1032,7 @@ export async function processChannelInbound(
           gate.missing ?? 'both',
           (state.language ?? 'en') as SupportedLanguage,
         );
-        const exhaustedSend = await sendChannelMessage({
+        const exhaustedSend = await io.sendChannelMessage({
           firmId,
           sender,
           text: exhaustedText,
@@ -1017,7 +1046,7 @@ export async function processChannelInbound(
       } catch (err) {
         console.warn('[channel-intake] exhausted-message dispatch failed:', err);
       }
-      await persistUnconfirmedInquiry({
+      await io.persistUnconfirmedInquiry({
         firmId,
         channel,
         senderId,
@@ -1029,7 +1058,7 @@ export async function processChannelInbound(
         reason: 'engine_refused',
         followUpAttempts: priorFollowUpCount,
       });
-      if (sessionId) await finalizeChannelSession(sessionId);
+      if (sessionId) await io.finalizeChannelSession(sessionId);
       console.log(
         `[channel-intake] follow-up budget exhausted firm=${firmId} channel=${channel} attempts=${priorFollowUpCount} → engine_refused`,
       );
@@ -1066,7 +1095,7 @@ export async function processChannelInbound(
     intakeHistory = contactQuestion.history;
     const newCount = priorFollowUpCount + 1;
     const persistedState: EngineState = { ...state, contactCaptureStarted: true };
-    const pendingSave = await persistQuestionState({
+    const pendingSave = await io.persistQuestionState({
       sessionId,
       firmId,
       channel,
@@ -1077,7 +1106,7 @@ export async function processChannelInbound(
     });
     if (!pendingSave.ok) {
       console.error('[channel-intake] contact question not sent because session persistence failed');
-      await persistUnconfirmedInquiry({
+      await io.persistUnconfirmedInquiry({
         firmId,
         channel,
         senderId,
@@ -1096,7 +1125,7 @@ export async function processChannelInbound(
       };
     }
     sessionId = pendingSave.sessionId;
-    const sendResult = await sendChannelMessage({
+    const sendResult = await io.sendChannelMessage({
       firmId,
       sender,
       text: followUpText,
@@ -1109,7 +1138,7 @@ export async function processChannelInbound(
       providerMessageId: sendResult.messageId,
       failureReason: sendResult.reason,
     });
-    await persistSettledQuestion({
+    await io.persistSettledQuestion({
       sessionId,
       engineState: persistedState,
       intakeExchanges: intakeHistory,
@@ -1123,7 +1152,7 @@ export async function processChannelInbound(
       console.warn(
         `[channel-intake] follow-up send failed firm=${firmId} channel=${channel}: ${sendResult.reason ?? 'unknown'}`,
       );
-      await persistUnconfirmedInquiry({
+      await io.persistUnconfirmedInquiry({
         firmId,
         channel,
         senderId,
@@ -1135,7 +1164,7 @@ export async function processChannelInbound(
         reason: 'no_contact_provided',
         followUpAttempts: priorFollowUpCount,
       });
-      if (sessionId) await finalizeChannelSession(sessionId);
+      if (sessionId) await io.finalizeChannelSession(sessionId);
       return {
         persisted: false,
         reason: `send_failed: ${sendResult.reason ?? 'unknown'}`,
@@ -1271,7 +1300,7 @@ export async function processChannelInbound(
         contactCaptureStarted: true,
         discoveryFollowUpCount: discoveryCount + 1,
       };
-      const pendingSave = await persistQuestionState({
+      const pendingSave = await io.persistQuestionState({
         sessionId,
         firmId,
         channel,
@@ -1290,7 +1319,7 @@ export async function processChannelInbound(
         });
       } else {
         sessionId = pendingSave.sessionId;
-        const sendResult = await sendChannelMessage({
+        const sendResult = await io.sendChannelMessage({
           firmId,
           sender,
           text: openingQuestion,
@@ -1303,7 +1332,7 @@ export async function processChannelInbound(
           providerMessageId: sendResult.messageId,
           failureReason: sendResult.reason,
         });
-        await persistSettledQuestion({
+        await io.persistSettledQuestion({
           sessionId,
           engineState: persistedState,
           intakeExchanges: intakeHistory,
@@ -1450,7 +1479,7 @@ export async function processChannelInbound(
         discoveryFollowUpCount: newDiscoveryCount,
         pendingAskedSlotId: slotToAsk.id,
       };
-      const pendingSave = await persistQuestionState({
+      const pendingSave = await io.persistQuestionState({
         sessionId,
         firmId,
         channel,
@@ -1469,7 +1498,7 @@ export async function processChannelInbound(
         });
       } else {
         sessionId = pendingSave.sessionId;
-        const sendResult = await sendChannelMessage({
+        const sendResult = await io.sendChannelMessage({
           firmId,
           sender,
           text: questionText,
@@ -1482,7 +1511,7 @@ export async function processChannelInbound(
           providerMessageId: sendResult.messageId,
           failureReason: sendResult.reason,
         });
-        await persistSettledQuestion({
+        await io.persistSettledQuestion({
           sessionId,
           engineState: persistedState,
           intakeExchanges: intakeHistory,
@@ -1518,14 +1547,14 @@ export async function processChannelInbound(
   // so the brief and the persisted row never disagree on the deadline.
   captureCurrentAnswers();
   if (sessionId) {
-    await updateChannelSession({
+    await io.updateChannelSession({
       sessionId,
       engineState: state,
       intakeExchanges: intakeHistory,
       followUpCount: priorFollowUpCount,
     });
   }
-  return finalizeChannelLead({
+  return io.finalizeChannelLead({
     firmId,
     sender,
     state,

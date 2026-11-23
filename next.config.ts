@@ -237,6 +237,13 @@ const nextConfig: NextConfig = {
         headers: screenDemoSecurityHeaders,
       },
       {
+        source: "/tools/screen/parity",
+        headers: mainSecurityHeaders.map(header => ({
+          ...header, value: header.key === "X-Frame-Options" ? "SAMEORIGIN" :
+            header.key === "Content-Security-Policy" ? header.value.replace("frame-ancestors 'none'", "frame-ancestors 'self'") : header.value,
+        })),
+      },
+      {
         source: "/screen-demo-app/:path*",
         headers: screenDemoSecurityHeaders,
       },
@@ -303,7 +310,7 @@ const nextConfig: NextConfig = {
         // both their embeddable set AND the strict main-app set, and the
         // latter's X-Frame-Options: DENY would block iframe embedding.
         source:
-          "/((?!widget/|widget-public/|screen-demo-app(?:/|$)|tools/screen/?$|tools/seo-check|tools/firm-voice-builder|tools/start-a-conversation|tools/website-design-check|tools/why-your-firm|tools/desired-client-matter/?$|tools/best-cases-profile/?$|screen-demo(?:/|$)).*)",
+          "/((?!widget/|widget-public/|screen-demo-app(?:/|$)|tools/screen/?$|tools/screen/parity/?$|tools/seo-check|tools/firm-voice-builder|tools/start-a-conversation|tools/website-design-check|tools/why-your-firm|tools/desired-client-matter/?$|tools/best-cases-profile/?$|screen-demo(?:/|$)).*)",
         headers: mainSecurityHeaders,
       },
     ];

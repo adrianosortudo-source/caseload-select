@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { Shell, type ShellLayout } from "@/components/intake-v2/Shell";
 import { TextCard } from "@/components/intake-v2/TextCard";
 import { DecisionCard } from "@/components/intake-v2/DecisionCard";
 import type { ScreenItem } from "@/components/intake-v2/types";
+import { extractPreviewInquiry, type ScreenPreviewBoundary } from "@/lib/screen-preview-boundary";
 import { applySelectedPracticeArea, initialiseState } from "@/lib/screen-engine/extractor";
 import { runEvidencePass } from "@/lib/screen-engine/slotEvidence";
 import { computeBand } from "@/lib/screen-engine/band";
@@ -35,11 +36,13 @@ import { DemoFactReview } from "./DemoFactReview";
 import { DemoConversation, type DemoConversationMessage } from "./DemoConversation";
 import { groundDemoConversationFacts } from "@/lib/screen-demo-conversation-grounding";
 import { prepareFamilyDemoState } from "@/lib/screen-demo-family";
-import { groundFamilyConversationFacts, groundFamilyOrderReplies } from "@/lib/screen-engine/family";
+import { configureFirmPracticeAreas, groundFamilyConversationFacts, groundFamilyOrderReplies } from "@/lib/screen-engine/family";
 import { applyPendingSlotReply } from "@/lib/pending-slot-reply";
 import { meetsDiscoveryFloor } from "@/lib/discovery-floor";
 import { selectNextSlot } from "@/lib/screen-engine/selector";
 import { confirmDemoFacts, demoCapturedFacts, demoReviewFacts } from "@/lib/screen-demo-confirmation";
+
+export const ScreenPreviewTransport = createContext<ScreenPreviewBoundary | undefined>(undefined);
 
 export type ScreenWidgetStage = "kickoff" | "questions" | "contact" | "done";
 export type ScreenWidgetRuntime = "live" | "demo" | "demo-live-ai";
@@ -157,6 +160,8 @@ export interface ScreenEnginePublicWidgetProps {
   configuredPracticeAreas?: readonly import("@/lib/screen-engine/types").PracticeArea[];
   /** Optional fictional opening used by the presentation toolbar. */
   initialDescription?: string;
+  /** Explicitly authorized intake packs, supplied by the server-side firm resolver. */
+  operationalPracticeAreas?: readonly import("@/lib/screen-engine/types").PracticeArea[];
 }
 
 type Stage = ScreenWidgetStage;
@@ -303,9 +308,12 @@ export function ScreenEnginePublicWidget({
   demoContinuation,
   initialDescription = "",
   configuredPracticeAreas = [],
+  operationalPracticeAreas,
 }: ScreenEnginePublicWidgetProps) {
+  const previewBoundary = useContext(ScreenPreviewTransport);
   const policy = SCREEN_WIDGET_EXECUTION_POLICY[runtime];
   const isDemo = policy.isGuidedDemo;
+  const extractInquiry = previewBoundary ? extractPreviewInquiry : llmExtract;
   const metaWorkflow = isDemo && demoContinuation?.workflow === "meta";
   const [stage, setStage] = useState<Stage>("kickoff");
   const [pendingDemoReview, setPendingDemoReview] = useState(false);
@@ -363,7 +371,7 @@ export function ScreenEnginePublicWidget({
   // does not create a session row. Never surfaces a failure to the UI:
   // this is telemetry for the abandonment sweep, not the intake path.
   useEffect(() => {
-    if (!policy.allowsPersistence) return;
+    if (!policy.allowsPersistence || previewBoundary) return;
     if (!state || persistedRef.current) return;
     const hasProgress = Object.keys(state.slot_meta ?? {}).length > 0;
     if (!hasProgress) return;
@@ -452,6 +460,22 @@ export function ScreenEnginePublicWidget({
     });
   }, [isDemo, runtime, onDemoStateChange, stage, state, currentItem, demoReport, extraction, pendingDemoReview, isReading, next?.type]);
 
+  const lastPreviewOpening = useRef<string | null>(null);
+  useEffect(() => {
+    if (!previewBoundary || stage !== "kickoff" || !initialDescription) return;
+    setDescription(initialDescription);
+    if (previewBoundary.startImmediately && lastPreviewOpening.current !== initialDescription) {
+      lastPreviewOpening.current = initialDescription;
+      void runStart(initialDescription);
+    }
+  // A parent handoff is consumed once per mounted conversation.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialDescription, previewBoundary?.startImmediately]);
+
+  useEffect(() => {
+    previewBoundary?.onStage(stage, next?.type ?? null, next?.slot?.id ?? null);
+  }, [previewBoundary, stage, next]);
+
   async function start() {
     await runStart(description);
   }
@@ -480,6 +504,7 @@ export function ScreenEnginePublicWidget({
 
     let nextState = initialiseState(text);
     if (isDemo) nextState = prepareFamilyDemoState(nextState, configuredPracticeAreas);
+    else if (operationalPracticeAreas) nextState = configureFirmPracticeAreas(nextState, operationalPracticeAreas);
     nextState = runEvidencePass(text, nextState);
     if (metaWorkflow) nextState = groundDemoConversationFacts(nextState, text);
     else if (nextState.family_enabled) nextState = groundFamilyConversationFacts(nextState, text);
@@ -495,8 +520,9 @@ export function ScreenEnginePublicWidget({
     }
 
     try {
-      const extracted = await llmExtract(text, nextState);
+      const extracted = await extractInquiry(text, nextState);
       if (run !== extractionRun.current) return;
+      previewBoundary?.onExtraction?.(extracted.mode === "live");
       if (extracted.mode === "live") {
         nextState = scoreState(mergeLlmResults(nextState, extracted.extracted));
         if (metaWorkflow) nextState = scoreState(groundDemoConversationFacts(nextState, text));
@@ -513,6 +539,7 @@ export function ScreenEnginePublicWidget({
       }
     } catch (error) {
       if (run !== extractionRun.current) return;
+      previewBoundary?.onExtraction?.(false);
       // llmExtract normally resolves failures as { mode: "error" }, but keep
       // the presentation state truthful if that contract is ever violated.
       if (isDemo) {
@@ -538,7 +565,7 @@ export function ScreenEnginePublicWidget({
     if (updated.matter_type === "unknown" && policy.allowsExtraction) {
       setIsReading(true);
       try {
-        const result = await llmExtract(`${state.input}\n\n${text}`, updated);
+        const result = await extractInquiry(`${state.input}\n\n${text}`, updated);
         if (run !== extractionRun.current) return;
         if (result.mode === "live") updated = mergeLlmResults(updated, result.extracted);
       } catch {
@@ -604,7 +631,7 @@ export function ScreenEnginePublicWidget({
       const context = metaWorkflow
         ? [state.input, ...demoReplyHistory.current].join("\n\n")
         : [state.input, ...Object.values(state.written_answers ?? {}), text].join("\n\n");
-      const result = await llmExtract(context, state, { pendingSlotId: slotId, reply: text });
+      const result = await extractInquiry(context, state, { pendingSlotId: slotId, reply: text });
       if (run !== extractionRun.current) return;
       if (result.mode !== "live" && !result.mapped_answer) {
         setExtraction({ status: "fallback", reason: result.reason });
@@ -705,6 +732,11 @@ export function ScreenEnginePublicWidget({
       email_consent_explicit: consentCaptureEnabled && consentChecked,
     };
 
+    if (previewBoundary) {
+      previewBoundary.onSubmission(payload);
+      setPersistStatus("Preview complete");
+      return;
+    }
     try {
       const res = await fetch(resolveSubmitEndpoint(firmId, submitEndpoint), {
         method: "POST",
@@ -860,7 +892,7 @@ export function ScreenEnginePublicWidget({
           onSubmit={start}
           submitLabel={ws("kickoff_submit", "Continue matter review")}
           minChars={10}
-          enableVoice={policy.allowsVoice}
+          enableVoice={policy.allowsVoice && !previewBoundary}
           voiceHint={ws("voice_hint", "speak your answer instead of typing it")}
           examplePrompts={familyOnlyDemo ? [
             "I recently separated...",
@@ -927,7 +959,7 @@ export function ScreenEnginePublicWidget({
       "A lawyer at {firmName} will read what you shared and reach out directly to talk through the legal side.",
     );
     const doneBody = doneBodyTemplate.replace(/\{firmName\}/g, trimmedFirmName);
-    const visibleDoneBody = isDemo
+    const visibleDoneBody = isDemo || previewBoundary
       ? "The fictional intake is complete and the demonstration brief is ready. No firm was contacted."
       : doneBody;
     // Translate the "submitted" sentinel; pass other reason strings
@@ -952,7 +984,7 @@ export function ScreenEnginePublicWidget({
             </svg>
           </div>
           <h2 data-ui-copy={isDemo ? "heading" : undefined} className="text-[28px] font-extrabold text-balance text-[var(--cls-text,#1E2F58)]" style={{ fontFamily: fontDisplay }}>
-            {isDemo
+            {isDemo || previewBoundary
               ? "Demo complete"
               : ws("done_heading", "Your matter review was submitted.")}
           </h2>
@@ -1123,14 +1155,14 @@ export function ScreenEnginePublicWidget({
               {label}
               <input
                 name={name}
-                defaultValue={getContactValue(state, name)}
+                defaultValue={getContactValue(state, name) || (name === "client_phone" ? previewBoundary?.phone : undefined)}
                 placeholder={placeholder}
                 className="h-12 rounded-xl border border-[color-mix(in_srgb,var(--cls-accent,#1E2F58)_15%,transparent)] bg-[var(--cls-surface,#FFFFFF)] px-4 text-[15px] normal-case tracking-normal text-[var(--cls-text,#1E2F58)] outline-none focus:border-[var(--cls-accent,#1E2F58)]"
                 style={{ fontFamily: fontBody }}
               />
             </label>
           ))}
-          {consentCaptureEnabled && policy.allowsConsent && (
+          {consentCaptureEnabled && policy.allowsConsent && !previewBoundary && (
             <label className="flex items-start gap-3 cursor-pointer">
               <input
                 type="checkbox"
@@ -1156,7 +1188,7 @@ export function ScreenEnginePublicWidget({
           >
             {isDemo
               ? "Complete demonstration"
-              : ws("contact_submit", "Submit matter review")}
+              : previewBoundary ? "Complete fictional enquiry" : ws("contact_submit", "Submit matter review")}
           </button>
         </form>
       </Shell>
@@ -1241,14 +1273,14 @@ export function ScreenEnginePublicWidget({
       value: opt.value,
       label: ws(opt.labelKey, CLARIFY_CHIP_FALLBACK_LABELS[opt.labelKey] ?? opt.labelKey),
     }));
-    if (isDemo && configuredPracticeAreas.includes("family")) {
+    if (state.family_enabled) {
       clarifyOptions.push({ value: "family_general", label: "Family law" });
     }
 
     function handleClarifySelect(picked: string | string[]) {
       const value = Array.isArray(picked) ? picked[0] : picked;
       if (!value) return;
-      if (isDemo && value === "family_general" && state?.family_enabled) {
+      if (value === "family_general" && state?.family_enabled) {
         setHistory((items) => [...items, state]);
         mutate(groundFamilyConversationFacts({
           ...applySelectedPracticeArea(state, "family"),
