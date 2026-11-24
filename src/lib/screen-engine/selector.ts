@@ -205,34 +205,34 @@ function getMatterGap(state: EngineState): DecisionGap {
   // existed. Same shape affects every matter type below.
 
   if (matter_type === 'will_drafting') {
-    if (!isUserAnswered(state, 'marital_status')) return 'matter_qualification';
-    if (!isUserAnswered(state, 'children_count')) return 'matter_qualification';
-    if (!isUserAnswered(state, 'estate_complexity')) return 'value'; // resolves: 'value'
-    if (!isUserAnswered(state, 'existing_will_status')) return 'matter_qualification';
+    if (!questionAddressed(state, 'marital_status')) return 'matter_qualification';
+    if (!questionAddressed(state, 'children_count')) return 'matter_qualification';
+    if (!questionAddressed(state, 'estate_complexity')) return 'value'; // resolves: 'value'
+    if (!questionAddressed(state, 'existing_will_status')) return 'matter_qualification';
     return 'none';
   }
 
   if (matter_type === 'power_of_attorney') {
-    if (!isUserAnswered(state, 'poa_type')) return 'matter_qualification';
-    if (!isUserAnswered(state, 'poa_urgency')) return 'urgency'; // resolves: 'urgency'
-    if (!isUserAnswered(state, 'marital_status')) return 'matter_qualification';
-    if (!isUserAnswered(state, 'poa_existing_documents')) return 'matter_qualification';
+    if (!questionAddressed(state, 'poa_type')) return 'matter_qualification';
+    if (!questionAddressed(state, 'poa_urgency')) return 'urgency'; // resolves: 'urgency'
+    if (!questionAddressed(state, 'marital_status')) return 'matter_qualification';
+    if (!questionAddressed(state, 'poa_existing_documents')) return 'matter_qualification';
     return 'none';
   }
 
   if (matter_type === 'probate') {
-    if (!isUserAnswered(state, 'relationship_to_deceased')) return 'matter_qualification';
-    if (!isUserAnswered(state, 'will_status_probate')) return 'matter_qualification';
-    if (!isUserAnswered(state, 'estate_value_band')) return 'value'; // resolves: 'value'
-    if (!isUserAnswered(state, 'executor_role')) return 'matter_qualification';
+    if (!questionAddressed(state, 'relationship_to_deceased')) return 'matter_qualification';
+    if (!questionAddressed(state, 'will_status_probate')) return 'matter_qualification';
+    if (!questionAddressed(state, 'estate_value_band')) return 'value'; // resolves: 'value'
+    if (!questionAddressed(state, 'executor_role')) return 'matter_qualification';
     return 'none';
   }
 
   if (matter_type === 'estate_dispute') {
-    if (!isUserAnswered(state, 'estate_dispute_type')) return 'matter_qualification';
-    if (!isUserAnswered(state, 'estate_dispute_role')) return 'matter_qualification';
-    if (!isUserAnswered(state, 'estate_value_band')) return 'value';
-    if (!isUserAnswered(state, 'estate_court_status')) return 'matter_qualification';
+    if (!questionAddressed(state, 'estate_dispute_type')) return 'matter_qualification';
+    if (!questionAddressed(state, 'estate_dispute_role')) return 'matter_qualification';
+    if (!questionAddressed(state, 'estate_value_band')) return 'value';
+    if (!questionAddressed(state, 'estate_court_status')) return 'matter_qualification';
     return 'none';
   }
 
@@ -244,47 +244,47 @@ function getMatterGap(state: EngineState): DecisionGap {
     // channels (voice webhook, promote replay, reclassify), the LLM's
     // __matter_type classifier can also promote, stamped 'llm_inferred'
     // and flagged in the brief. DR-069.
-    if (!isUserAnswered(state, 'estates_problem_type')) return 'matter_qualification';
+    if (!questionAddressed(state, 'estates_problem_type')) return 'matter_qualification';
     return 'none';
   }
 
   // ─── Employment Phase B ─────────────────────────────────────────────────
 
   if (matter_type === 'wrongful_dismissal') {
-    if (!isUserAnswered(state, 'tenure_band')) return 'matter_qualification';
-    if (!isUserAnswered(state, 'dismissal_reason_given')) return 'matter_qualification';
-    if (!isUserAnswered(state, 'salary_band')) return 'value'; // resolves: 'value'
-    if (!isUserAnswered(state, 'severance_offered')) return 'matter_qualification';
-    if (!isUserAnswered(state, 'signed_release')) return 'matter_qualification';
+    if (!questionAddressed(state, 'tenure_band')) return 'matter_qualification';
+    if (!questionAddressed(state, 'dismissal_reason_given')) return 'matter_qualification';
+    if (!questionAddressed(state, 'salary_band')) return 'value'; // resolves: 'value'
+    if (!questionAddressed(state, 'severance_offered')) return 'matter_qualification';
+    if (!questionAddressed(state, 'signed_release')) return 'matter_qualification';
     return 'none';
   }
 
   if (matter_type === 'severance_review') {
-    if (!isUserAnswered(state, 'severance_offer_amount')) return 'matter_qualification';
-    if (!isUserAnswered(state, 'severance_deadline')) return 'urgency'; // resolves: 'urgency'
-    if (!isUserAnswered(state, 'tenure_band')) return 'matter_qualification';
-    if (!isUserAnswered(state, 'salary_band')) return 'value';
-    if (!isUserAnswered(state, 'signed_release')) return 'matter_qualification';
+    if (!questionAddressed(state, 'severance_offer_amount')) return 'matter_qualification';
+    if (!questionAddressed(state, 'severance_deadline')) return 'urgency'; // resolves: 'urgency'
+    if (!questionAddressed(state, 'tenure_band')) return 'matter_qualification';
+    if (!questionAddressed(state, 'salary_band')) return 'value';
+    if (!questionAddressed(state, 'signed_release')) return 'matter_qualification';
     return 'none';
   }
 
   if (matter_type === 'harassment_complaint') {
-    if (!isUserAnswered(state, 'harassment_type')) return 'matter_qualification';
-    if (!isUserAnswered(state, 'harassment_employment_status')) return 'matter_qualification';
-    if (!isUserAnswered(state, 'reported_to_hr')) return 'matter_qualification';
+    if (!questionAddressed(state, 'harassment_type')) return 'matter_qualification';
+    if (!questionAddressed(state, 'harassment_employment_status')) return 'matter_qualification';
+    if (!questionAddressed(state, 'reported_to_hr')) return 'matter_qualification';
     return 'none';
   }
 
   if (matter_type === 'wage_recovery') {
-    if (!isUserAnswered(state, 'wages_owed_band')) return 'value'; // resolves: 'value'
-    if (!isUserAnswered(state, 'wages_type')) return 'matter_qualification';
+    if (!questionAddressed(state, 'wages_owed_band')) return 'value'; // resolves: 'value'
+    if (!questionAddressed(state, 'wages_type')) return 'matter_qualification';
     return 'none';
   }
 
   if (matter_type === 'employment_contract_review') {
-    if (!isUserAnswered(state, 'contract_review_type')) return 'matter_qualification';
-    if (!isUserAnswered(state, 'contract_review_timeline')) return 'urgency'; // resolves: 'urgency'
-    if (!isUserAnswered(state, 'contract_review_concerns')) return 'matter_qualification';
+    if (!questionAddressed(state, 'contract_review_type')) return 'matter_qualification';
+    if (!questionAddressed(state, 'contract_review_timeline')) return 'urgency'; // resolves: 'urgency'
+    if (!questionAddressed(state, 'contract_review_concerns')) return 'matter_qualification';
     return 'none';
   }
 
@@ -294,7 +294,7 @@ function getMatterGap(state: EngineState): DecisionGap {
     // (user_routing_answer provenance). Single-pass channels may also
     // be promoted by the LLM __matter_type classifier (llm_inferred).
     // DR-069.
-    if (!isUserAnswered(state, 'employment_problem_type')) return 'matter_qualification';
+    if (!questionAddressed(state, 'employment_problem_type')) return 'matter_qualification';
     return 'none';
   }
 
@@ -376,7 +376,12 @@ function isResolved(state: EngineState, gap: DecisionGap): boolean {
   // user actually answered it (or regex matched user text, or system
   // metadata supplied it). LLM guesses do not resolve gaps. See
   // isUserAnswered for the canonical predicate.
-  return resolvers.some(s => isUserAnswered(state, s.id));
+  return resolvers.some(s => questionAddressed(state, s.id));
+}
+
+/** The visitor can cover a question without proving a menu value for scoring. */
+export function questionAddressed(state: EngineState, id: string): boolean {
+  return !!state.intake_reading?.coveredQuestions?.[id] || isUserAnswered(state, id);
 }
 
 function hasValue(state: EngineState, slotId: string): boolean {
@@ -521,7 +526,7 @@ function groupAlreadyAnswered(state: EngineState, slot: SlotDefinition): boolean
   // Provenance-aware: a sibling only suppresses this slot when the user
   // actually answered the sibling. An LLM guess on a sibling does not
   // count as "covered." See isUserAnswered.
-  return siblings.some(s => isUserAnswered(state, s.id));
+  return siblings.some(s => questionAddressed(state, s.id));
 }
 
 function slotIsAnswered(state: EngineState, slot: SlotDefinition): boolean {
@@ -532,7 +537,7 @@ function slotIsAnswered(state: EngineState, slot: SlotDefinition): boolean {
   // a broad help menu would ask them to classify the same answer again.
   const repeatsGoal = !!state.slots.written_goal && state.matter_type.endsWith('_general') &&
     (slot.question_group === 'routing_category' || slot.question_group === 'routing' || slot.id === 'family_help_sought');
-  return repeatsGoal || !!state.written_answers?.[slot.id] || isUserAnswered(state, slot.id);
+  return repeatsGoal || !!state.written_answers?.[slot.id] || questionAddressed(state, slot.id);
 }
 
 // ─── Subtrack applicability ───────────────────────────────────────────────
@@ -756,7 +761,7 @@ function pickByExplicitOrder(state: EngineState): SlotDefinition | null {
 
 export function selectNextSlot(state: EngineState): SlotDefinition | null {
   if (state.matter_type === 'out_of_scope') return null;
-  const clarification = selectWrittenFollowUp(state);
+  const clarification = !state.intake_reading && selectWrittenFollowUp(state);
   if (clarification) return clarification;
   if (state.matter_type === 'unknown') return null;
 

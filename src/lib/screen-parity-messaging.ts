@@ -77,8 +77,9 @@ export async function runFictionalMessage(cursor: MessagingCursor, text: string)
     },
     async llmExtractServer(...args) {
       try {
-        const [description, state, ...options] = args;
-        const response = await llmExtractServer(redactPreviewText(description, state), redactPreviewState(state), ...options);
+        const [description, state, limit, provider, request, turn] = args;
+        const response = await llmExtractServer(redactPreviewText(description, state), redactPreviewState(state), limit, provider, request,
+          turn && { ...turn, reply: turn.reply && redactPreviewText(turn.reply, state) });
         if (response.mode !== 'live') result.unavailable = true;
         return response;
       } catch (error) { result.unavailable = true; throw error; }

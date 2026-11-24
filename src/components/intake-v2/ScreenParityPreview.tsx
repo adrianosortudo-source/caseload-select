@@ -57,8 +57,6 @@ export default function ScreenParityPreview({ practiceArea, channel, comparison,
   const [phase, setPhase] = useState({ stage: "kickoff", step: null as string | null, question: null as string | null });
   const [submission, setSubmission] = useState<PreviewSubmission | null>(null);
   const [brief, setBrief] = useState("");
-  const [usedFallback, setUsedFallback] = useState(false);
-  const noteExtraction = useCallback((available: boolean) => { if (!available) setUsedFallback(true); }, []);
   const [messagingReport, setMessagingReport] = useState<LawyerReport | null>(null);
 
   useEffect(() => {
@@ -105,8 +103,8 @@ export default function ScreenParityPreview({ practiceArea, channel, comparison,
     setPhase(previous => previous.stage === stage && previous.step === step && previous.question === question ? previous : { stage, step, question });
   }, []);
   const boundary = useMemo<ScreenPreviewBoundary>(() => ({
-    comparison, startImmediately: handoff.start, phone: handoff.phone, onExtraction: noteExtraction, onSubmission: captured, onStage,
-  }), [comparison, handoff.start, handoff.phone, noteExtraction, captured, onStage]);
+    comparison, startImmediately: handoff.start, phone: handoff.phone, onSubmission: captured, onStage,
+  }), [comparison, handoff.start, handoff.phone, captured, onStage]);
   const onMessagingReport = useCallback(({ report, html }: { report: LawyerReport; html: string }) => {
     setMessagingReport(report);
     setPhase({ stage: "done", step: "stop", question: null });
@@ -116,14 +114,11 @@ export default function ScreenParityPreview({ practiceArea, channel, comparison,
   return <main ref={root} data-parity-path={comparison ? "production" : "embedded"}
     data-parity-stage={phase.stage} data-parity-step={phase.step} data-parity-question={phase.question} data-parity-channel={channel}>
     {(comparison || !externalReport) && <p className="px-5 py-3 text-sm">Use fictional details. Screen sends your enquiry and written follow-up answers to its AI provider to prepare the brief.</p>}
-    {usedFallback && <p role="status" className="border-l-4 border-[#1e2f58] bg-[#f4f3ef] p-4 text-[#101923]">
-      AI was unavailable for part of this enquiry. Screen used its built-in questions for that step.
-    </p>}
     <ScreenPreviewTransport.Provider value={boundary}>
     {children ?? (channel === "website" || channel === "sms"
       ? <ScreenEnginePublicWidget firmId="fictional-screen-preview" firmName="Example Law Firm" runtime="live"
           layout="contained" reportEmbeddedHeight={false} initialDescription={handoff.opening}
-          operationalPracticeAreas={operationalPracticeAreas} />
+          operationalPracticeAreas={operationalPracticeAreas} selectedPracticeArea={practiceArea} />
       : <ScreenParityMessaging practiceArea={practiceArea} channel={channel} comparison={comparison}
           opening={handoff.opening} onReport={onMessagingReport} />)}
     </ScreenPreviewTransport.Provider>

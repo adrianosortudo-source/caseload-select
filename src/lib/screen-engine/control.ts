@@ -13,6 +13,7 @@ import {
   classificationForMatterType,
 } from './extractor';
 import { deriveAdvisorySpecificTask, runEvidencePass } from './slotEvidence';
+import { intakeFollowUp } from './interpretation';
 import { interpretWrittenAnswer, refineWrittenRoute, selectWrittenFollowUp } from './written-answers';
 import { buildClosingMessage } from './closing';
 import { getOptionDisplayLabel } from './i18n/display';
@@ -1238,6 +1239,9 @@ export function getNextStep(state: EngineState): NextStep {
     return { type: 'present_insight', bridgeText: getBridgeText(state) };
   }
 
+  const followUp = intakeFollowUp(state);
+  if (followUp) return { type: 'continue', slot: followUp };
+
   if (state.insightShown) {
     const next = selectNextSlot(state);
     if (!next || gap === 'none') {
@@ -1253,7 +1257,7 @@ export function getNextStep(state: EngineState): NextStep {
   }
 
   if (state.matter_type === 'unknown') {
-    const clarification = selectWrittenFollowUp(state);
+    const clarification = !state.intake_reading && selectWrittenFollowUp(state);
     if (clarification) return { type: 'continue', slot: clarification };
     // Structured clarify step (DR-112, extends DR-071). `reason` and
     // `options` let a surface render a warm, correctly-acknowledged menu;

@@ -4,6 +4,7 @@
 // unavailable or no API key is configured.
 
 import type { EngineState, LeadIntent, MatterType, SupportedLanguage } from '../types';
+import { readIntakeInterpretation } from '../interpretation';
 import { computeBand } from '../band';
 import { computeCoreCompleteness, getDecisionGap } from '../selector';
 import { classificationForMatterType, isValidMatterType } from '../extractor';
@@ -30,6 +31,9 @@ function isValidSupportedLanguage(value: string): boolean {
 }
 
 export interface LlmExtractionResponse {
+  interpretation?: import('../interpretation').IntakeInterpretation;
+  provider?: string;
+  model?: string;
   extracted: Record<string, string | null>;
   mode: 'live' | 'disabled' | 'error';
   reason?: string;
@@ -63,6 +67,9 @@ export async function llmExtract(
         family_enabled: state.family_enabled === true,
         already_extracted: state.slots,
         ...(followUp ? { pending_slot_id: followUp.pendingSlotId, reply: followUp.reply } : {}),
+        ...(followUp && ['intake_detail_1', 'intake_detail_2'].includes(followUp.pendingSlotId)
+          && state.intake_reading?.next?.slotId === followUp.pendingSlotId
+          ? { pending_question: state.intake_reading.next.question } : {}),
       }),
       signal: controller.signal,
     });
@@ -72,6 +79,9 @@ export async function llmExtract(
     const data = await res.json();
     return {
       extracted: data.extracted ?? {},
+      interpretation: readIntakeInterpretation(data.interpretation),
+      provider: data.provider,
+      model: data.model,
       mode: data.mode ?? 'live',
       reason: data.reason,
       mapped_answer: data.mapped_answer,

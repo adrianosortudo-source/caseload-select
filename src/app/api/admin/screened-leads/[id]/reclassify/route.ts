@@ -32,6 +32,8 @@ import { runEvidencePass } from '@/lib/screen-engine/slotEvidence';
 import { mergeLlmResults } from '@/lib/screen-engine/llm/extractor';
 import { buildReport } from '@/lib/screen-engine/report';
 import { computeBand } from '@/lib/screen-engine/band';
+import { screenTextProvider } from '@/lib/ai/intake-generation';
+import { configureFirmPracticeAreas } from '@/lib/screen-engine/family';
 import { llmExtractServer } from '@/lib/screen-llm-server';
 import { renderBriefHtmlServer } from '@/lib/screen-brief-html';
 import { resolveFirmTimezone } from '@/lib/firm-timezone';
@@ -110,14 +112,6 @@ export async function POST(
     .maybeSingle();
   const firmTimezone = resolveFirmTimezone({ location: firmRow?.location ?? null });
 
-  const transcript = row.raw_transcript ?? '';
-  if (!transcript.trim()) {
-    return NextResponse.json(
-      { error: 'row has no raw_transcript to reclassify against' },
-      { status: 400 },
-    );
-  }
-
   // ── Pull voice metadata from slot_answers (for seed) ───────────────────
   const sa = (row.slot_answers ?? {}) as {
     voice_meta?: {
@@ -130,8 +124,24 @@ export async function POST(
     channel?: string;
     slots?: Record<string, string | null>;
     written_answers?: Record<string, string>;
+    intake_reading?: EngineState['intake_reading'];
+    slot_meta?: EngineState['slot_meta'];
+    slot_evidence?: EngineState['slot_evidence'];
+    family_enabled?: boolean;
+    family_only?: boolean;
     questionHistory?: string[];
   };
+  // Corrected facts must survive an operator rebuild, including English web
+  // submissions whose separate raw transcript is empty by design.
+  const reading = sa.intake_reading && Array.isArray(sa.intake_reading.turns) ? sa.intake_reading : undefined;
+  const transcript = reading?.currentAccount ?? row.raw_transcript ?? '';
+  if (!transcript.trim()) {
+    return NextResponse.json(
+      { error: 'row has no raw_transcript to reclassify against' },
+      { status: 400 },
+    );
+  }
+
   const callerPhone = sa.voice_meta?.caller_phone ?? null;
   const callerName = sa.voice_meta?.caller_name ?? null;
   // Default to 'web' (Website widget) when slot_answers.channel is missing.
@@ -154,13 +164,14 @@ export async function POST(
 
   // ── Engine pipeline ────────────────────────────────────────────────────
   let state = initialiseState(transcript);
-  state = { ...state, channel };
+  if (sa.family_enabled && sa.family_only) state = configureFirmPracticeAreas(state, ['family']);
+  state = { ...state, channel, family_enabled: state.family_enabled || sa.family_enabled === true };
   state = seedVoiceState(state, callerPhone, callerName);
   state = runEvidencePass(transcript, state);
 
   if (state.matter_type !== 'out_of_scope') {
     try {
-      const llm = await llmExtractServer(transcript, state);
+      const llm = await llmExtractServer(transcript, state, undefined, channel === 'voice' ? undefined : screenTextProvider());
       const filledIds = Object.keys(llm.extracted).filter(
         (k) => llm.extracted[k] !== null && llm.extracted[k] !== '',
       );
@@ -188,6 +199,15 @@ export async function POST(
   }
 
   // ── Build the new report + brief ───────────────────────────────────────
+  if (reading) {
+    // These are the values accepted on the completed intake, after superseded
+    // facts were removed. Keep later confirmed answers and their provenance.
+    const captured = sa.slots ?? {};
+    state = { ...state, intake_reading: reading,
+      input: reading.originalOpening ?? row.raw_transcript ?? transcript,
+      slots: { ...state.slots, ...captured }, slot_meta: { ...state.slot_meta, ...sa.slot_meta },
+      slot_evidence: { ...state.slot_evidence, ...sa.slot_evidence } };
+  }
   const report = buildReport(state);
 
   // Reclassify keeps the original decision_deadline by default (the lawyer

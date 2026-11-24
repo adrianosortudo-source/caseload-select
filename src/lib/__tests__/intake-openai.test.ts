@@ -24,12 +24,14 @@ afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); });
 
 describe("SCREEN provider routing", () => {
   it("uses the direct project, nullable slots and canonical output filtering on the OpenAI route", async () => {
+    vi.stubEnv("CASELOAD_OPENAI_PROJECT_ID", "proj_fictional_test");
     const fetchMock = stubResponse({ amount_at_stake: "$5,000-$25,000", client_email: "invalid", invented: "invalid" });
     const result = await llmExtractServer(invoice, state, 4000, "openai");
     expect(result).toMatchObject({ mode: "live", attempts: 1, extracted: { amount_at_stake: "$5,000–$25,000" }, tokens: { prompt: 36, completion: 17 } });
     expect(Object.keys(result.extracted)).toEqual(["amount_at_stake"]);
     const [url, init] = fetchMock.mock.calls[0];
     expect(url).toBe("https://api.openai.com/v1/responses");
+    expect(new Headers(init?.headers).get("OpenAI-Project")).toBe("proj_fictional_test");
     const sent = JSON.parse(String(init?.body));
     expect(sent.text.format).toMatchObject({ name: "screen_extraction", strict: true, schema: { additionalProperties: false } });
     expect(sent.text.format.schema.properties.amount_at_stake.type).toEqual(["string", "null"]);

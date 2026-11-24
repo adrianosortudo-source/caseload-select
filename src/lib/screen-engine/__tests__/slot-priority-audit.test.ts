@@ -74,6 +74,8 @@ describe('Slot priority audit — free_text inventory', () => {
       'client_postal_code',
       'family_timing',
       'gca_specific_document',
+      'intake_detail_1',
+      'intake_detail_2',
       'ownership_percentage',
       // Optional, unscored clarifications that only appear after a relevant detail.
       'written_agreement',

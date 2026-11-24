@@ -38,7 +38,7 @@ describe("private SCREEN preview transport", () => {
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
     const date = await screen.findByRole("textbox", { name: "Is there a date the lawyer should take into account?" });
     fireEvent.change(date, { target: { value: "Next Tuesday." } });
-    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Continue" })); });
     for (let i=0; i<8; i++) {
       const skip = screen.queryByRole("button", { name: "Skip this question" });
       if (!skip) break;
@@ -58,26 +58,34 @@ describe("private SCREEN preview transport", () => {
     expect(brief.brief_html).toContain("Next Tuesday.");
     expect((document.querySelector("#parity-brief") as HTMLIFrameElement).srcdoc).toContain(brief.brief_html.slice(0, 30));
     expect(Object.values(brief.slot_answers.written_answers)).toContain(written);
-    expect(requests.map(r => r.url)).toEqual(["/api/extract", "/api/extract"]);
+    expect(requests.map(r => r.url)).toEqual(["/api/extract", "/api/extract", "/api/extract"]);
+    expect(requests[2].body.reply).toBe("Next Tuesday.");
     expect(JSON.stringify(requests)).not.toContain("alex@example.test");
   });
 
-  it.each(["opening", "follow-up"])("labels fallback when AI is unavailable during a %s", async failure => {
-    let count = 0;
-    vi.stubGlobal("fetch", vi.fn(async () => {
-      const mode = ++count === (failure === "opening" ? 1 : 2) ? "error" : "live";
+  it.each(["opening", "follow-up"])("keeps the visitor's %s and retries the identical extraction", async failure => {
+    const bodies: string[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (_url, init) => {
+      bodies.push(init.body);
+      const mode = bodies.length === (failure === "opening" ? 1 : 2) ? "error" : "live";
       return { ok: true, json: async () => ({ mode, extracted: {} }) };
     }));
     render(<ScreenParityPreview practiceArea="corporate" channel="website" comparison={false} externalReport={false} />);
     fireEvent.change(screen.getByRole("textbox", { name: "Tell us how a lawyer can help you today." }), {target:{value:opening}});
     await submitOpening();
-    await screen.findByRole("button", {name:/Something else/i});
-    if (failure === "follow-up") expect(screen.queryByText(/AI was unavailable/)).toBeNull();
-    fireEvent.click(screen.getByRole("button", {name:/Something else/i}));
-    fireEvent.change(await screen.findByPlaceholderText("Describe what happened in your situation..."), {target:{value:"I have an offer that I want reviewed."}});
-    fireEvent.click(screen.getByRole("button", {name:"Continue"}));
-    await screen.findByRole("textbox", {name:"Is there a date the lawyer should take into account?"});
-    expect(screen.getByText(/AI was unavailable for part of this enquiry/)).toBeTruthy();
+    const written = "I have an offer that I want reviewed.";
+    if (failure === "follow-up") {
+      fireEvent.click(await screen.findByRole("button", {name:/Something else/i}));
+      fireEvent.change(await screen.findByPlaceholderText("Describe what happened in your situation..."), {target:{value:written}});
+      await act(async () => { fireEvent.click(screen.getByRole("button", {name:"Continue"})); });
+    }
+    const retry = await screen.findByRole("button", {name:"Try again"});
+    expect(screen.getByText(failure === "opening" ? opening : written)).toBeTruthy();
+    expect(document.querySelector("#parity-submission")).toBeNull();
+    await act(async () => { fireEvent.click(retry); });
+    expect(bodies.at(-1)).toBe(bodies.at(-2));
+    if (failure === "opening") await screen.findByRole("button", {name:/Something else/i});
+    else await screen.findByRole("textbox", {name:"Is there a date the lawyer should take into account?"});
   });
 
   it.each([false, true])("preserves the operational request on the reference only: comparison=%s", async comparison => {

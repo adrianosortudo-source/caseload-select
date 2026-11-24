@@ -85,6 +85,7 @@ export default async function PublicWidgetPage({ params, searchParams }: PagePro
         initialLang={initialLang}
         consentCaptureEnabled={!!firm.consent_gate_enabled}
         operationalPracticeAreas={operationalPracticeAreas}
+        selectedPracticeArea={firmId === "fictional-screen-preview" ? area as PreviewPracticeArea : undefined}
       />
     </div>
   );

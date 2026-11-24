@@ -49,11 +49,12 @@ class OpenAIRequestError extends Error {
 export async function requestOpenAI(request: GenerationRequest): Promise<GenerationResult> {
   const key = process.env.CASELOAD_OPENAI_API_KEY?.trim();
   if (!key) throw new OpenAIRequestError("OpenAI project key missing", 401);
+  const project = process.env.CASELOAD_OPENAI_PROJECT_ID?.trim();
   const timeout = AbortSignal.timeout(45_000);
   const signal = request.signal ? AbortSignal.any([request.signal, timeout]) : timeout;
   const res = await fetch("https://api.openai.com/v1/responses", {
     method: "POST",
-    headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+    headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json", ...(project && { "OpenAI-Project": project }) },
     cache: "no-store",
     redirect: "error",
     signal,

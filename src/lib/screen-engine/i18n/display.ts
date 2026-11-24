@@ -12,6 +12,9 @@ export function getQuestionDisplayText(
   _language: SupportedLanguage,
   i18n: I18nBundle,
 ): string {
+  // The actual follow-up is generated in the visitor's language. Its catalogue
+  // entry supplies a default only when a recorded question is unavailable.
+  if (slotId.startsWith('intake_detail_') && englishQuestion) return englishQuestion;
   const translated = i18n.slot_questions?.[slotId];
   return translated || englishQuestion;
 }

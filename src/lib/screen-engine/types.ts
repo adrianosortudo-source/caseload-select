@@ -402,6 +402,7 @@ export type Channel = 'web' | 'whatsapp' | 'sms' | 'instagram' | 'facebook' | 'g
 export type SupportedLanguage = 'en' | 'fr' | 'es' | 'pt' | 'zh' | 'ar';
 
 export interface EngineState {
+  intake_reading?: import('./interpretation').IntakeReadingState;
   input: string;
   /** Optional profile flag; omitted by existing firms and stored states. */
   family_enabled?: boolean;

@@ -58,6 +58,8 @@ import {
   describeSituationFirstAsk,
   contactCaptureFirstAsk,
 } from '@/lib/channel-intake-intro';
+import { applyIntakeInterpretation } from '@/lib/screen-engine/interpretation';
+import { screenTextProvider } from '@/lib/ai/intake-generation';
 import { llmMapOptionReply } from '@/lib/llm-option-map';
 import { isValidOptionValue } from '@/lib/llm-option-map-pure';
 import { buildClosingMessage } from '@/lib/screen-engine/closing';
@@ -881,7 +883,7 @@ export async function processChannelInbound(
           options: pendingSlot.options,
           reply: trimmed,
           language: state.language ?? 'en',
-        });
+        }, screenTextProvider());
         if (isValidOptionValue(mapped.value, pendingSlot.options)) {
           state = applyWrittenAnswer(state, pendingId, trimmed, mapped.value as string);
           state = { ...state, pendingAskedSlotId: null };
@@ -912,7 +914,9 @@ export async function processChannelInbound(
     !pendingLlmMapped
   ) {
     try {
-      const llm = await io.llmExtractServer(trimmed, state);
+      const pendingSlotId = isResume ? state.pendingAskedSlotId ?? undefined : undefined;
+      const llm = await io.llmExtractServer(trimmed, state, undefined, screenTextProvider(), undefined,
+        isResume ? { reply: trimmed, slotId: pendingSlotId } : {});
       llmMode = llm.mode;
       const filledIds = Object.keys(llm.extracted).filter(
         (k) => llm.extracted[k] !== null && llm.extracted[k] !== '',
@@ -920,6 +924,7 @@ export async function processChannelInbound(
       if (llm.mode === 'live' && filledIds.length > 0) {
         state = mergeLlmResults(state, llm.extracted);
       }
+      if (llm.mode === 'live') state = applyIntakeInterpretation(state, llm.interpretation, trimmed, pendingSlotId);
     } catch (err) {
       console.warn(`[channel-intake] llmExtractServer failed channel=${channel}:`, err);
     }
@@ -1681,6 +1686,9 @@ export async function finalizeChannelLead(
     slot_meta: state.slot_meta,
     slot_evidence: state.slot_evidence,
     written_answers: state.written_answers,
+    intake_reading: state.intake_reading,
+    family_enabled: state.family_enabled,
+    family_only: state.family_only,
     channel,
     multi_turn: wasMultiTurn,
     follow_up_count: totalFollowUps,

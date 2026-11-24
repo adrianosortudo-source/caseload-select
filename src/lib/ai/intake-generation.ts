@@ -13,6 +13,11 @@ export function operationalIntakeProvider(): IntakeProvider {
   return getProvider('SCREEN_INTAKE_AI_PROVIDER');
 }
 
+/** Text enquiries on the website and messaging channels share one provider selection. */
+export function screenTextProvider(): IntakeProvider {
+  return 'openai';
+}
+
 export function intakeModel(): string {
   return process.env.SCREEN_OPENAI_MODEL?.trim() || 'gpt-6-luna';
 }

@@ -1,3 +1,4 @@
+import { pendingIntakeQuestion } from './interpretation';
 import type { EngineState, LawyerReport, Band, ResolvedFact } from './types';
 import { computeBand, bandLabel, scoreFourAxes, buildAxisReasoning } from './band';
 import { selectNextSlot, getDecisionGap, isUserAnswered } from './selector';
@@ -674,6 +675,10 @@ function buildWhyItMatters(state: EngineState, band: Band): string {
 // ─── Best next lawyer question ────────────────────────────────────────────
 
 function buildBestNextQuestion(state: EngineState): string {
+  if (state.intake_reading) {
+    const open = pendingIntakeQuestion(state) ?? selectNextSlot(state);
+    return open?.question ?? '';
+  }
   switch (state.matter_type) {
     case 'business_setup_advisory': {
       const sub = state.advisory_subtrack;
@@ -964,6 +969,8 @@ export const SLOT_LABELS: Record<string, string> = {
   written_order: 'Court order in place',
   written_document: 'Document to sign or review',
   written_timing: 'Timing the lawyer should know',
+  intake_detail_1: 'Additional intake detail',
+  intake_detail_2: 'Further intake detail',
   written_goal: 'What the person wants help with',
   estate_dispute_type: 'Dispute type',
   estate_dispute_role: 'Client role',
@@ -987,20 +994,37 @@ function isReportableSlot(id: string): boolean {
 }
 
 function writtenFacts(state: EngineState): ResolvedFact[] {
-  return Object.entries(state.written_answers ?? {}).map(([id, value]) => {
+  const turns: ResolvedFact[] = (state.intake_reading?.turns ?? []).map(turn => ({
+    label: turn.correction ? 'Correction from the visitor' : turn.question ? `Answer to “${turn.question}”` : 'Additional detail from the visitor',
+    value: turn.text, source: 'explicit_from_caller',
+  }));
+  if (turns.length) turns.unshift({
+    label: state.intake_reading?.originalOpening ? 'Original enquiry (later corrected)' : 'Original enquiry',
+    value: state.intake_reading?.originalOpening ?? state.input, source: 'explicit_from_caller',
+  });
+  const quoted = new Set(turns.map(turn => turn.value));
+  for (const [id, quote] of Object.entries(state.intake_reading?.coveredQuestions ?? {})) {
+    if (!quote || quoted.has(quote) || !isReportableSlot(id)) continue;
+    const subject = SLOT_LABELS[id] ?? SLOT_REGISTRY.find(slot => slot.id === id)?.question;
+    if (!subject) continue;
+    turns.push({ label: `Visitor’s words · ${subject}`, value: quote, source: 'explicit_from_caller' });
+    quoted.add(quote);
+  }
+  return turns.concat(Object.entries(state.written_answers ?? {}).map(([id, value]) => {
     const question = SLOT_REGISTRY.find(slot => slot.id === id)?.question;
     const round = id.slice('__clarify__'.length);
     const label = question ? `Answer to “${question}”` : `Enquiry clarification${round ? ' ' + round : ''}`;
-    return { label, value, source: 'explicit_from_caller' };
-  });
+    return { label, value, source: 'explicit_from_caller' as const };
+  }));
 }
 
 function buildResolvedFacts(state: EngineState): Record<string, string> {
   const facts: Record<string, string> = {};
   for (const [id, val] of Object.entries(state.slots)) {
     if (!val) continue;
-    if (!isReportableSlot(id)) continue;
+    if (!isReportableSlot(id) || (id.startsWith('intake_detail_') && state.intake_reading?.turns.length)) continue;
     if (!isConfirmed(state, id) || state.written_answers?.[id]) continue;
+    if (state.intake_reading?.coveredQuestions?.[id] && state.slot_meta[id]?.source !== 'answered') continue;
     const label = SLOT_LABELS[id] ?? id;
     facts[label] = val;
   }
@@ -1012,9 +1036,10 @@ function buildResolvedFactsV2(state: EngineState): ResolvedFact[] {
   const out = writtenFacts(state);
   for (const [id, val] of Object.entries(state.slots)) {
     if (!val) continue;
-    if (!isReportableSlot(id) || state.written_answers?.[id]) continue;
+    if (!isReportableSlot(id) || state.written_answers?.[id] || (id.startsWith('intake_detail_') && state.intake_reading?.turns.length)) continue;
     const meta = state.slot_meta[id];
     if (!meta) continue;
+    if (state.intake_reading?.coveredQuestions?.[id] && meta.source !== 'answered') continue;
     const label = SLOT_LABELS[id] ?? id;
     let source: ResolvedFact['source'];
     // Honest BASE provenance from the engine's SlotMetaSource (#139, 2026-06-02).
@@ -1410,7 +1435,7 @@ function buildOpenQuestions(state: EngineState): string[] {
   }
 
   const questions: string[] = [...routingConfirm];
-  const next = selectNextSlot(state);
+  const next = pendingIntakeQuestion(state) ?? selectNextSlot(state);
   if (next) questions.push(next.question);
 
   const gap = getDecisionGap(state);
@@ -1600,16 +1625,27 @@ export function validateReportFacts(state: EngineState): string[] {
 // ─── Main report builder ──────────────────────────────────────────────────
 
 export function buildReport(state: EngineState): LawyerReport {
+  // Show the source account even when the classifier identifies a specific
+  // legal service. A service label cannot establish what the visitor wants.
+  const latestTurn = state.intake_reading?.turns.slice(-1)[0];
+  const visitorSnapshot = state.intake_reading
+    ? latestTurn
+      ? `The visitor later wrote: “${latestTurn.text}”`
+      : `The visitor wrote: “${state.input}”`
+    : undefined;
+  if (state.intake_reading?.currentAccount) {
+    state = { ...state, input: state.intake_reading.currentAccount };
+  }
   if (state.matter_type === 'family_general') {
     // Legacy report fields are required by existing storage readers. These
     // zero values are compatibility sentinels, not scores; renderers must
     // suppress them when intake_only is true.
     const blankAxis = () => ({ score: 0, reasons: [] as string[] });
-    const familyQuestions = SLOT_REGISTRY.filter(slot => slot.applies_to.includes('family_general') && slot.tier !== 'contact' && !isUserAnswered(state, slot.id)).map(slot => slot.question);
-    const next = familyQuestions[0] ?? '';
+    const familyQuestions = SLOT_REGISTRY.filter(slot => slot.applies_to.includes('family_general') && slot.tier !== 'contact' && !state.intake_reading?.coveredQuestions?.[slot.id] && !isUserAnswered(state, slot.id)).map(slot => slot.question);
+    const next = pendingIntakeQuestion(state)?.question ?? familyQuestions[0] ?? '';
     return {
       intake_only: true, lead_id: state.lead_id, submitted_at: state.submitted_at,
-      matter_snapshot: `Family law intake. Person's original description: ${state.input}`, lawyer_time_priority: 'Firm review required', band: 'C',
+      matter_snapshot: visitorSnapshot ?? `Family law intake. Person's original description: ${state.input}`, lawyer_time_priority: 'Firm review required', band: 'C',
       band_reasoning_bullets: [], confidence_calibration: 'Not assessed',
       four_axis: { value: 0, complexity: 0, urgency: 0, readiness: 0, readinessAnswered: false },
       axis_reasoning: { value: blankAxis(), complexity: blankAxis(), urgency: blankAxis(), readiness: blankAxis(), readinessAnswered: false },
@@ -1628,7 +1664,7 @@ export function buildReport(state: EngineState): LawyerReport {
   return {
     lead_id: state.lead_id,
     submitted_at: state.submitted_at,
-    matter_snapshot: buildMatterSnapshot(state),
+    matter_snapshot: visitorSnapshot ?? buildMatterSnapshot(state),
     lawyer_time_priority: bandLabel(bandResult.band),
     band: bandResult.band,
     band_reasoning_bullets: buildBandReasoningBullets(state),

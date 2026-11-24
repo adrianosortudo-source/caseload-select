@@ -5,6 +5,7 @@ import { Shell, type ShellLayout } from "@/components/intake-v2/Shell";
 import { TextCard } from "@/components/intake-v2/TextCard";
 import { DecisionCard } from "@/components/intake-v2/DecisionCard";
 import type { ScreenItem } from "@/components/intake-v2/types";
+import { applyIntakeInterpretation } from "@/lib/screen-engine/interpretation";
 import { extractPreviewInquiry, type ScreenPreviewBoundary } from "@/lib/screen-preview-boundary";
 import { applySelectedPracticeArea, initialiseState } from "@/lib/screen-engine/extractor";
 import { runEvidencePass } from "@/lib/screen-engine/slotEvidence";
@@ -158,6 +159,7 @@ export interface ScreenEnginePublicWidgetProps {
   /** Optional, browser-only continuation for the prospect presentation. */
   demoContinuation?: { workflow?: "meta"; contactUsed?: boolean; onUseSampleContact: () => void; onResetSession?: () => void; reply: string | null; onShowReview?: () => void };
   configuredPracticeAreas?: readonly import("@/lib/screen-engine/types").PracticeArea[];
+  selectedPracticeArea?: import("@/lib/screen-engine/types").PracticeArea;
   /** Optional fictional opening used by the presentation toolbar. */
   initialDescription?: string;
   /** Explicitly authorized intake packs, supplied by the server-side firm resolver. */
@@ -294,6 +296,12 @@ function FreeTextAnswerCard({
 
 
 
+function contextWithReply(state: EngineState, reply: string): string {
+  const prior = state.intake_reading?.turns.map(turn => turn.text) ?? [];
+  const other = Object.values(state.written_answers ?? {}).filter(text => !prior.includes(text));
+  return [state.input, ...other, ...prior, reply].join("\n\n");
+}
+
 export function ScreenEnginePublicWidget({
   firmId,
   firmName,
@@ -308,7 +316,7 @@ export function ScreenEnginePublicWidget({
   demoContinuation,
   initialDescription = "",
   configuredPracticeAreas = [],
-  operationalPracticeAreas,
+  operationalPracticeAreas, selectedPracticeArea,
 }: ScreenEnginePublicWidgetProps) {
   const previewBoundary = useContext(ScreenPreviewTransport);
   const policy = SCREEN_WIDGET_EXECUTION_POLICY[runtime];
@@ -321,6 +329,7 @@ export function ScreenEnginePublicWidget({
   const [state, setState] = useState<EngineState | null>(null);
   const [history, setHistory] = useState<EngineState[]>([]);
   const [isReading, setIsReading] = useState(false);
+  const [retryTurn, setRetryTurn] = useState<{ text: string; slotId?: string } | null>(null);
   const [readingAnswer, setReadingAnswer] = useState(false);
   const [answerFeedback, setAnswerFeedback] = useState<string | null>(null);
   const [persistStatus, setPersistStatus] = useState<string | null>(null);
@@ -405,6 +414,8 @@ export function ScreenEnginePublicWidget({
   const ws = (key: string, fallback: string): string =>
     i18n.widget_strings?.[key] ?? fallback;
 
+  const fontDisplay = "var(--cls-font-display, Manrope, sans-serif)";
+  const fontBody = "var(--cls-font-body, DM Sans, sans-serif)";
   const roundLabel =
     stage === "kickoff"
       ? ws("shell_round_your_situation", "Your situation")
@@ -490,6 +501,7 @@ export function ScreenEnginePublicWidget({
     setAnswerFeedback(null);
     setReadingAnswer(false);
     const run = ++extractionRun.current;
+    setRetryTurn(null);
 
     if (policy.usesFixtureEngine) {
       let fixtureState = prepareFamilyDemoState(startDemoState(text), configuredPracticeAreas);
@@ -505,11 +517,14 @@ export function ScreenEnginePublicWidget({
     let nextState = initialiseState(text);
     if (isDemo) nextState = prepareFamilyDemoState(nextState, configuredPracticeAreas);
     else if (operationalPracticeAreas) nextState = configureFirmPracticeAreas(nextState, operationalPracticeAreas);
+    if (selectedPracticeArea) nextState = applySelectedPracticeArea(nextState, selectedPracticeArea);
     nextState = runEvidencePass(text, nextState);
     if (metaWorkflow) nextState = groundDemoConversationFacts(nextState, text);
     else if (nextState.family_enabled) nextState = groundFamilyConversationFacts(nextState, text);
     nextState = scoreState(nextState);
-    setState(nextState);
+    // An opening remains a draft until the operational interpreter accepts it.
+    // Deferring state also avoids saving a second checkpoint when someone retries.
+    setState(runtime === "live" ? null : nextState);
     setStage("questions");
     setIsReading(true);
     if (isDemo) setExtraction({ status: "reading" });
@@ -522,9 +537,12 @@ export function ScreenEnginePublicWidget({
     try {
       const extracted = await extractInquiry(text, nextState);
       if (run !== extractionRun.current) return;
-      previewBoundary?.onExtraction?.(extracted.mode === "live");
+      if (runtime === "live" && extracted.mode !== "live") {
+        setRetryTurn({ text });
+        return;
+      }
       if (extracted.mode === "live") {
-        nextState = scoreState(mergeLlmResults(nextState, extracted.extracted));
+        nextState = scoreState(applyIntakeInterpretation(mergeLlmResults(nextState, extracted.extracted), extracted.interpretation, text));
         if (metaWorkflow) nextState = scoreState(groundDemoConversationFacts(nextState, text));
         setState(nextState);
         if (runtime === "demo-live-ai") setPendingDemoReview(!metaWorkflow && demoCapturedFacts(nextState).length > 0);
@@ -539,7 +557,7 @@ export function ScreenEnginePublicWidget({
       }
     } catch (error) {
       if (run !== extractionRun.current) return;
-      previewBoundary?.onExtraction?.(false);
+      if (runtime === "live") setRetryTurn({ text });
       // llmExtract normally resolves failures as { mode: "error" }, but keep
       // the presentation state truthful if that contract is ever violated.
       if (isDemo) {
@@ -559,23 +577,30 @@ export function ScreenEnginePublicWidget({
     if (!state || isReading || !text) return;
     const run = ++extractionRun.current;
     const attempts = clarifyAttempts + 1;
-    setClarifyAttempts(attempts);
-    setHistory((items) => [...items, state]);
+    setRetryTurn(null);
     let updated = applyWrittenAnswer(state, "__clarify__", text);
-    if (updated.matter_type === "unknown" && policy.allowsExtraction) {
+    if (policy.allowsExtraction && (runtime === "live" || updated.matter_type === "unknown")) {
       setIsReading(true);
       try {
-        const result = await extractInquiry(`${state.input}\n\n${text}`, updated);
+        const result = await extractInquiry(contextWithReply(state, text), updated, { pendingSlotId: "__clarify__", reply: text });
         if (run !== extractionRun.current) return;
-        previewBoundary?.onExtraction?.(result.mode === "live");
-        if (result.mode === "live") updated = mergeLlmResults(updated, result.extracted);
+        if (runtime === "live" && result.mode !== "live") {
+          setRetryTurn({ text, slotId: "__clarify__" });
+          return;
+        }
+        if (result.mode === "live") updated = applyIntakeInterpretation(mergeLlmResults(updated, result.extracted), result.interpretation, text, "__clarify__");
       } catch {
         if (run !== extractionRun.current) return;
-        previewBoundary?.onExtraction?.(false);
+        if (runtime === "live") {
+          setRetryTurn({ text, slotId: "__clarify__" });
+          return;
+        }
       } finally {
         if (run === extractionRun.current) setIsReading(false);
       }
     }
+    setClarifyAttempts(attempts);
+    setHistory((items) => [...items, state]);
     if (updated.family_enabled) updated = groundFamilyConversationFacts(updated, text);
     if (attempts >= 2 && updated.matter_type === "unknown") {
       setClarifyFallback(true);
@@ -608,22 +633,25 @@ export function ScreenEnginePublicWidget({
     if (!text) return;
     const asked = next?.slot;
     if (!asked || asked.id !== slotId) return;
-    const finishWritten = (updated: EngineState) => {
+    setRetryTurn(null);
+    const finishWritten = (updated: EngineState, reading?: Parameters<typeof applyIntakeInterpretation>[1]) => {
       setHistory((items) => [...items, state]);
       const grounded = updated.family_enabled ? groundFamilyConversationFacts(updated, text) : updated;
-      mutate(metaWorkflow ? groundFamilyOrderReplies(grounded, demoUserEvidence.current) : grounded);
+      const prepared = metaWorkflow ? groundFamilyOrderReplies(grounded, demoUserEvidence.current) : grounded;
+      mutate(applyIntakeInterpretation(prepared, reading, text, slotId));
     };
     const selectedWrittenAnswer = !metaWorkflow || writtenChoiceFor.current === slotId;
     writtenChoiceFor.current = null;
     const matched = applyPendingSlotReply(text, { ...state, pendingAskedSlotId: slotId });
-    if (matched.slot_meta[slotId]?.source === "answered" && !matched.pendingAskedSlotId) {
+    const locallyMatched = matched.slot_meta[slotId]?.source === "answered" && !matched.pendingAskedSlotId;
+    if (runtime !== "live" && locallyMatched) {
       const canonical = matched.slots[slotId];
       finishWritten(selectedWrittenAnswer
         ? applyWrittenAnswer(state, slotId, text, canonical ?? undefined)
         : matched);
       return;
     }
-    if (asked.input_type === "free_text" || !policy.allowsExtraction) {
+    if (!policy.allowsExtraction || (runtime !== "live" && asked.input_type === "free_text")) {
       finishWritten(applyWrittenAnswer(state, slotId, text));
       return;
     }
@@ -632,10 +660,13 @@ export function ScreenEnginePublicWidget({
     try {
       const context = metaWorkflow
         ? [state.input, ...demoReplyHistory.current].join("\n\n")
-        : [state.input, ...Object.values(state.written_answers ?? {}), text].join("\n\n");
+        : contextWithReply(state, text);
       const result = await extractInquiry(context, state, { pendingSlotId: slotId, reply: text });
       if (run !== extractionRun.current) return;
-      previewBoundary?.onExtraction?.(result.mode === "live" && (!result.mapping_mode || result.mapping_mode === "live"));
+      if (runtime === "live" && (result.mode !== "live" || (result.mapping_mode && result.mapping_mode !== "live"))) {
+        setRetryTurn({ text, slotId });
+        return;
+      }
       if (result.mode !== "live" && !result.mapped_answer) {
         setExtraction({ status: "fallback", reason: result.reason });
         finishWritten(applyWrittenAnswer(state, slotId, text));
@@ -649,11 +680,15 @@ export function ScreenEnginePublicWidget({
       }
       const mapped = result.mapped_answer;
       const mappedAnswer = mapped?.slotId === slotId && asked.options?.some((option) => option.value === mapped.value);
-      finishWritten(applyWrittenAnswer(updated, slotId, text, mappedAnswer ? mapped!.value : undefined));
+      const canonical = mappedAnswer ? mapped!.value : locallyMatched ? matched.slots[slotId] ?? undefined : undefined;
+      finishWritten(applyWrittenAnswer(updated, slotId, text, canonical), result.interpretation);
       setExtraction({ status: "live" });
     } catch {
       if (run !== extractionRun.current) return;
-      previewBoundary?.onExtraction?.(false);
+      if (runtime === "live") {
+        setRetryTurn({ text, slotId });
+        return;
+      }
       setExtraction({ status: "fallback", reason: "The answer could not be read." });
       finishWritten(applyWrittenAnswer(state, slotId, text));
     } finally {
@@ -664,6 +699,7 @@ export function ScreenEnginePublicWidget({
   function back() {
     demoReplyHistory.current = [];
     extractionRun.current += 1;
+    setRetryTurn(null);
     setIsReading(false);
     setPendingDemoReview(false);
     const prev = history.at(-1);
@@ -715,6 +751,9 @@ export function ScreenEnginePublicWidget({
         slot_meta: finalState.slot_meta,
         slot_evidence: finalState.slot_evidence,
         written_answers: finalState.written_answers,
+        intake_reading: finalState.intake_reading,
+        family_enabled: finalState.family_enabled,
+        family_only: finalState.family_only,
         raw: finalState.raw,
         intent_family: finalState.intent_family,
         dispute_family: finalState.dispute_family,
@@ -804,6 +843,48 @@ export function ScreenEnginePublicWidget({
   const demoReviewFooter = isDemo && !metaWorkflow && state && !pendingDemoReview && !isReading && demoCapturedFacts(state).length > 0
     ? <button type="button" className="min-h-[44px] w-full border border-[#1E2F58] bg-white px-4 py-3 text-[#1E2F58]" onClick={() => setPendingDemoReview(true)}>Review captured facts</button>
     : undefined;
+
+  if (retryTurn) {
+    const { text, slotId } = retryTurn;
+    return <Shell totalScreens={1} currentScreen={0} roundLabel={roundLabel} layout={layout} reportHeight={reportEmbeddedHeight}>
+      <section className="w-full space-y-4 py-6">
+        <h2 className="text-2xl font-extrabold">Please try that answer again</h2>
+        <p role="status">Screen could not read your answer. Your text is still here.</p>
+        <p className="whitespace-pre-wrap break-words border border-[#c8c3bb] p-3">{text}</p>
+        <button className="min-h-12 bg-[#1e2f58] px-5 py-2 font-bold text-white" type="button" onClick={() => {
+          if (slotId === "__clarify__") void submitClarify(text);
+          else if (slotId) void answer(slotId, "other:" + text);
+          else void runStart(text);
+        }}>Try again</button>
+      </section>
+    </Shell>;
+  }
+
+  if (isReading && !isDemo) {
+    return (
+      <Shell
+        totalScreens={WEB_DISCOVERY_HARD_CAP}
+        currentScreen={Math.min(state?.questionHistory.length ?? 0, WEB_DISCOVERY_HARD_CAP - 1)}
+        roundLabel={roundLabel}
+        onBack={back}
+        backLabel={backLabel}
+        layout={layout} reportHeight={reportEmbeddedHeight} footer={demoReviewFooter}
+      >
+        <div className="flex flex-col items-center justify-center text-center gap-4 py-16">
+          <div
+            aria-hidden="true"
+            className="w-10 h-10 rounded-full motion-reduce:animate-none border-2 border-[color-mix(in_srgb,var(--cls-accent,#1E2F58)_20%,transparent)] border-t-[var(--cls-accent,#1E2F58)] animate-spin"
+          />
+          <p
+            className="text-[13px] uppercase tracking-[0.18em] text-[color-mix(in_srgb,var(--cls-text,#1E2F58)_60%,transparent)]"
+            style={{ fontFamily: fontBody }}
+          >
+            {ws("loading_reading", "Reading your description...")}
+          </p>
+        </div>
+      </Shell>
+    );
+  }
 
   if (metaWorkflow) {
     const familyOnly = configuredPracticeAreas.length === 1 && configuredPracticeAreas[0] === "family";
@@ -917,8 +998,6 @@ export function ScreenEnginePublicWidget({
 
   // Per-firm theme tokens — see lib/widget-theme.ts. Fallbacks match
   // the legacy CaseLoad Select chrome.
-  const fontDisplay = "var(--cls-font-display, Manrope, sans-serif)";
-  const fontBody = "var(--cls-font-body, DM Sans, sans-serif)";
 
   if (isDemo && isReading) {
     return <Shell totalScreens={1} currentScreen={0} roundLabel="Reading" onBack={back} backLabel={backLabel} layout={layout} reportHeight={reportEmbeddedHeight} footer={demoReviewFooter}>
@@ -1195,38 +1274,6 @@ export function ScreenEnginePublicWidget({
               : previewBoundary ? "Complete fictional enquiry" : ws("contact_submit", "Submit matter review")}
           </button>
         </form>
-      </Shell>
-    );
-  }
-
-  // Hold the question render until the LLM extraction settles. Without this
-  // guard, the engine renders Question 1 from the evidence-pass state, then a
-  // few seconds later the LLM merge advances `getNextStep` to a different slot
-  // and the screen swaps without any user input (the symptom that reads as
-  // "two different versions of the widget flashing past"). One loading screen,
-  // then exactly one question.
-  if (isReading) {
-    return (
-      <Shell
-        totalScreens={WEB_DISCOVERY_HARD_CAP}
-        currentScreen={Math.min(state?.questionHistory.length ?? 0, WEB_DISCOVERY_HARD_CAP - 1)}
-        roundLabel={roundLabel}
-        onBack={back}
-        backLabel={backLabel}
-        layout={layout} reportHeight={reportEmbeddedHeight} footer={demoReviewFooter}
-      >
-        <div className="flex flex-col items-center justify-center text-center gap-4 py-16">
-          <div
-            aria-hidden="true"
-            className="w-10 h-10 rounded-full motion-reduce:animate-none border-2 border-[color-mix(in_srgb,var(--cls-accent,#1E2F58)_20%,transparent)] border-t-[var(--cls-accent,#1E2F58)] animate-spin"
-          />
-          <p
-            className="text-[13px] uppercase tracking-[0.18em] text-[color-mix(in_srgb,var(--cls-text,#1E2F58)_60%,transparent)]"
-            style={{ fontFamily: fontBody }}
-          >
-            {ws("loading_reading", "Reading your description...")}
-          </p>
-        </div>
       </Shell>
     );
   }

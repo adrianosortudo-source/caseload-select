@@ -32,13 +32,15 @@ describe("public demo extraction compatibility", () => {
     expect(handle).not.toHaveBeenCalled();
   });
 
-  it("preserves the legacy Gemini disclosure for any referrer or client-supplied provider marker", async () => {
-    vi.stubEnv("SCREEN_DEMO_AI_PROVIDER", "openai");
-    vi.stubEnv("SCREEN_INTAKE_AI_PROVIDER", "openai");
-    const req = new Request("https://example.test/api/extract", { method: "POST", headers: {
-      referer: "https://example.test/screen-demo-app/index.html", "X-Screen-Demo-Provider": "openai",
-    } });
-    await legacyExtract(req);
-    expect(handle).toHaveBeenCalledWith(req, "gemini");
-  });
+  it.each([undefined, "openai", "gemini"])(
+    "uses OpenAI for written Screen even with the legacy provider set to %s",
+    async (setting) => {
+      vi.stubEnv("SCREEN_INTAKE_AI_PROVIDER", setting);
+      const req = new Request("https://example.test/api/extract", { method: "POST", headers: {
+        referer: "https://example.test/screen-demo-app/index.html", "X-Screen-Demo-Provider": "gemini",
+      } });
+      await legacyExtract(req);
+      expect(handle).toHaveBeenCalledWith(req, "openai");
+    },
+  );
 });
