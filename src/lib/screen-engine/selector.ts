@@ -537,7 +537,7 @@ function slotIsAnswered(state: EngineState, slot: SlotDefinition): boolean {
   // a broad help menu would ask them to classify the same answer again.
   const repeatsGoal = !!state.slots.written_goal && state.matter_type.endsWith('_general') &&
     (slot.question_group === 'routing_category' || slot.question_group === 'routing' || slot.id === 'family_help_sought');
-  return repeatsGoal || !!state.written_answers?.[slot.id] || questionAddressed(state, slot.id);
+  return repeatsGoal || !!state.written_answers?.[slot.id] || !!state.intake_reading?.quoteOnlyOptions?.[slot.id] || questionAddressed(state, slot.id);
 }
 
 // ─── Subtrack applicability ───────────────────────────────────────────────

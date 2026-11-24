@@ -43,8 +43,8 @@ export interface LlmExtractionResponse {
 }
 
 const REQUEST_TIMEOUT_MS = 12_000;
-// Family classification and pending-answer mapping can share one provider call.
-const FAMILY_REQUEST_TIMEOUT_MS = 45_000;
+// Written replies and the Family profile may need the server's bounded retry window.
+const EXTENDED_REQUEST_TIMEOUT_MS = 45_000;
 
 export async function llmExtract(
   description: string,
@@ -53,7 +53,8 @@ export async function llmExtract(
   demoProvider?: 'openai' | 'gemini',
 ): Promise<LlmExtractionResponse> {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), state.family_enabled === true ? FAMILY_REQUEST_TIMEOUT_MS : REQUEST_TIMEOUT_MS);
+  const timeoutMs = followUp || state.family_enabled === true ? EXTENDED_REQUEST_TIMEOUT_MS : REQUEST_TIMEOUT_MS;
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const res = await fetch(demoProvider ? '/api/screen-demo/extract' : '/api/extract', {
       method: 'POST',
@@ -370,7 +371,7 @@ export function mergeLlmResults(
     // classifier output, not a user-answered slot.
     if (slotId === LEAD_INTENT_FIELD) continue;
 
-    if (value === null || value === '' || value === undefined) continue;
+    if (value === null || value === '' || value === undefined || working.intake_reading?.quoteOnlyOptions?.[slotId]) continue;
     if (working.matter_type === 'family_general' && !familyNegativeIsGrounded(slotId, value, state.input)) continue;
     // Drop non-answer literals — except when BOTH (a) the lead's own
     // text shows uncertainty AND (b) the slot's own option set

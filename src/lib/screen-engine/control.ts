@@ -13,6 +13,7 @@ import {
   classificationForMatterType,
 } from './extractor';
 import { deriveAdvisorySpecificTask, runEvidencePass } from './slotEvidence';
+import { familyNegativeIsGrounded } from './llm/extractor';
 import { intakeFollowUp } from './interpretation';
 import { interpretWrittenAnswer, refineWrittenRoute, selectWrittenFollowUp } from './written-answers';
 import { buildClosingMessage } from './closing';
@@ -1300,6 +1301,11 @@ export function applyAnswer(state: EngineState, slotId: string, value: string): 
     questionHistory: [...state.questionHistory, slotId],
   };
 
+  if (updated.intake_reading?.quoteOnlyOptions?.[slotId]) {
+    const options = { ...updated.intake_reading.quoteOnlyOptions };
+    delete options[slotId];
+    updated.intake_reading = { ...updated.intake_reading, quoteOnlyOptions: options };
+  }
   const slot = SLOT_REGISTRY.find(s => s.id === slotId);
   if (slot?.input_type === 'free_text' && slot.tier !== 'contact') {
     updated = runEvidencePass(value, refineWrittenRoute(updated, value));
@@ -1408,6 +1414,29 @@ export function applyAnswer(state: EngineState, slotId: string, value: string): 
   };
 
   return updated;
+}
+
+/** A semantic match can omit qualifications in the option label. Keep the
+ * source quotation until the visitor confirms the whole answer. */
+export function applyGroundedWrittenAnswer(
+  state: EngineState, slotId: string, text: string, proposedOption?: string,
+): EngineState {
+  const slot = SLOT_REGISTRY.find(item => item.id === slotId);
+  const option = slot?.options?.find(item => item.value === proposedOption);
+  if (!slot || !option || slot.input_type !== 'single_select') return applyWrittenAnswer(state, slotId, text);
+  const normalized = (value: string) => value.trim().toLowerCase().replace(/[.!?]+$/, '').trim();
+  const reply = normalized(text);
+  const literal = reply === normalized(option.value) || reply === normalized(option.label);
+  const digit = /^\d+$/.test(reply) && slot.options?.[Number(reply) - 1]?.value === option.value;
+  const completeDenial = slotId === 'family_existing_order' && option.value === 'Neither'
+    && !/\b(?:might|perhaps|if|maybe|unsure|apparently|told|assumed?|claims?|says?|said)\b/i.test(text)
+    && familyNegativeIsGrounded(slotId, option.value, text);
+  if (literal || digit || completeDenial) return applyWrittenAnswer(state, slotId, text, option.value);
+
+  return applyWrittenAnswer({ ...state, intake_reading: {
+    ...state.intake_reading, turns: state.intake_reading?.turns ?? [],
+    quoteOnlyOptions: { ...state.intake_reading?.quoteOnlyOptions, [slot.id]: text },
+  } }, slotId, text);
 }
 
 /** Record a free response without treating an unmatched opinion as a canonical fact. */

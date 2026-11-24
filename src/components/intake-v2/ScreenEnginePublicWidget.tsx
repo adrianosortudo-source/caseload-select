@@ -13,6 +13,7 @@ import { computeBand } from "@/lib/screen-engine/band";
 import { computeCoreCompleteness, getDecisionGap } from "@/lib/screen-engine/selector";
 import {
   applyAnswer,
+  applyGroundedWrittenAnswer,
   applyWrittenAnswer,
   applyClarifyChoice,
   buildLeadSummary,
@@ -681,7 +682,10 @@ export function ScreenEnginePublicWidget({
       const mapped = result.mapped_answer;
       const mappedAnswer = mapped?.slotId === slotId && asked.options?.some((option) => option.value === mapped.value);
       const canonical = mappedAnswer ? mapped!.value : locallyMatched ? matched.slots[slotId] ?? undefined : undefined;
-      finishWritten(applyWrittenAnswer(updated, slotId, text, canonical), result.interpretation);
+      const prepared = result.interpretation
+        ? applyGroundedWrittenAnswer(updated, slotId, text, canonical ?? result.extracted[slotId] ?? undefined)
+        : applyWrittenAnswer(updated, slotId, text, canonical);
+      finishWritten(prepared, result.interpretation);
       setExtraction({ status: "live" });
     } catch {
       if (run !== extractionRun.current) return;

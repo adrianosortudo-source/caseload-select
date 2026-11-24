@@ -47,7 +47,7 @@ import { runEvidencePass } from '@/lib/screen-engine/slotEvidence';
 import { mergeLlmResults } from '@/lib/screen-engine/llm/extractor';
 import { buildReport } from '@/lib/screen-engine/report';
 import { computeBand } from '@/lib/screen-engine/band';
-import { getNextStep, applyWrittenAnswer } from '@/lib/screen-engine/control';
+import { getNextStep, applyGroundedWrittenAnswer, applyWrittenAnswer } from '@/lib/screen-engine/control';
 import { selectWrittenFollowUp } from '@/lib/screen-engine/written-answers';
 import { llmExtractServer } from '@/lib/screen-llm-server';
 import { renderBriefHtmlServer } from '@/lib/screen-brief-html';
@@ -850,13 +850,9 @@ export async function processChannelInbound(
   // promise once the C2 intro says "answer in your own words" — ask the
   // LLM to map the lead's own wording onto one of the options offered.
   //
-  // A mapped value earns 'answered' provenance via applyAnswer (not
-  // 'llm_inferred' slot-fill), because the user DID answer this specific
-  // question; the LLM only translates their wording onto the option list
-  // WE offered, which is a materially different and narrower claim than
-  // a free-form extraction guess. See llm-option-map-pure.ts for why the
-  // membership check before applyAnswer is mandatory: never feed an
-  // LLM-invented value into the engine.
+  // A proposed menu value may include conclusions that the visitor never
+  // stated. Store a categorical answer only when independently grounded.
+  // Otherwise retain the visitor's wording and continue the conversation.
   //
   // Ordering: must run BEFORE llmExtractServer (immediately below), not
   // inside Phase C's pending-slot block further down. Phase C computes
@@ -885,7 +881,7 @@ export async function processChannelInbound(
           language: state.language ?? 'en',
         }, screenTextProvider());
         if (isValidOptionValue(mapped.value, pendingSlot.options)) {
-          state = applyWrittenAnswer(state, pendingId, trimmed, mapped.value as string);
+          state = applyGroundedWrittenAnswer(state, pendingId, trimmed, mapped.value as string);
           state = { ...state, pendingAskedSlotId: null };
           pendingLlmMapped = true;
         }

@@ -23,6 +23,18 @@ describe('family extraction timeout', () => {
     await expect(result).resolves.toMatchObject({ mode: 'error', reason: 'request aborted' });
     expect(vi.getTimerCount()).toBe(0);
   });
+  it('allows every written follow-up the full server retry window, then cleans up', async () => {
+    vi.stubGlobal('fetch', pendingFetch());
+    const state = initialiseState('A business invoice is unpaid');
+    const result = llmExtract(state.input, state, { pendingSlotId: 'invoice_exists', reply: 'It was an email.' });
+    await vi.advanceTimersByTimeAsync(12_000);
+    expect(vi.getTimerCount()).toBe(1);
+    await vi.advanceTimersByTimeAsync(32_999);
+    expect(vi.getTimerCount()).toBe(1);
+    await vi.advanceTimersByTimeAsync(1);
+    await expect(result).resolves.toMatchObject({ mode: 'error', reason: 'request aborted' });
+    expect(vi.getTimerCount()).toBe(0);
+  });
   it('keeps the legacy 12-second deadline for the default profile', async () => {
     vi.stubGlobal('fetch', pendingFetch());
     const state = initialiseState('A business invoice is unpaid');

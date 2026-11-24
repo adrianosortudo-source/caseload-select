@@ -29,6 +29,8 @@ export interface IntakeReadingState {
   originalOpening?: string;
   /** Exact visitor passages that already addressed an intake question. Not scored facts. */
   coveredQuestions?: Record<string, string>;
+  /** An attempted enum mapping exceeded what the visitor actually said. */
+  quoteOnlyOptions?: Record<string, string>;
   next?: { slotId: string; question: string; after: number };
 }
 
@@ -144,7 +146,7 @@ export function applyIntakeInterpretation(
   const turns = [...old?.turns ?? []];
   let next: EngineState = { ...state, slots: { ...state.slots }, slot_meta: { ...state.slot_meta },
     slot_evidence: { ...state.slot_evidence }, written_answers: { ...state.written_answers },
-    intake_reading: { turns, currentAccount: active, originalOpening: old?.originalOpening ?? (correction ? state.input : undefined) } };
+    intake_reading: { turns, quoteOnlyOptions: old?.quoteOnlyOptions, currentAccount: active, originalOpening: old?.originalOpening ?? (correction ? state.input : undefined) } };
   const remove = (id: string) => {
     if (protect(id)) return;
     delete next.slots[id]; delete next.slot_meta[id]; delete next.slot_evidence[id]; delete next.written_answers![id];

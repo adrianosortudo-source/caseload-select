@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { applySelectedPracticeArea, initialiseState } from '../extractor';
 import { applyIntakeInterpretation, type IntakeInterpretation } from '../interpretation';
-import { getNextStep } from '../control';
+import { applyAnswer, applyGroundedWrittenAnswer, getNextStep } from '../control';
+import { mergeLlmResults } from '../llm/extractor';
+import { runEvidencePass } from '../slotEvidence';
 import { isUserAnswered, selectNextSlot } from '../selector';
 import { buildReport } from '../report';
 import { getSlotById } from '../slotRegistry';
@@ -76,6 +78,31 @@ describe('the shared discovery and callback question policy', () => {
     expect(next.intake_reading?.coveredQuestions?.wages_type).toBe('I need my unpaid overtime');
     expect(getNextStep(next).slot?.id).toBe('wages_owed_band');
     expect(next.slots.wages_type).toBeUndefined();
+  });
+
+  it.each([
+    ['probate' as const, 'will_status_probate', 'We found his signed will this morning.', 'Yes, and it is valid'],
+    ['family_general' as const, 'family_existing_order', 'There is no court order.', 'Neither'],
+    ['will_drafting' as const, 'existing_will_status', 'I signed a will years ago.', 'Yes, but it is outdated'],
+  ])('does not convert a partial answer in %s into a stronger menu label', (matter,id,source,proposed) => {
+    const state = {...initialiseState('I need advice.'),matter_type:matter,family_enabled:true};
+    const merged = mergeLlmResults(state,{[id]:proposed});
+    const recorded = applyGroundedWrittenAnswer(merged,id,source,proposed);
+    const interpreted = applyIntakeInterpretation(recorded,{...base,matter,answers_question:true,
+      covered_questions:[{slot_id:id,quote:source}]},source,id);
+    const resumed = runEvidencePass(source,mergeLlmResults(interpreted,{[id]:proposed}));
+    expect(resumed.slots[id]).toBeUndefined();
+    expect(resumed.slot_meta[id]).toBeUndefined();
+    expect(buildReport(resumed).resolved_facts_v2.some(fact => fact.value === proposed)).toBe(false);
+    expect(buildReport(resumed).resolved_facts_v2.some(fact => fact.value === source)).toBe(true);
+    expect(applyAnswer(resumed,id,proposed).slots[id]).toBe(proposed);
+    expect(applyGroundedWrittenAnswer(resumed,id,proposed,proposed).slots[id]).toBe(proposed);
+  });
+
+  it('accepts a complete independent denial for a combined agreement and order question', () => {
+    const state = {...initialiseState('I want to ask about parenting.'),matter_type:'family_general' as const,family_enabled:true};
+    const answer = 'There is no order and no written agreement.';
+    expect(applyGroundedWrittenAnswer(state,'family_existing_order',answer,'Neither').slots.family_existing_order).toBe('Neither');
   });
 
   it('re-grounds the corrected value after discarding an unsupported earlier hypothesis', () => {

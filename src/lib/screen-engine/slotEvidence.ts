@@ -21,6 +21,7 @@ function matchPattern(text: string, patterns: string[]): string | null {
 }
 
 function slotAlreadyFilled(state: EngineState, slotId: string): boolean {
+  if (state.intake_reading?.quoteOnlyOptions?.[slotId]) return true;
   const val = state.slots[slotId];
   if (val !== null && val !== undefined && val !== '') return true;
   const meta = state.slot_meta[slotId];
