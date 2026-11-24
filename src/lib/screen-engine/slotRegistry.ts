@@ -128,6 +128,8 @@ const CONTACT_APPLIES_TO: MatterType[] = [...ALL_MATTER_TYPES];
 // The selector offers these only when a visitor's words raise the specific question.
 // An empty applies_to keeps them out of automatic scoring and extraction packs.
 const writtenFollowUps: SlotDefinition[] = [
+  { id: 'intake_detail_1', question: 'What else should the lawyer know?' },
+  { id: 'intake_detail_2', question: 'What detail would you like to add?' },
   { id: 'written_agreement', question: 'Is there a written agreement in place?' },
   { id: 'written_order', question: 'Is there a court order in place?' },
   { id: 'written_document', question: 'What document have you been asked to sign or review?' },

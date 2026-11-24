@@ -13,6 +13,11 @@
  */
 
 import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
+import { notFound } from "next/navigation";
+import { screenParityPreviewEnabled } from "@/lib/screen-parity-preview-enabled";
+import ScreenParityPreview from "@/components/intake-v2/ScreenParityPreview";
+import type { PreviewPracticeArea } from "@/lib/screen-preview-boundary";
+import "@/app/portal/[firmId]/triage/[leadId]/brief.css";
 import { ScreenEnginePublicWidget } from "@/components/intake-v2/ScreenEnginePublicWidget";
 import {
   resolveWidgetTheme,
@@ -22,7 +27,7 @@ import {
 
 interface PageProps {
   params: Promise<{ firmId: string }>;
-  searchParams: Promise<{ lang?: string }>;
+  searchParams: Promise<{ lang?: string; practice_area?: string }>;
 }
 
 interface FirmRow {
@@ -40,18 +45,23 @@ const KICKOFF_LANGS = new Set(["en", "pt"]);
 
 export default async function PublicWidgetPage({ params, searchParams }: PageProps) {
   const { firmId } = await params;
-  const { lang } = await searchParams;
+  const { lang, practice_area: area } = await searchParams;
+  const previewFirm = firmId === "fictional-screen-preview" || firmId === "fictional-screen-default-preview";
+  if (previewFirm && (!screenParityPreviewEnabled() || !area || !["corporate", "employment", "real_estate", "estates", "family"].includes(area))) notFound();
+  const operationalPracticeAreas = previewFirm && firmId === "fictional-screen-preview" && area === "family" ? ["family" as const] : undefined;
 
   // Locale hint from the embedding page (e.g. DRG's /pt/contact passes
   // ?lang=pt). Validated against the kickoff allow-list; unknown values
   // fall back to English so a malformed query never breaks the screen.
   const initialLang = lang && KICKOFF_LANGS.has(lang) ? (lang as "en" | "pt") : "en";
 
-  const { data: firm } = await supabase
+  const firm: FirmRow | null = previewFirm
+    ? { name: "Example Law Firm", branding: null, consent_gate_enabled: false }
+    : (await supabase
     .from("intake_firms")
     .select("name, branding, consent_gate_enabled")
     .eq("id", firmId)
-    .single<FirmRow>();
+    .single<FirmRow>()).data;
 
   if (!firm) {
     return (
@@ -67,14 +77,18 @@ export default async function PublicWidgetPage({ params, searchParams }: PagePro
   const theme = resolveWidgetTheme(firm.branding);
   const themeStyle = themeToCssVars(theme);
 
-  return (
+  const widget = (
     <div style={themeStyle}>
       <ScreenEnginePublicWidget
         firmId={firmId}
         firmName={displayName}
         initialLang={initialLang}
         consentCaptureEnabled={!!firm.consent_gate_enabled}
+        operationalPracticeAreas={operationalPracticeAreas}
+        selectedPracticeArea={firmId === "fictional-screen-preview" ? area as PreviewPracticeArea : undefined}
       />
     </div>
   );
+  return previewFirm ? <ScreenParityPreview practiceArea={area as PreviewPracticeArea} channel="website"
+    comparison externalReport={false}>{widget}</ScreenParityPreview> : widget;
 }

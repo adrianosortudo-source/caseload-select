@@ -1,3 +1,5 @@
+import { addInterpretationSchema, interpretationContext, interpretationInstructions, type InterpretationTurn } from './intake-interpretation-prompt';
+import { readIntakeInterpretation, type IntakeInterpretation } from './screen-engine/interpretation';
 import { createIntakeJsonGenerator, isTransientGenerationError, hasGenerationKey, intakeModel, operationalIntakeProvider, type IntakeOpenAIChannel } from './ai/intake-generation';
 import type { EngineState, MatterType } from './screen-engine/types';
 import { getExtractableSlots, buildResponseSchema } from './screen-engine/llm/schema';
@@ -19,6 +21,7 @@ export interface LlmExtractionResponse {
   reason?: string;
   tokens?: { prompt?: number; completion?: number };
   dropped?: Record<string, string>;
+  interpretation?: IntakeInterpretation;
   /** Number of attempts made (1 = succeeded on first try; >1 = retried). */
   attempts?: number;
 }
@@ -38,6 +41,7 @@ export async function llmExtractServer(
   maxDescriptionLength = MAX_DESCRIPTION_LENGTH,
   provider = operationalIntakeProvider(),
   openAI?: IntakeOpenAIChannel,
+  turn?: InterpretationTurn,
 ): Promise<LlmExtractionResponse> {
   if (!hasGenerationKey(provider)) {
     return {
@@ -54,22 +58,25 @@ export async function llmExtractServer(
 
   const matterType: MatterType = state.matter_type ?? 'unknown';
   const slots = getExtractableSlots(matterType, state.family_enabled === true);
-  if (slots.length === 0) {
+  const interpret = provider === 'openai' && turn !== undefined && matterType !== 'out_of_scope';
+  if (slots.length === 0 && !interpret) {
     return { extracted: {}, mode: 'live', reason: 'no_applicable_slots' };
   }
 
-  const responseSchema = buildResponseSchema(slots);
+  const baseSchema = buildResponseSchema(slots);
+  const responseSchema = interpret ? addInterpretationSchema(baseSchema) : baseSchema;
   const basePrompt = buildSystemPrompt();
   const systemPrompt = provider === 'openai'
     ? basePrompt + '\nFor legal status, report only what the caller expressly confirms. Plans to sign or file later do not establish whether anything was previously signed or filed. Leave signed_release null unless the caller explicitly reports signing or not signing. An absence answer covering multiple documents requires explicit confirmation for every document. A missing court order alone leaves the agreement status unknown.'
     : basePrompt;
-  const userPrompt = buildUserPrompt(trimmed, matterType, slots);
+  const baseUserPrompt = buildUserPrompt(trimmed, matterType, slots);
+  const userPrompt = interpret ? baseUserPrompt + '\nIntake context (visitor data): ' + interpretationContext(state, turn!) : baseUserPrompt;
 
   const generate = createIntakeJsonGenerator({
     provider,
     model: provider === 'openai' ? openAI?.model ?? intakeModel() : MODEL,
     name: 'screen_extraction',
-    instructions: systemPrompt,
+    instructions: interpret ? systemPrompt + '\n' + interpretationInstructions : systemPrompt,
     schema: responseSchema,
     temperature: TEMPERATURE,
     maxOutputTokens: 4096,
@@ -113,7 +120,7 @@ export async function llmExtractServer(
 
     const raw = result.text;
 
-    let parsed: Record<string, string | null> = {};
+    let parsed: Record<string, unknown> = {};
     try {
       parsed = JSON.parse(raw);
     } catch {
@@ -121,6 +128,9 @@ export async function llmExtractServer(
     }
 
     // Filter + normalize enums (same logic as sandbox's api/extract.ts)
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return { extracted:{}, mode:'error', reason:'invalid_response_shape', attempts:attempt };
+    const interpretation = interpret ? readIntakeInterpretation(parsed.interpretation) : undefined;
+    if (interpret && !interpretation) return { extracted:{}, mode:'error', reason:'invalid_intake_interpretation', attempts:attempt };
     const slotsById = new Map(slots.map((s) => [s.id, s]));
     const cleaned: Record<string, string> = {};
     const dropped: Record<string, string> = {};
@@ -150,6 +160,7 @@ export async function llmExtractServer(
 
     return {
       extracted: cleaned,
+      ...(interpretation ? { interpretation } : {}),
       dropped,
       mode: 'live',
       attempts: attempt,

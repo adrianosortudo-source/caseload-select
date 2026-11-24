@@ -5,6 +5,10 @@ import type { EngineState, SlotDefinition } from './types';
 const unspecifiedDocument = /\b(?:sign|review)\s+(?:(?:some|the|these|those|a|my|their|some kind of)\s+)*(?:something|it|paperwork|papers?|documents?|forms?)\b/i;
 const documentName = /\b(?:agreements?|contracts?|offers?|releases?|leases?|wills|(?:a|my|our|the|his|her|their|last) will|court orders?|notices?|deeds?|applications?|letters?|settlements?|parenting plans?)\b/i;
 const reviewAction = /\b(?:sign(?:ing|ature)?|review(?:ed|ing)?|submit(?:ting)?|fil(?:e|ing)|draft(?:ed|ing)?|respond(?:ing)?|reply|due|deadline)\b/i;
+export function namesDocumentTask(text: string): boolean {
+  return documentName.test(text) && reviewAction.test(text);
+}
+
 const negativeAction = /\b(?:nothing to (?:sign|review)|(?:do not|don't|don’t|did not|didn't|didn’t|no longer) (?:need|want|have|plan|intend|expect|require)|(?:not|never) (?:signing|asked to sign|going to sign)|no (?:review|reply|response|signature) (?:is )?(?:needed|required))\b/i;
 const deadlineReference = /\b(?:by|before|due|deadline|respond|reply|submit|sign|file|meeting|hearing|appointment|court date)\b/i;
 const negativeTiming = /\b(?:no\s+(?:(?:immediate|fixed|specific|known|reported|upcoming|set|scheduled|court|hearing|filing|response|payment|signing)\s+)*(?:dates?|deadlines?)|(?:date|deadline) (?:has not been|hasn't been|is not|isn't|not yet) (?:set|scheduled|reported|given|known)|not time[- ]sensitive|no rush|no time limit)\b/i;

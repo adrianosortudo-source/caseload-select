@@ -202,7 +202,7 @@ describe('LLM option-mapping fallback for off-list replies (C3)', () => {
     expect(buildReport(answered).resolved_facts_v2.some((fact) => fact.value === words)).toBe(true);
   });
 
-  it('mapped: an off-list reply that clearly selects an option is applied with answered provenance; llmExtractServer is skipped; a NEW question is sent', async () => {
+  it('keeps a mapped paraphrase in the visitor’s own words and advances to the next question', async () => {
     mocks.loadOpenChannelSession.mockResolvedValueOnce(advisoryPathPendingSession() as never);
     mocks.llmMapOptionReply.mockResolvedValueOnce({
       value: 'Starting a new business',
@@ -236,17 +236,11 @@ describe('LLM option-mapping fallback for off-list replies (C3)', () => {
 
     const persistCall =
       mocks.updateChannelSession.mock.calls[0] ?? mocks.createChannelSession.mock.calls[0];
-    const persistedState = (
-      persistCall as unknown as Array<{
-        engineState: {
-          slots: Record<string, string>;
-          slot_meta: Record<string, { source: string }>;
-          pendingAskedSlotId: string | null;
-        };
-      }>
-    )[0].engineState;
-    expect(persistedState.slots.advisory_path).toBe('Starting a new business');
-    expect(persistedState.slot_meta.advisory_path.source).toBe('answered');
+    const persistedState = (persistCall as unknown as [{ engineState: EngineState }])[0].engineState;
+    expect(persistedState.slots.advisory_path).toBeUndefined();
+    expect(persistedState.slot_meta.advisory_path).toBeUndefined();
+    expect(buildReport(persistedState).resolved_facts_v2.some(fact =>
+      fact.value === 'yeah just getting it off the ground from scratch')).toBe(true);
     // The pointer moved to the NEW question the engine asked next, not
     // left dangling on advisory_path.
     expect(persistedState.pendingAskedSlotId).not.toBe('advisory_path');

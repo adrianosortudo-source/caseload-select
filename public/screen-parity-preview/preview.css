@@ -1,0 +1,79 @@
+#demo-live {
+  color: #0d1520;
+  font-family: Manrope, sans-serif;
+  min-width: 0;
+}
+#demo-live [hidden] { display: none !important; }
+#demo-live :is(button, select, textarea, input) { font: inherit; }
+#demo-live .preview-choices {
+  display: grid;
+  grid-template-columns: minmax(18rem, 1fr) minmax(0, 1.4fr);
+  gap: 1rem 3rem;
+  align-items: start;
+  border-block: 1px solid #c8c4ba;
+  padding: 1.2rem 0;
+}
+.preview-pickers { display: grid; grid-template-columns: 1fr auto; gap: .75rem 1rem; }
+.preview-picker { display: grid; gap: .3rem; min-width: 0; grid-column: 1; }
+.preview-picker label, #preview-send label { font-size: .875rem; font-weight: 700; }
+#demo-live select, #preview-text {
+  width: 100%;
+  min-height: 2.7rem;
+  border: 1px solid #203359;
+  border-radius: 0;
+  background: #fff;
+  color: #0d1520;
+  padding: .55rem .65rem;
+}
+#demo-live select:disabled { border-color: #868a90; color: #575e68; }
+#preview-reset {
+  grid-column: 2;
+  grid-row: 1;
+  align-self: end;
+  min-height: 2.7rem;
+  background: white;
+  border: 1px solid #203359;
+  color: #203359;
+  padding: .4rem .8rem;
+}
+#preview-reset:disabled { opacity: .55; }
+#demo-live :is(#demo-scope, #preview-disclosure, #preview-prompt) { font-size: .98rem; line-height: 1.55; margin: 0; }
+#demo-live h3 { margin: 1.65rem 0 .7rem; font-size: 1.5rem; line-height: 1.25; color: #203359; }
+#demo-live .preview-channels { display: flex; gap: .15rem .6rem; flex-wrap: wrap; border: 0; border-bottom: 1px solid #c8c4ba; padding: 0; margin: 0 0 .8rem; }
+.preview-channels legend { font: 650 .76rem/1.4 Oxanium, sans-serif; letter-spacing: .08em; text-transform: uppercase; margin-bottom: .3rem; }
+.preview-channels label { display: inline-flex; align-items: stretch; position: relative; color: #303641; cursor: pointer; }
+.preview-channels input { position: absolute; width: 1px; height: 1px; clip-path: inset(50%); }
+.preview-channels span { display: inline-flex; align-items: center; font: 650 .86rem/1.35 Oxanium, sans-serif; min-height: 2.75rem; border-bottom: 3px solid transparent; padding: .25rem .4rem; }
+.preview-channels input:checked + span { border-bottom-color: #203359; color: #203359; }
+.preview-channels input:focus-visible + span { outline: 2px solid #203359; outline-offset: -2px; }
+#demo-live #preview-disclosure { color: #34404d; margin: .65rem 0; }
+#demo-live #preview-prompt { background: #f4f2ed; padding: 1rem; }
+.preview-workspace, .preview-widget-host { min-width: 0; }
+.preview-workspace.with-sms { display: grid; gap: 1.4rem; grid-template-columns: minmax(0, .8fr) minmax(0, 1.5fr); align-items: start; }
+.preview-phone {
+  box-sizing: border-box;
+  width: 100%; max-width: 24rem;
+  padding: 1.25rem;
+  border: 2px solid #203359;
+  border-radius: 1.4rem;
+  background: #fff;
+}
+#demo-live .preview-phone h4 { margin: 0; font: 700 1.1rem/1.4 Manrope,sans-serif; }
+#demo-live .preview-number { font-size: .85rem; margin: .2rem 0 1rem; }
+#preview-send { display: grid; gap: .5rem; }
+#preview-send .fp-btn { justify-self: start; margin-top: .3rem; }
+#preview-text { display: block; box-sizing: border-box; resize: none; overflow: hidden; }
+.preview-messages { display: grid; gap: .65rem; line-height: 1.45; }
+.preview-messages p { margin: 0; overflow-wrap: anywhere; }
+.preview-sent, .preview-reply { padding: .75rem; max-width: 94%; border-radius: .9rem; }
+.preview-messages .preview-sent { margin-left: auto; background: #203359; color: #fff; white-space: pre-wrap; }
+.preview-reply { background: #f4f2ed; color: #0d1520; }
+.preview-reply a { display: block; margin-top: .35rem; color: #203359; font-weight: 700; }
+.preview-widget-host iframe, #preview-report iframe { display: block; width: 100%; border: 0; }
+#preview-report { border-top: 1px solid #c8c4ba; margin-top: 2rem; }
+#preview-report p { margin: 0 0 1rem; line-height: 1.6; }
+@media (max-width: 760px) {
+  #demo-live .preview-choices, .preview-workspace.with-sms { grid-template-columns: 1fr; gap: 1rem; }
+  .preview-phone { max-width: none; }
+  .preview-pickers { grid-template-columns: minmax(0,1fr) auto; gap: .5rem; }
+}

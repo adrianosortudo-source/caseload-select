@@ -1,7 +1,7 @@
 /**
  * Route-level tests for /api/extract rate limiting + body cap (H6).
  *
- * /api/extract is a public proxy in front of the Gemini extraction call
+ * /api/extract is a public proxy in front of the Screen extraction call
  * (the browser widget calls it, so it cannot require auth). These tests
  * pin the two gates added by the launch audit:
  *   - 429 with rate-limit headers when the per-IP bucket denies
@@ -91,7 +91,17 @@ describe("/api/extract rate limiting", () => {
     const description = "x".repeat(16_000);
     const res = await POST(makeRequest({ description }));
     expect(res.status).toBe(200);
-    expect(mocks.llmExtractServer).toHaveBeenCalledWith(description, expect.anything(), 16_000, "gemini", undefined);
+    expect(mocks.llmExtractServer).toHaveBeenCalledWith(description, expect.anything(), 16_000, "openai", undefined, {});
+  });
+
+  it("passes the actual dynamic question and written answer to the same interpreter", async () => {
+    const question = "What needs to be addressed in the release?";
+    const res = await POST(makeRequest({ description: "They paid me. I need a release.", matter_type: "corporate_general",
+      pending_slot_id: "intake_detail_1", pending_question: question, reply: "I want a written release." }));
+    expect(res.status).toBe(200);
+    expect(mocks.llmExtractServer).toHaveBeenCalledWith(expect.any(String), expect.anything(), 16_000, "openai", undefined,
+      { slotId: "intake_detail_1", question, reply: "I want a written release." });
+    expect(await res.json()).toMatchObject({ provider: "openai", mode: "live" });
   });
 
   it("keeps the empty-description short-circuit (no LLM call, no 4xx)", async () => {

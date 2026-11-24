@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import type { IntakeProvider } from "@/lib/ai/intake-generation";
+import { intakeModel, type IntakeProvider } from "@/lib/ai/intake-generation";
 import { publicToolPilotModel, requestPublicToolOpenAI } from "@/lib/ai/public-tool-pilot-budget";
 import { startPilotMetrics } from "@/lib/ai/public-pilot-metrics";
 import { llmExtractServer } from "@/lib/screen-llm-server";
@@ -16,6 +16,7 @@ interface ExtractRequest {
   family_enabled?: boolean;
   already_extracted?: Record<string, string | null>;
   pending_slot_id?: string;
+  pending_question?: string;
   reply?: string;
 }
 
@@ -57,17 +58,25 @@ export async function handleScreenExtraction(req: Request, provider: IntakeProvi
 
   const slot = typeof body.pending_slot_id === "string" ? SLOT_REGISTRY.find((item) => item.id === body.pending_slot_id) : undefined;
   const reply = typeof body.reply === "string" ? body.reply.trim() : "";
-  if ((body.pending_slot_id !== undefined || body.reply !== undefined) &&
-      (!slot || slot.tier === "contact" || slot.input_type !== "single_select" || !slot.options?.length ||
-       !slot.applies_to.includes(state.matter_type) || !reply || reply.length > 4000)) {
+  const clarification = body.pending_slot_id === "__clarify__";
+  const hasFollowUp = body.pending_slot_id !== undefined || body.reply !== undefined;
+  const dynamicSlot = slot?.id === "intake_detail_1" || slot?.id === "intake_detail_2";
+  const question = dynamicSlot && typeof body.pending_question === "string" ? body.pending_question.trim() : undefined;
+  if (body.pending_question !== undefined && (!question || question.length > 260 || /[<>\n\r]|https?:\/\//i.test(question))) {
+    return NextResponse.json({ error: "invalid pending question" }, { status: 400 });
+  }
+  if (hasFollowUp && (!reply || reply.length > 4000 ||
+      (!clarification && (!slot || slot.tier === "contact" ||
+       (slot.applies_to.length > 0 && !slot.applies_to.includes(state.matter_type)))))) {
     return NextResponse.json({ error: "invalid pending slot or reply" }, { status: 400 });
   }
   const metrics = surface === "public-demo" ? startPilotMetrics("screen-demo", provider, started) : undefined;
   const channel = surface === "public-demo" ? { model: publicToolPilotModel, request: requestPublicToolOpenAI } : undefined;
   metrics?.attempt(provider);
   const [result, mapped] = await Promise.all([
-    llmExtractServer(description, state, MAX_DESCRIPTION_CHARS, provider, channel),
-    slot && reply ? llmMapOptionReply({ questionLabel: slot.question, options: slot.options!, reply, language: "en" }, provider, channel) : Promise.resolve(null),
+    llmExtractServer(description, state, MAX_DESCRIPTION_CHARS, provider, channel,
+      surface === "public-demo" ? undefined : hasFollowUp ? { reply, slotId: body.pending_slot_id, question } : {}),
+    slot?.input_type === "single_select" && slot.options?.length && reply ? llmMapOptionReply({ questionLabel: slot.question, options: slot.options!, reply, language: "en" }, provider, channel) : Promise.resolve(null),
   ]).catch(error => { metrics?.finish("failed"); throw error; });
   metrics?.finish(result.mode === "live" && (!mapped || mapped.mode === "live") ? "completed" : "degraded");
   const value = mapped?.value;
@@ -75,5 +84,6 @@ export async function handleScreenExtraction(req: Request, provider: IntakeProvi
     /^neither[.!\s]*$/i.test(reply) || familyNegativeIsGrounded(slot.id, value, `${description}\n${reply}`);
   const mapped_answer = slot && value && compositeNegativeGrounded && slot.options?.some((option) => option.value === value)
     ? { slotId: slot.id, value } : undefined;
-  return NextResponse.json({ ...result, ...(mapped ? { mapping_mode: mapped.mode } : {}), ...(mapped_answer ? { mapped_answer } : {}) });
+  const model = provider === "openai" ? channel?.model ?? intakeModel() : "gemini-2.5-flash";
+  return NextResponse.json({ ...result, provider, model, ...(mapped ? { mapping_mode: mapped.mode } : {}), ...(mapped_answer ? { mapped_answer } : {}) });
 }

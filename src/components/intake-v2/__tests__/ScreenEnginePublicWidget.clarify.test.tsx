@@ -39,7 +39,7 @@ beforeEach(() => {
   vi.stubGlobal("ResizeObserver", MockResizeObserver);
   vi.stubGlobal(
     "fetch",
-    vi.fn().mockRejectedValue(new Error("network disabled in test")),
+    vi.fn().mockResolvedValue({ ok: true, json: async () => ({ mode: "live", extracted: {} }) }),
   );
 });
 
@@ -99,7 +99,7 @@ describe("ScreenEnginePublicWidget clarify menu render (DR-112)", () => {
     const submissions: { brief_html: string; slot_answers: { written_answers: Record<string, string> } }[] = [];
     vi.stubGlobal("fetch", vi.fn(async (url, init) => {
       if (url === "/api/example-submit") submissions.push(JSON.parse(init.body));
-      return { ok: true, json: async () => ({ mode: "disabled", extracted: {}, persisted: true }) };
+      return { ok: true, json: async () => ({ mode: "live", extracted: {}, persisted: true }) };
     }));
     render(<ScreenEnginePublicWidget firmId="test-firm" firmName="Example practice" submitEndpoint="/api/example-submit" />);
     await submitKickoff("I need legal help with my business.");
@@ -108,7 +108,9 @@ describe("ScreenEnginePublicWidget clarify menu render (DR-112)", () => {
     await submitOtherFreeText(words);
     const date = await screen.findByRole("textbox", { name: "Is there a date the lawyer should take into account?" });
     fireEvent.change(date, { target: { value: "Next Tuesday." } });
+    await waitFor(() => expect(screen.getByRole("button", { name: "Continue" })).toBeTruthy());
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    await screen.findByRole("button", { name: "Skip this question" });
     for (let turn = 0; turn < 8; turn += 1) {
       const skip = screen.queryByRole("button", { name: "Skip this question" });
       if (!skip) break;

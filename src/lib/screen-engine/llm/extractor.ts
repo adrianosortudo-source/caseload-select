@@ -4,6 +4,7 @@
 // unavailable or no API key is configured.
 
 import type { EngineState, LeadIntent, MatterType, SupportedLanguage } from '../types';
+import { readIntakeInterpretation } from '../interpretation';
 import { computeBand } from '../band';
 import { computeCoreCompleteness, getDecisionGap } from '../selector';
 import { classificationForMatterType, isValidMatterType } from '../extractor';
@@ -30,6 +31,9 @@ function isValidSupportedLanguage(value: string): boolean {
 }
 
 export interface LlmExtractionResponse {
+  interpretation?: import('../interpretation').IntakeInterpretation;
+  provider?: string;
+  model?: string;
   extracted: Record<string, string | null>;
   mode: 'live' | 'disabled' | 'error';
   reason?: string;
@@ -39,8 +43,8 @@ export interface LlmExtractionResponse {
 }
 
 const REQUEST_TIMEOUT_MS = 12_000;
-// Family classification and pending-answer mapping can share one provider call.
-const FAMILY_REQUEST_TIMEOUT_MS = 45_000;
+// Written replies and the Family profile may need the server's bounded retry window.
+const EXTENDED_REQUEST_TIMEOUT_MS = 45_000;
 
 export async function llmExtract(
   description: string,
@@ -49,7 +53,8 @@ export async function llmExtract(
   demoProvider?: 'openai' | 'gemini',
 ): Promise<LlmExtractionResponse> {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), state.family_enabled === true ? FAMILY_REQUEST_TIMEOUT_MS : REQUEST_TIMEOUT_MS);
+  const timeoutMs = followUp || state.family_enabled === true ? EXTENDED_REQUEST_TIMEOUT_MS : REQUEST_TIMEOUT_MS;
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const res = await fetch(demoProvider ? '/api/screen-demo/extract' : '/api/extract', {
       method: 'POST',
@@ -63,6 +68,9 @@ export async function llmExtract(
         family_enabled: state.family_enabled === true,
         already_extracted: state.slots,
         ...(followUp ? { pending_slot_id: followUp.pendingSlotId, reply: followUp.reply } : {}),
+        ...(followUp && ['intake_detail_1', 'intake_detail_2'].includes(followUp.pendingSlotId)
+          && state.intake_reading?.next?.slotId === followUp.pendingSlotId
+          ? { pending_question: state.intake_reading.next.question } : {}),
       }),
       signal: controller.signal,
     });
@@ -72,6 +80,9 @@ export async function llmExtract(
     const data = await res.json();
     return {
       extracted: data.extracted ?? {},
+      interpretation: readIntakeInterpretation(data.interpretation),
+      provider: data.provider,
+      model: data.model,
       mode: data.mode ?? 'live',
       reason: data.reason,
       mapped_answer: data.mapped_answer,
@@ -360,7 +371,7 @@ export function mergeLlmResults(
     // classifier output, not a user-answered slot.
     if (slotId === LEAD_INTENT_FIELD) continue;
 
-    if (value === null || value === '' || value === undefined) continue;
+    if (value === null || value === '' || value === undefined || working.intake_reading?.quoteOnlyOptions?.[slotId]) continue;
     if (working.matter_type === 'family_general' && !familyNegativeIsGrounded(slotId, value, state.input)) continue;
     // Drop non-answer literals — except when BOTH (a) the lead's own
     // text shows uncertainty AND (b) the slot's own option set
