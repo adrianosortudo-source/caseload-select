@@ -1,36 +1,7 @@
 import type { EngineState, SlotDefinition, DecisionGap } from './types';
 import { selectWrittenFollowUp } from './written-answers';
-import { getSlotById, SLOT_REGISTRY } from './slotRegistry';
+import { getSlotById, SLOT_REGISTRY, slotApplicableToCorporateRouting, slotApplicableToSubtrack } from './slotRegistry';
 import { groundedCoverage, neutralQuestion, priorityPending, priorityQuestion, questionPermitted } from './question-policy';
-
-const CORPORATE_DETAIL_SLOT_BY_CATEGORY: Readonly<Record<string, string>> = {
-  'Money owed, supplier billing, or a broken agreement': 'corporate_dispute_problem_type',
-  'A partner, co-owner, or internal company concern': 'corporate_internal_problem_type',
-  'Contracts or ongoing legal support': 'corporate_support_problem_type',
-};
-const CORPORATE_DETAIL_SLOT_IDS = new Set(
-  Object.values(CORPORATE_DETAIL_SLOT_BY_CATEGORY),
-);
-
-/**
- * Corporate routing is deliberately progressive. The compatibility slot
- * corporate_problem_type remains in the registry for extraction, stored
- * states, and reports, but interactive selection uses one four-choice
- * category followed by only the relevant two- or three-choice detail slot.
- */
-function slotApplicableToCorporateRouting(
-  state: EngineState,
-  slot: SlotDefinition,
-): boolean {
-  if (state.matter_type !== 'corporate_general') return true;
-  if (slot.id === 'corporate_problem_type') return false;
-
-  if (!CORPORATE_DETAIL_SLOT_IDS.has(slot.id)) return true;
-
-  const category = state.slots['corporate_help_category'];
-  return typeof category === 'string' &&
-    CORPORATE_DETAIL_SLOT_BY_CATEGORY[category] === slot.id;
-}
 
 // ─── Decision gap logic ────────────────────────────────────────────────────
 
@@ -544,14 +515,6 @@ function slotIsAnswered(state: EngineState, slot: SlotDefinition): boolean {
 }
 
 // ─── Subtrack applicability ───────────────────────────────────────────────
-
-function slotApplicableToSubtrack(state: EngineState, slot: SlotDefinition): boolean {
-  if (!slot.applies_to_subtrack) return true;
-  if (state.matter_type !== 'business_setup_advisory') return true;
-  const sub = state.advisory_subtrack;
-  if (sub === 'unknown') return true;
-  return slot.applies_to_subtrack.includes(sub);
-}
 
 // ─── Slot scoring ─────────────────────────────────────────────────────────
 

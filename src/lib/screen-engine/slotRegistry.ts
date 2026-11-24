@@ -1,4 +1,4 @@
-import type { MatterType, SlotDefinition } from './types';
+import type { EngineState, MatterType, SlotDefinition } from './types';
 
 /**
  * Every contact slot (client_name / client_phone / client_email /
@@ -1249,6 +1249,7 @@ export const SLOT_REGISTRY: SlotDefinition[] = [
 
   {
     id: 'amount_at_stake',
+    question_premise: 'financial',
     question: 'About how much money is involved?',
     input_type: 'single_select',
     options: [
@@ -3747,4 +3748,49 @@ export function getSlotById(id: string): SlotDefinition | undefined {
 
 export function getSlotsForMatter(matterType: string): SlotDefinition[] {
   return SLOT_REGISTRY.filter(s => s.applies_to.includes(matterType as never));
+}
+
+const CORPORATE_DETAIL_SLOT_BY_CATEGORY: Readonly<Record<string, string>> = {
+  'Money owed, supplier billing, or a broken agreement': 'corporate_dispute_problem_type',
+  'A partner, co-owner, or internal company concern': 'corporate_internal_problem_type',
+  'Contracts or ongoing legal support': 'corporate_support_problem_type',
+};
+const CORPORATE_DETAIL_SLOT_IDS = new Set(
+  Object.values(CORPORATE_DETAIL_SLOT_BY_CATEGORY),
+);
+
+/**
+ * Corporate routing is deliberately progressive. The compatibility slot
+ * corporate_problem_type remains in the registry for extraction, stored
+ * states, and reports, but interactive selection uses one four-choice
+ * category followed by only the relevant two- or three-choice detail slot.
+ */
+export function slotApplicableToCorporateRouting(
+  state: EngineState,
+  slot: SlotDefinition,
+): boolean {
+  if (state.matter_type !== 'corporate_general') return true;
+  if (slot.id === 'corporate_problem_type') return false;
+
+  if (!CORPORATE_DETAIL_SLOT_IDS.has(slot.id)) return true;
+
+  const category = state.slots['corporate_help_category'];
+  return typeof category === 'string' &&
+    CORPORATE_DETAIL_SLOT_BY_CATEGORY[category] === slot.id;
+}
+
+export function slotApplicableToSubtrack(state: EngineState, slot: SlotDefinition): boolean {
+  if (!slot.applies_to_subtrack) return true;
+  if (state.matter_type !== 'business_setup_advisory') return true;
+  const sub = state.advisory_subtrack;
+  if (sub === 'unknown') return true;
+  return slot.applies_to_subtrack.includes(sub);
+}
+
+export function catalogueQuestionApplies(state: EngineState, slot: SlotDefinition): boolean {
+  if (!slot.applies_to.includes(state.matter_type) || !slotApplicableToSubtrack(state, slot)
+      || !slotApplicableToCorporateRouting(state, slot)) return false;
+  if (slot.id === 'ownership_split_discussed' && state.advisory_subtrack === 'solo_setup') return false;
+  return slot.id !== 'gca_specific_document'
+    || state.slots['gca_engagement_shape'] === 'A specific contract reviewed or drafted';
 }

@@ -36,15 +36,36 @@ describe('shared grounded question policy', () => {
       question_review: {
         requests: [{ quote: 'whether the agreement was signed', matter: 'contract_dispute' }],
         priority_quote: null,
-        questions: [{ slot_id: 'dispute_reason', status: 'missing', quote: 'disagree about whether the agreement was signed' }],
+        questions: [
+          { slot_id: 'dispute_reason', status: 'missing', quote: 'disagree about whether the agreement was signed' },
+          { slot_id: 'amount_at_stake', status: 'missing', quote: 'disagree about whether the agreement was signed' },
+        ],
       },
     };
     const state = opening(input, 'contract_dispute', reading);
     expect(questionPermitted(state, getSlotById('dispute_reason')!)).toBe(false);
+    expect(questionPermitted(state, getSlotById('amount_at_stake')!)).toBe(false);
     expect(getNextStep(state).slot?.id).not.toBe('dispute_reason');
     expect(buildReport(state).best_next_question).not.toMatch(/paying|not paid|owe/iu);
     expect(opening(input, 'contract_dispute', reading, false).intake_reading?.questionReview).toBeUndefined();
     expect(pendingIntakeQuestion(opening(input, 'contract_dispute', reading, false))?.id).toBe('dispute_reason');
+  });
+
+  it('permits a material financial question when a financial stake is mentioned without asserting a debt', () => {
+    const input = 'The deposit might be at risk. I need to discuss our contract terms.';
+    const state = opening(input, 'contract_dispute', {
+      next_slot: 'amount_at_stake',
+      question_review: {
+        requests: [{ quote: 'I need to discuss our contract terms.', matter: 'contract_dispute' }],
+        priority_quote: null,
+        questions: [
+          { slot_id: 'dispute_reason', status: 'missing', quote: 'The deposit might be at risk.' },
+          { slot_id: 'amount_at_stake', status: 'missing', quote: 'The deposit might be at risk.' },
+        ],
+      },
+    });
+    expect(questionPermitted(state, getSlotById('dispute_reason')!)).toBe(false);
+    expect(questionPermitted(state, getSlotById('amount_at_stake')!)).toBe(true);
   });
 
   it('permits a relevant underpayment question when evidence supports it', () => {
@@ -159,6 +180,71 @@ describe('shared grounded question policy', () => {
     }
     expect(getNextStep(state).slot?.id).toBe('desired_outcome_will_drafting');
     expect(buildReport(state).matter_snapshot).toContain(input);
+  });
+
+  it('uses a grounded outcome question when a proposed company setup question is already covered', () => {
+    const input = 'I fix bikes under my own name. I want customers to hire a company instead of me personally.';
+    const nextQuestion = 'What would you like the company to handle or change about how you work with customers?';
+    const basis = 'I want customers to hire a company instead of me personally.';
+    const state = opening(input, 'business_setup_advisory', {
+      next_slot: 'setup_needs',
+      next_question: nextQuestion,
+      question_review: { requests: [{ quote: basis, matter: 'business_setup_advisory' }], priority_quote: null,
+        custom_basis_quote: basis, questions: [{ slot_id: 'setup_needs', status: 'answered', quote: basis }] },
+    });
+    expect(getNextStep(state).slot?.question).toBe(nextQuestion);
+  });
+
+  it('applies the same progressive routing prerequisites to a model-selected menu as a local fallback', () => {
+    const input = 'It is between me and someone I work with. Something changed.';
+    const candidate: Partial<IntakeInterpretation> = {
+      next_slot: 'corporate_internal_problem_type',
+      next_question: 'What would you like to change about how you work with this person?',
+      question_review: { requests: [], priority_quote: null, custom_basis_quote: input,
+        questions: [{ slot_id: 'corporate_internal_problem_type', status: 'missing', quote: 'someone I work with' }] },
+    };
+    const state = opening(input, 'corporate_general', candidate);
+    expect(pendingIntakeQuestion(state)).toBeUndefined();
+    expect(getNextStep(state).slot?.id).toBe('written_goal');
+    expect(pendingIntakeQuestion(opening(input, 'corporate_general', candidate, false))?.id).toBe('corporate_internal_problem_type');
+  });
+
+  it('does not re-ask a generic date after an accepted deadline and still asks when timing is tentative', () => {
+    const request = 'I need help reviewing my severance offer.';
+    const deadline = 'My response is due by Thursday.';
+    const reading = (quote: string): Partial<IntakeInterpretation> => ({
+      question_review: { requests: [{ quote: request, matter: 'severance_review' }], priority_quote: null,
+        questions: [{ slot_id: 'severance_deadline', status: 'answered', quote }] },
+    });
+    const resolved = opening(`${request} ${deadline}`, 'severance_review', reading('by Thursday'));
+    expect(getNextStep(resolved).slot?.id).not.toBe('written_timing');
+    const unclear = opening(`${request} It might be due by Thursday.`, 'severance_review', reading('by Thursday'));
+    expect(getNextStep(unclear).slot?.id).toBe('written_timing');
+  });
+
+  it('keeps identifying details in the dedicated contact screen and tolerates references to ways notices arrived', () => {
+    const familyInput = 'I need some help with my brother. It is sensitive and I’m not ready to describe it yet.';
+    const initial: EngineState = { ...initialiseState(familyInput), matter_type: 'family_general',
+      practice_area: 'family', family_enabled: true, question_policy: 'grounded_v1' };
+    const reading: IntakeInterpretation = { ...base, matter: 'family_general',
+      next_question: 'Could you share your name and the best phone number or email for the firm to reach you?', question_review: {
+        requests: [{ quote: 'I need some help with my brother.', matter: 'family_general' }], priority_quote: null,
+        custom_basis_quote: 'It is sensitive and I’m not ready to describe it yet.', questions: [],
+      } };
+    const state = applyIntakeInterpretation(initial, reading, familyInput);
+    expect(pendingIntakeQuestion(state)).toBeUndefined();
+    expect(getNextStep(state).slot?.id).toBe('written_timing');
+    for (const question of ['What is the other party’s legal name?', 'Can you provide your mailing address?', 'What is their email?']) {
+      const adverse = applyIntakeInterpretation(initial, { ...reading, next_question: question }, familyInput);
+      expect(pendingIntakeQuestion(adverse)).toBeUndefined();
+    }
+    const notice = opening('I need help with a notice about our agreement.', 'contract_dispute', {
+      next_question: 'Did you receive the notice by email?', question_review: {
+        requests: [{ quote: 'I need help with a notice about our agreement.', matter: 'contract_dispute' }],
+        priority_quote: null, custom_basis_quote: 'a notice about our agreement', questions: [],
+      },
+    });
+    expect(getNextStep(notice).slot?.question).toBe('Did you receive the notice by email?');
   });
 
   it('withholds unsupported review when a citation is invented or spans two replies', () => {

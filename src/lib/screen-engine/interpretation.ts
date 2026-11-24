@@ -3,7 +3,7 @@ import { getSlotById, SLOT_REGISTRY } from './slotRegistry';
 import { runEvidencePass } from './slotEvidence';
 import { groundFamilyConversationFacts, groundFamilyOrderReplies } from './family';
 import { namesDocumentTask } from './written-answers';
-import { customQuestionPermitted, groundQuestionReview, parseQuestionReview, priorityPending, questionPermitted, type GroundedQuestionReview, type QuestionReview } from './question-policy';
+import { canRefineCoveredQuestion, customQuestionPermitted, groundQuestionReview, parseQuestionReview, priorityPending, questionPermitted, type GroundedQuestionReview, type QuestionReview } from './question-policy';
 import type { EngineState, MatterType, SlotDefinition } from './types';
 
 export interface IntakeInterpretation {
@@ -275,7 +275,8 @@ export function applyIntakeInterpretation(
       && (!slot.applies_to.includes(next.matter_type) || protect(slot.id) || !!covered[slot.id]
         || used.includes(slot.id) || !!next.slots[slot.id]));
     const rejectedSubject = !!(goal && authored && (!authored.applies_to.includes(next.matter_type) || covered[authored.id]));
-    const rejectedRegistered = state.question_policy === 'grounded_v1' && !!authored;
+    const rejectedRegistered = state.question_policy === 'grounded_v1' && authored && question
+      && !canRefineCoveredQuestion(next, authored, question);
     if (id && question && !rejectedRegistered && !rejectedSubject && !repeatsAuthored && customQuestionPermitted(next, question)
       && question.length <= 260 && /^[^<>\n]+[?？]$/.test(question)
       && !/https?:\/\//i.test(question) && !turns.some(turn => turn.question === question)) {

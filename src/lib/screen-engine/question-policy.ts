@@ -1,4 +1,4 @@
-import { ALL_MATTER_TYPES, getSlotById, SLOT_REGISTRY } from './slotRegistry';
+import { ALL_MATTER_TYPES, catalogueQuestionApplies, getSlotById, SLOT_REGISTRY } from './slotRegistry';
 import type { EngineState, MatterType, SlotDefinition } from './types';
 
 type QuestionStatus = 'missing' | 'answered' | 'disputed' | 'irrelevant';
@@ -127,6 +127,7 @@ const firmQuestions = new Set(['hiring_timeline', 'decision_authority', 'other_c
  * cannot support one of these questions. This never populates a slot. */
 const premiseClues = {
   payment: /\b(?:unpaid|nonpayment|past due|outstanding balance|owe[sd]?|not (?:been )?paid|haven['’]t paid|hasn['’]t paid|part(?:ially)? paid|refus\w+ to pay|marked it as unpaid)\b/iu,
+  financial: /(?:[$€£]\s*\d|\b[\d,.]+\s+(?:dollars?|euros?|pounds?)\b|\b(?:monetary|money|price|purchase amount|fees?|costs?|arrears|outstanding|balance|owe[sd]?|invoice|unpaid|payment|deposit|refund|financial loss|compensation)\b)/iu,
   dismissal: /\b(?:dismiss\w+|terminated|fired|laid off|let go|ending my employment|never come back|\w+ job ended)\b/iu,
   severance: /\b(?:severance|termination package|separation package|termination offer|termination pay|pay in lieu)\b/iu,
   closing: /\b(?:closing|close on|settlement date|accepted offer|purchase and sale)\b/iu,
@@ -150,7 +151,14 @@ const directCoverage = {
 export type QuestionCoverage = keyof typeof directCoverage;
 
 const indirect = /\b(?:presumably|i assume|i thought|i was told|i (?:heard|believe|guess)|maybe|apparently|supposedly|someone (?:says|said|told me)|i (?:am|'m) not sure|(?:if|whether) (?:i|we|they|he|she))\b/iu;
-const deniedPremise = /\b(?:not about|no longer|does not owe|doesn['’]t owe|never owed|paid (?:in full|it all|everything)|no (?:debt|dismissal|severance|dispute)|still employed)\b/iu;
+const deniedPremise = /\b(?:not about|no longer|does not owe|doesn['’]t owe|never owed|paid (?:in full|it all|everything)|no (?:debt|money(?: at stake)?|financial loss|dismissal|severance|dispute)|still employed)\b/iu;
+const deniedByTopic: Partial<Record<QuestionPremise, RegExp>> = {
+  payment: /\b(?:does not owe|doesn['’]t owe|never owed|paid (?:in full|it all|everything)|no (?:debt|balance))\b/iu,
+  financial: /\b(?:not about (?:the )?money|no (?:debt|money(?: at stake)?|financial loss))\b/iu,
+  dismissal: /\b(?:not fired|not dismissed|no dismissal|still employed)\b/iu,
+  severance: /\b(?:no severance|not (?:a |about )severance)\b/iu,
+  dispute: /\b(?:no dispute|not a dispute)\b/iu,
+};
 
 function currentSources(state: EngineState): string[] {
   const account = state.intake_reading?.currentAccount ?? state.input;
@@ -163,7 +171,7 @@ function hasLiteralPremise(state: EngineState, topic: QuestionPremise, citation:
   if (!premiseClues[topic].test(citation)) return false;
   return currentSources(state).some(source => {
     const statement = containingStatement(source, citation);
-    return statement && !indirect.test(statement) && !deniedPremise.test(statement);
+    return statement && !indirect.test(statement) && !deniedByTopic[topic]?.test(statement);
   });
 }
 
@@ -186,7 +194,7 @@ export function groundedCoverage(state: EngineState, slot: SlotDefinition): stri
 
 export function questionPermitted(state: EngineState, slot: SlotDefinition): boolean {
   if (state.question_policy !== 'grounded_v1' || slot.tier === 'contact') return true;
-  if (state.questionHistory.includes(slot.id) || priorityPending(state)) return false;
+  if (!catalogueQuestionApplies(state, slot) || state.questionHistory.includes(slot.id) || priorityPending(state)) return false;
   if (groundedCoverage(state, slot) || state.intake_reading?.coveredQuestions?.[slot.id]) return false;
   const reading = state.intake_reading;
   const grade = reading?.questionReview?.grades[slot.id];
@@ -201,6 +209,14 @@ const goalQuestion = getSlotById('written_goal');
 
 export function priorityQuestion(state: EngineState): SlotDefinition | undefined {
   return priorityPending(state) && !state.questionHistory.includes('written_goal') ? goalQuestion : undefined;
+}
+
+function solicitsContactDetails(question: string): boolean {
+  const contactIdentifier = /\b(?:(?:first|last|full|legal) names?|(?:phone|telephone|mobile|cell|fax|whatsapp|contact) numbers?|(?:e-?mail|mailing|postal|home|street|residential) address(?:es)?|contact (?:details|information|info)|nom complet|pr[ée]nom|adresse (?:postale|e-?mail)|num[ée]ro de t[ée]l[ée]phone|(?:nombre|nome) completo|correo electr[óo]nico|n[úu]mero (?:de )?te(?:l[eé]fono|lefone)|endere[çc]o de e-?mail)\b|手机号|电话号码|全名|电子邮[件箱]|رقم الهاتف|البريد الإلكتروني|الاسم الكامل/iu;
+  const asksFor = /\b(?:what (?:is|are)|what['’]s|provide|share|give|send|tell me|state|list|enter|leave|confirm|identify)\b/iu;
+  const ownedIdentifier = /\b(?:your|their|the (?:other party|customer|employer|recipient|lender|vendor|seller|landlord|partner)['’]s) (?:legal )?(?:name|e-?mail|number|address)\b/iu;
+  return contactIdentifier.test(question) || asksFor.test(question) && ownedIdentifier.test(question)
+    || /\b(?:how (?:can|could|should) (?:we|the (?:firm|lawyer)) (?:reach|contact)|best (?:way|number|address) (?:for .{1,40} )?to (?:reach|contact))\b/iu.test(question);
 }
 
 function authoredTextAllowed(state: EngineState, question: string, basis: string): boolean {
@@ -220,6 +236,7 @@ function authoredTextAllowed(state: EngineState, question: string, basis: string
 
 export function customQuestionPermitted(state: EngineState, question: string): boolean {
   if (state.question_policy !== 'grounded_v1') return true;
+  if (solicitsContactDetails(question)) return false;
   const review = state.intake_reading?.questionReview;
   if (!review?.customBasis || priorityPending(state) || !authoredTextAllowed(state, question, review.customBasis)) return false;
   const directTopic = [
@@ -230,6 +247,31 @@ export function customQuestionPermitted(state: EngineState, question: string): b
     ['closing_date', /\bwhen (?:is|will) (?:the |your )?(?:closing|you close)\b/iu],
   ] as const;
   return !directTopic.some(([topic, wording]) => wording.test(question) && directQuote(state, topic));
+}
+
+/** The model can refine an already covered catalogue question into an
+ * outcome question. It cannot sidestep a failed premise or routing gate. */
+export function canRefineCoveredQuestion(state: EngineState, slot: SlotDefinition, question: string): boolean {
+  if (slot.question_premise || !catalogueQuestionApplies(state, slot) || state.questionHistory.includes(slot.id)) return false;
+  if (!groundedCoverage(state, slot) && !state.intake_reading?.coveredQuestions?.[slot.id]) return false;
+  if (!/^what (?:would you like|do you want|are you hoping)\b/iu.test(question) || /^(?:what kind|what type)/iu.test(question)) return false;
+  const quote = state.intake_reading?.questionReview?.customBasis;
+  if (!quote) return false;
+  const words = new Set(quote.toLowerCase().match(/[\p{L}\p{N}]{4,}/gu) ?? []);
+  return question.toLowerCase().match(/[\p{L}\p{N}]{4,}/gu)
+    ?.some(word => !priorityWords.has(word) && words.has(word)) ?? false;
+}
+
+function hasCoveredTiming(state: EngineState): boolean {
+  const grades = state.intake_reading?.questionReview?.grades ?? {};
+  const timingSlot = /(?:date|deadline|timing|timeline|when|urgency)/i;
+  const timeEvidence = /\b(?:(?:by|on|before|due)\s+(?:(?:next|this)\s+)?(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday|tomorrow|tonight)|\d{1,4}[-\/]\d{1,2}[-\/]\d{1,4}|(?:january|february|march|april|may|june|july|august|september|october|november|december)\s+\d{1,2}|(?:no|without (?:a|any))\s+(?:set\s+)?(?:date|deadline))\b/iu;
+  const tentative = /\b(?:might|could|may change|possibly|tentative|unconfirmed|hasn['’]t been confirmed|but (?:they|he|she) (?:said|says)|dates? (?:conflict|differ))\b/iu;
+  return Object.values(grades).some(grade =>
+    grade.status === 'answered' && timingSlot.test(grade.slot_id) && currentSources(state).some(source => {
+      const statement = containingStatement(source, grade.quote);
+      return statement && timeEvidence.test(statement) && !indirect.test(statement) && !tentative.test(statement);
+    }));
 }
 
 export function neutralQuestion(state: EngineState): SlotDefinition | undefined {
@@ -243,8 +285,6 @@ export function neutralQuestion(state: EngineState): SlotDefinition | undefined 
       && !state.slots[slot.id] && questionPermitted(state, slot);
   });
   if (remaining || used.some(id => id.startsWith('intake_detail_') || id === 'written_timing')) return;
-  const account = state.intake_reading?.currentAccount ?? state.input;
-  const timingDiscussed = /\b(?:deadline|due|respond by|before|sign by|court date|closing|hearing date|no (?:date|deadline)|(?:\d{1,2}[\/-]){2}\d{2,4})\b/iu.test(account)
-    || used.some(id => /(?:deadline|timing|timeline|when|urgency)/i.test(id));
+  const timingDiscussed = hasCoveredTiming(state) || used.some(id => /(?:date|deadline|timing|timeline|when|urgency)/i.test(id));
   return timingDiscussed ? getSlotById('intake_detail_1') : getSlotById('written_timing');
 }
