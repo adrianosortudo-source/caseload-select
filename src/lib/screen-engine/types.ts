@@ -402,6 +402,8 @@ export type Channel = 'web' | 'whatsapp' | 'sms' | 'instagram' | 'facebook' | 'g
 export type SupportedLanguage = 'en' | 'fr' | 'es' | 'pt' | 'zh' | 'ar';
 
 export interface EngineState {
+  /** A session opts in at its first enquiry and keeps that policy on later turns. */
+  question_policy?: 'grounded_v1';
   intake_reading?: import('./interpretation').IntakeReadingState;
   input: string;
   /** Optional profile flag; omitted by existing firms and stored states. */
@@ -516,6 +518,10 @@ export interface SlotOption {
 export interface SlotDefinition {
   id: string;
   question: string;
+  /** Consequential factual premise the question requires before it can be asked. */
+  question_premise?: import('./question-policy').QuestionPremise;
+  /** A direct answer may cover the question without setting a scored slot value. */
+  question_coverage?: import('./question-policy').QuestionCoverage;
   input_type: 'single_select' | 'free_text';
   options?: SlotOption[];
   applies_to: MatterType[];
@@ -721,6 +727,8 @@ export interface AxisReasoning {
 export interface LawyerReport {
   /** Intake-only family report: numeric legacy fields are placeholders and must not be rendered. */
   intake_only?: boolean;
+  /** The visitor's priority or scope needs to be confirmed before qualification. */
+  routing_review_required?: true;
   // Lead metadata
   lead_id: string;
   submitted_at: string;

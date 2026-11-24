@@ -23,9 +23,24 @@ const fields = {
   next_question: optionalText,
 };
 
-export function addInterpretationSchema(schema: Record<string, unknown>) {
+const questionReview = {
+  requests: { type: 'array', items: { type: 'object', properties: { quote: text, matter: fields.matter }, required: ['quote', 'matter'] } },
+  priority_quote: optionalText,
+  preferred_request_quote: optionalText,
+  custom_basis_quote: optionalText,
+  questions: { type: 'array', items: { type: 'object', properties: {
+    slot_id: text,
+    status: { type: 'string', enum: ['missing', 'answered', 'disputed', 'irrelevant'] },
+    quote: text,
+  }, required: ['slot_id', 'status', 'quote'] } },
+};
+
+export function addInterpretationSchema(schema: Record<string, unknown>, reviewQuestions = false) {
+  const interpretation = reviewQuestions
+    ? { ...fields, question_review: { type: 'object', properties: questionReview, required: Object.keys(questionReview) } }
+    : fields;
   return { ...schema, properties: { ...(schema.properties as object),
-    interpretation: { type: 'object', properties: fields, required: Object.keys(fields) },
+    interpretation: { type: 'object', properties: interpretation, required: Object.keys(interpretation) },
   }, required: [...schema.required as string[], 'interpretation'] };
 }
 
@@ -61,3 +76,8 @@ answers_question is true only if the latest written answer addresses what was as
 When the latest statement actually displaces earlier facts or a goal, superseded_quote must be an EXACT passage from that earlier account. In that case use current_excerpts for short EXACT passages from any turn that together describe the entire current matter. Include unaffected facts, and omit superseded claims. Otherwise use null and [] respectively. The opening statement cannot supersede a previous turn. Set replacement_goal to the EXACT words of the latest reply describing the new work requested only when the visitor REPLACES the former goal. A correction of a factual detail that leaves the legal work the same has replacement_goal null. Choose the matter independently of the catalogue of fields, which was built using the previous hypothesis. A resolved dispute followed by a request for document drafting, review or business advice is an advisory matter. A request to collect unpaid earnings is wage_recovery even if an old account described dismissal. A non-contentious business lease belongs to commercial_real_estate. Use probate for an executor application, even if the visitor corrects whether a will exists. These distinctions apply to phrasing in any language. Do not include the old contradicted words among current_excerpts, even as part of a longer quotation. Use unsupported_slots for field IDs in the supplied extracted or existing facts that conflict with current evidence or assert something unsupported. An unanswered question is not a negative finding.
 For covered_questions, consider all question IDs under the CURRENT supported matter, including ones previously outside the old pack. For each question that the visitor already answered, output its slot_id and the shortest EXACT passage that conveys the answer with its subject, negation, and source intact. A menu may not express what was said. Suppress repeat questions without inventing menu values. Do not list a question if the passage answers only part of it, says something about a different person, or reports an unverified claim in place of an actual answer. Distinguish the amount still unpaid from whether any earlier payments were made. An expressly unknown answer can cover a repeated question but cannot verify a fact. Never use printed field options, questions, or labels as evidence. Use [] when no question is covered.
 Pick ONE useful next factual question in the visitor's language. Explain nothing and give no legal advice. It should help a lawyer decide the next step for THIS enquiry. Respect any selected area, priorities, stated dates and corrected facts. If the matter is clear, do not re-ask its category. If there are conflicting accounts, ask the one question that helps resolve them. Use only questions belonging to your CURRENT proposed matter from questions_by_matter. Never ask a general routing question from the old pack after choosing a more specific matter. Prefer an applicable catalogue question when its precise subject is unanswered, using its ID in next_slot. Otherwise next_slot is null. Supply next_question as a short relevant fallback question with a question mark. It can ask about a document, event, outcome or unresolved uncertainty in this particular situation. When there is nothing useful left to clarify, use null for both. Do not repeat a question already answered. Treat asking for contact details, legal advice, or instructions to use another service as outside this step.`;
+
+export const questionReviewInstructions = `Review the next question against the whole current account before choosing it.
+In question_review.requests, list each distinct piece of work the visitor wants done now. For each, supply a short word-for-word quotation that identifies the requested work, with its matter type. Do not list background, denied requests, someone else's matter, or the earlier version of a corrected request. When the visitor has not chosen a first request, set priority_quote and preferred_request_quote to null. When they explicitly choose, use their exact choice in priority_quote and repeat the corresponding request's exact quote in preferred_request_quote. Never choose for them based on area, sequence, urgency, or seniority.
+In question_review.questions, review the relevant catalogue question IDs for the CURRENT matter, including unanswered questions that could come later. For an answered question, cite the exact words that already supply an answer. Use disputed when the visitor gives conflicting accounts or says the claim is unverified. Preserve the words that express doubt or identify the source. Use irrelevant when the visitor's exact words place that question outside the request. Use missing only when the citation supports every premise of the question and its answer is still unknown. A document dispute does not establish an unpaid bill. A signed document does not establish legal validity. Silence is not confirmation. A reference to an existing spouse or children can resolve whether they exist even if it leaves other details open. Omit entries without a useful exact citation.
+For a custom next question, custom_basis_quote must quote the visitor's exact words establishing why the unanswered question matters. Use neutral wording when a fact remains disputed. Ask for the visitor's preference if two requests compete without a stated priority. Use null when there is no quote that supports a custom question. Never cite headings, prompts, menu labels, or the lawyer's earlier questions as visitor evidence.`;

@@ -22,6 +22,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<Rec
   }
   return <ScreenParityPreview practiceArea={area as PreviewPracticeArea}
     channel={channel as "website" | "sms" | "whatsapp" | "instagram" | "facebook"}
+    canRequestQuestionPolicy
     operationalPracticeAreas={area === "family" ? ["family"] : undefined}
     comparison={query.compare === "production"} externalReport={query.external_report === "1"} />;
 }

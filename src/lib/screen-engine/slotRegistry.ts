@@ -1076,6 +1076,7 @@ export const SLOT_REGISTRY: SlotDefinition[] = [
     },
   },
   {
+    question_premise: 'ownership',
     id: 'shareholder_agreement',
     question: 'Do you have a shareholder agreement or any ownership documents?',
     input_type: 'single_select',
@@ -1273,6 +1274,7 @@ export const SLOT_REGISTRY: SlotDefinition[] = [
     },
   },
   {
+    question_premise: 'payment',
     id: 'invoice_exists',
     question: 'Do you have an invoice, bill, or statement showing what is owed?',
     input_type: 'single_select',
@@ -1295,6 +1297,7 @@ export const SLOT_REGISTRY: SlotDefinition[] = [
     },
   },
   {
+    question_premise: 'payment',
     id: 'payment_status',
     question: 'Has any of the amount been paid?',
     input_type: 'single_select',
@@ -1348,6 +1351,7 @@ export const SLOT_REGISTRY: SlotDefinition[] = [
     },
   },
   {
+    question_premise: 'payment',
     id: 'dispute_reason',
     question: 'What is the other side saying about why they are not paying?',
     input_type: 'single_select',
@@ -1692,6 +1696,7 @@ export const SLOT_REGISTRY: SlotDefinition[] = [
     priority: 43,
   },
   {
+    question_premise: 'irregularity',
     id: 'evidence_of_irregularity',
     question: 'Do you have any records, statements, or documents showing the irregularity?',
     input_type: 'single_select',
@@ -2027,6 +2032,8 @@ export const SLOT_REGISTRY: SlotDefinition[] = [
     priority: 20,
   },
   {
+    question_premise: 'closing',
+    question_coverage: 'closing_date',
     id: 'residential_closing_timeline',
     question: 'When is the closing?',
     input_type: 'single_select',
@@ -2049,6 +2056,7 @@ export const SLOT_REGISTRY: SlotDefinition[] = [
     priority: 21,
   },
   {
+    question_coverage: 'financing',
     id: 'residential_mortgage_situation',
     question: 'Where are you with financing?',
     input_type: 'single_select',
@@ -2096,6 +2104,7 @@ export const SLOT_REGISTRY: SlotDefinition[] = [
   // ─── REAL ESTATE LITIGATION ──────────────────────────────────────────────
 
   {
+    question_premise: 'dispute',
     id: 'litigation_subject',
     question: 'What is the dispute about?',
     input_type: 'single_select',
@@ -2130,6 +2139,7 @@ export const SLOT_REGISTRY: SlotDefinition[] = [
     },
   },
   {
+    question_premise: 'dispute',
     id: 'litigation_role',
     question: 'What is your role in the dispute?',
     input_type: 'single_select',
@@ -2301,6 +2311,7 @@ export const SLOT_REGISTRY: SlotDefinition[] = [
     },
   },
   {
+    question_premise: 'dispute',
     id: 'tenancy_issue',
     question: 'What is the dispute about?',
     input_type: 'single_select',
@@ -2415,6 +2426,7 @@ export const SLOT_REGISTRY: SlotDefinition[] = [
     priority: 2,
   },
   {
+    question_premise: 'payment',
     id: 'lien_amount',
     question: 'How much is owed?',
     input_type: 'single_select',
@@ -2435,6 +2447,7 @@ export const SLOT_REGISTRY: SlotDefinition[] = [
     priority: 3,
   },
   {
+    question_premise: 'construction',
     id: 'lien_last_supply',
     question: 'When did you last supply work or materials to the project?',
     input_type: 'single_select',
@@ -2962,6 +2975,7 @@ export const SLOT_REGISTRY: SlotDefinition[] = [
 
   // ─── EMPLOYMENT — wrongful_dismissal ────────────────────────────────
   {
+    question_premise: 'dismissal',
     id: 'dismissal_reason_given',
     question: 'What reason did your employer give for the dismissal?',
     input_type: 'single_select',
@@ -3040,6 +3054,7 @@ export const SLOT_REGISTRY: SlotDefinition[] = [
 
   // ─── EMPLOYMENT — severance_review ──────────────────────────────────
   {
+    question_premise: 'severance',
     id: 'severance_offer_amount',
     question: 'How does the severance offer compare to your tenure?',
     input_type: 'single_select',
@@ -3180,6 +3195,7 @@ export const SLOT_REGISTRY: SlotDefinition[] = [
 
   // ─── EMPLOYMENT — wage_recovery ─────────────────────────────────────
   {
+    question_premise: 'payment',
     id: 'wages_owed_band',
     question: 'Roughly how much is owed?',
     input_type: 'single_select',
@@ -3200,6 +3216,7 @@ export const SLOT_REGISTRY: SlotDefinition[] = [
     priority: 10,
   },
   {
+    question_premise: 'payment',
     id: 'wages_type',
     question: 'What kind of pay is owed?',
     input_type: 'single_select',
@@ -3355,6 +3372,7 @@ export const SLOT_REGISTRY: SlotDefinition[] = [
 
   // ─── ESTATES — will_drafting ────────────────────────────────────────
   {
+    question_coverage: 'spouse',
     id: 'marital_status',
     question: 'What is your marital status?',
     input_type: 'single_select',
@@ -3375,6 +3393,7 @@ export const SLOT_REGISTRY: SlotDefinition[] = [
     priority: 10,
   },
   {
+    question_coverage: 'dependants',
     id: 'children_count',
     question: 'Do you have children or dependants to provide for?',
     input_type: 'single_select',
@@ -3414,6 +3433,7 @@ export const SLOT_REGISTRY: SlotDefinition[] = [
     priority: 12,
   },
   {
+    question_coverage: 'existing_will',
     id: 'existing_will_status',
     question: 'Do you currently have a will?',
     input_type: 'single_select',
@@ -3516,6 +3536,7 @@ export const SLOT_REGISTRY: SlotDefinition[] = [
 
   // ─── ESTATES — probate ──────────────────────────────────────────────
   {
+    question_coverage: 'relationship',
     id: 'relationship_to_deceased',
     question: 'What was your relationship to the person who passed?',
     input_type: 'single_select',
@@ -3536,6 +3557,7 @@ export const SLOT_REGISTRY: SlotDefinition[] = [
     priority: 10,
   },
   {
+    question_coverage: 'existing_will',
     id: 'will_status_probate',
     question: 'Is there a will?',
     input_type: 'single_select',
@@ -3596,6 +3618,7 @@ export const SLOT_REGISTRY: SlotDefinition[] = [
 
   // ─── ESTATES — estate_dispute ───────────────────────────────────────
   {
+    question_premise: 'dispute',
     id: 'estate_dispute_type',
     question: 'What kind of dispute is this?',
     input_type: 'single_select',
@@ -3621,6 +3644,7 @@ export const SLOT_REGISTRY: SlotDefinition[] = [
     priority: 10,
   },
   {
+    question_premise: 'dispute',
     id: 'estate_dispute_role',
     question: 'What is your role in the dispute?',
     input_type: 'single_select',
@@ -3692,6 +3716,7 @@ export const SLOT_REGISTRY: SlotDefinition[] = [
     decision_value: 0, abstraction_level: 'concrete', required: true, priority: 10,
   },
   {
+    question_coverage: 'dependants',
     id: 'family_children', question: 'Are children or parenting arrangements part of this matter?', input_type: 'single_select',
     options: [{ value: 'Yes', label: 'Yes' }, { value: 'No', label: 'No' }, { value: 'Not sure', label: 'Not sure' }],
     applies_to: ['family_general'], tier: 'core', question_group: 'generic', resolves: 'none',

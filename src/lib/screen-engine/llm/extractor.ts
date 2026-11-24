@@ -32,6 +32,7 @@ function isValidSupportedLanguage(value: string): boolean {
 
 export interface LlmExtractionResponse {
   interpretation?: import('../interpretation').IntakeInterpretation;
+  question_policy?: 'grounded_v1';
   provider?: string;
   model?: string;
   extracted: Record<string, string | null>;
@@ -67,6 +68,7 @@ export async function llmExtract(
         matter_type: state.matter_type,
         family_enabled: state.family_enabled === true,
         already_extracted: state.slots,
+        ...(state.question_policy ? { question_policy: state.question_policy } : {}),
         ...(followUp ? { pending_slot_id: followUp.pendingSlotId, reply: followUp.reply } : {}),
         ...(followUp && ['intake_detail_1', 'intake_detail_2'].includes(followUp.pendingSlotId)
           && state.intake_reading?.next?.slotId === followUp.pendingSlotId
@@ -81,6 +83,7 @@ export async function llmExtract(
     return {
       extracted: data.extracted ?? {},
       interpretation: readIntakeInterpretation(data.interpretation),
+      ...(data.question_policy === 'grounded_v1' ? { question_policy: 'grounded_v1' as const } : {}),
       provider: data.provider,
       model: data.model,
       mode: data.mode ?? 'live',

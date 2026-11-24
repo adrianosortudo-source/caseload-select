@@ -3,6 +3,7 @@ import { getSlotById, SLOT_REGISTRY } from './slotRegistry';
 import { runEvidencePass } from './slotEvidence';
 import { groundFamilyConversationFacts, groundFamilyOrderReplies } from './family';
 import { namesDocumentTask } from './written-answers';
+import { customQuestionPermitted, groundQuestionReview, parseQuestionReview, priorityPending, questionPermitted, type GroundedQuestionReview, type QuestionReview } from './question-policy';
 import type { EngineState, MatterType, SlotDefinition } from './types';
 
 export interface IntakeInterpretation {
@@ -15,6 +16,7 @@ export interface IntakeInterpretation {
   covered_questions?: { slot_id: string; quote: string }[];
   next_slot: string | null;
   next_question: string | null;
+  question_review?: QuestionReview;
 }
 
 export interface IntakeTurn {
@@ -32,6 +34,7 @@ export interface IntakeReadingState {
   /** An attempted enum mapping exceeded what the visitor actually said. */
   quoteOnlyOptions?: Record<string, string>;
   next?: { slotId: string; question: string; after: number };
+  questionReview?: GroundedQuestionReview;
 }
 
 export function readIntakeInterpretation(value: unknown): IntakeInterpretation | undefined {
@@ -40,6 +43,7 @@ export function readIntakeInterpretation(value: unknown): IntakeInterpretation |
   if (!v.matter || (v.matter !== 'family_general' && v.matter !== 'unknown' && !isValidMatterType(v.matter)) || typeof v.answers_question !== 'boolean'
     || !Array.isArray(v.current_excerpts) || !Array.isArray(v.unsupported_slots)) return;
   const strings = (values: unknown[]) => values.filter((x): x is string => typeof x === 'string' && !!x.trim()).slice(0, 24);
+  const questionReview = parseQuestionReview(v.question_review);
   return { matter: v.matter, answers_question: v.answers_question,
     superseded_quote: typeof v.superseded_quote === 'string' ? v.superseded_quote.trim() || null : null,
     replacement_goal: typeof v.replacement_goal === 'string' ? v.replacement_goal.trim() || null : null,
@@ -47,7 +51,8 @@ export function readIntakeInterpretation(value: unknown): IntakeInterpretation |
     covered_questions: Array.isArray(v.covered_questions) ? v.covered_questions.slice(0, 40).filter(item =>
       item && typeof item.slot_id === 'string' && typeof item.quote === 'string') : [],
     next_slot: typeof v.next_slot === 'string' ? v.next_slot : null,
-    next_question: typeof v.next_question === 'string' ? v.next_question.trim() : null };
+    next_question: typeof v.next_question === 'string' ? v.next_question.trim() : null,
+    ...(questionReview ? { question_review: questionReview } : {}) };
 }
 
 export function intakeFollowUp(state: EngineState): SlotDefinition | undefined {
@@ -59,7 +64,11 @@ export function pendingIntakeQuestion(state: EngineState): SlotDefinition | unde
   const next = state.intake_reading?.next;
   if (!next || next.after !== state.questionHistory.length || state.questionHistory.includes(next.slotId)) return;
   const slot = getSlotById(next.slotId);
-  return slot ? { ...slot, question: next.question } : undefined;
+  if (!slot) return;
+  const accepted = slot.id.startsWith('intake_detail_')
+    ? customQuestionPermitted(state, next.question)
+    : questionPermitted(state, slot);
+  return accepted ? { ...slot, question: next.question } : undefined;
 }
 
 const protect = (id: string) => getSlotById(id)?.tier === 'contact' ||
@@ -144,9 +153,17 @@ export function applyIntakeInterpretation(
   const active = correction ? (goal ? latest : [...new Set([...quotes, latest])].join('\n')) : old?.currentAccount;
   const previousPrompt = old?.next && old.next.slotId === slotId ? old.next.question : (slotId ? getSlotById(slotId)?.question : undefined);
   const turns = [...old?.turns ?? []];
+  const lastCorrection = turns.map(turn => turn.correction).lastIndexOf(true);
+  const sources = correction ? [...quotes, latest] : [
+    old?.currentAccount ?? state.input, ...turns.slice(lastCorrection + 1).map(turn => turn.text), latest,
+  ];
+  const questionReview = state.question_policy === 'grounded_v1'
+    ? groundQuestionReview(reading.question_review, sources, correction ? undefined : old?.questionReview, slotId === 'written_goal')
+    : undefined;
   let next: EngineState = { ...state, slots: { ...state.slots }, slot_meta: { ...state.slot_meta },
     slot_evidence: { ...state.slot_evidence }, written_answers: { ...state.written_answers },
-    intake_reading: { turns, quoteOnlyOptions: old?.quoteOnlyOptions, currentAccount: active, originalOpening: old?.originalOpening ?? (correction ? state.input : undefined) } };
+    intake_reading: { turns, quoteOnlyOptions: old?.quoteOnlyOptions, currentAccount: active, originalOpening: old?.originalOpening ?? (correction ? state.input : undefined),
+      ...(questionReview ? { questionReview } : {}) } };
   const remove = (id: string) => {
     if (protect(id)) return;
     delete next.slots[id]; delete next.slot_meta[id]; delete next.slot_evidence[id]; delete next.written_answers![id];
@@ -164,7 +181,8 @@ export function applyIntakeInterpretation(
       target = applySelectedPracticeArea({ ...state, matter_type: 'unknown' }, state.practice_area).matter_type;
     }
   }
-  const canReclassify = !slotId || correction || state.matter_type === 'unknown' || state.matter_type.endsWith('_general');
+  if (questionReview?.priority) target = questionReview.priority.matter;
+  const canReclassify = !slotId || correction || !!questionReview?.priority || state.matter_type === 'unknown' || state.matter_type.endsWith('_general');
   const routeChanged = canReclassify && permittedMatter(state, target) && state.matter_type !== target;
   if (routeChanged) {
     const route = target === 'family_general'
@@ -172,13 +190,20 @@ export function applyIntakeInterpretation(
       : classificationForMatterType(target);
     next = { ...next, ...route, matter_type_provenance: 'llm_inferred' };
   }
+  const pendingPriority = priorityPending(next);
+  if (pendingPriority && next.matter_type !== 'out_of_scope') {
+    // Avoid presenting the inferred branch as a settled priority. Keep
+    // saved answers intact while the visitor chooses which issue to focus on.
+    next = applySelectedPracticeArea({ ...next, matter_type: 'unknown' }, state.practice_area);
+    next.matter_type_provenance = 'llm_inferred';
+  }
   if (correction || routeChanged) {
     for (const id of Object.keys(next.slots)) {
       const slot = getSlotById(id);
       if (!slot || protect(id)) continue;
       const obsolete = slot.applies_to.length > 0 && !slot.applies_to.includes(next.matter_type);
       const inferred = next.slot_meta[id]?.source;
-      if (obsolete || (correction && inferred !== 'answered' && inferred !== 'system_metadata' && inferred !== 'profile_metadata')) remove(id);
+      if ((!pendingPriority && obsolete) || (correction && inferred !== 'answered' && inferred !== 'system_metadata' && inferred !== 'profile_metadata')) remove(id);
     }
   }
   for (const id of reading.unsupported_slots) {
@@ -200,11 +225,6 @@ export function applyIntakeInterpretation(
   // words even when its menu cannot safely represent that answer. Retain the
   // passage for the lawyer without setting an enum, earning points, or
   // treating somebody else's claim as the visitor's verified fact.
-  const priorTurns = old?.turns ?? [];
-  const lastCorrection = priorTurns.map(turn => turn.correction).lastIndexOf(true);
-  const sources = correction ? [...quotes, latest] : [
-    old?.currentAccount ?? state.input, ...priorTurns.slice(lastCorrection + 1).map(turn => turn.text), latest,
-  ];
   const covered: Record<string, string> = {};
   const applicable = (id: string) => {
     const slot = getSlotById(id);
@@ -224,6 +244,10 @@ export function applyIntakeInterpretation(
       covered[item.slot_id] = quote;
     }
   }
+  for (const grade of Object.values(questionReview?.grades ?? {})) {
+    if (grade.status === 'answered' && applicable(grade.slot_id)) covered[grade.slot_id] = grade.quote;
+    else if (grade.status === 'disputed') delete covered[grade.slot_id];
+  }
   if (goal) coverChangedGoal(next.matter_type, goal, covered);
   if (Object.keys(covered).length) next.intake_reading!.coveredQuestions = covered;
   if (slotId) {
@@ -239,7 +263,7 @@ export function applyIntakeInterpretation(
   const used = state.questionHistory;
   const authored = reading.next_slot ? getSlotById(reading.next_slot) : undefined;
   if (authored && authored.applies_to.includes(next.matter_type) && !protect(authored.id)
-      && !used.includes(authored.id) && !covered[authored.id] && !next.slots[authored.id]) {
+      && !used.includes(authored.id) && !covered[authored.id] && !next.slots[authored.id] && questionPermitted(next, authored)) {
     next.intake_reading!.next = { slotId: authored.id, question: authored.question, after: used.length };
   } else {
     const question = reading.next_question;
@@ -251,7 +275,9 @@ export function applyIntakeInterpretation(
       && (!slot.applies_to.includes(next.matter_type) || protect(slot.id) || !!covered[slot.id]
         || used.includes(slot.id) || !!next.slots[slot.id]));
     const rejectedSubject = !!(goal && authored && (!authored.applies_to.includes(next.matter_type) || covered[authored.id]));
-    if (id && question && !rejectedSubject && !repeatsAuthored && question.length <= 260 && /^[^<>\n]+[?？]$/.test(question)
+    const rejectedRegistered = state.question_policy === 'grounded_v1' && !!authored;
+    if (id && question && !rejectedRegistered && !rejectedSubject && !repeatsAuthored && customQuestionPermitted(next, question)
+      && question.length <= 260 && /^[^<>\n]+[?？]$/.test(question)
       && !/https?:\/\//i.test(question) && !turns.some(turn => turn.question === question)) {
       next.intake_reading!.next = { slotId: id, question, after: used.length };
     }

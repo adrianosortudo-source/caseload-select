@@ -161,6 +161,7 @@ export interface ScreenEnginePublicWidgetProps {
   demoContinuation?: { workflow?: "meta"; contactUsed?: boolean; onUseSampleContact: () => void; onResetSession?: () => void; reply: string | null; onShowReview?: () => void };
   configuredPracticeAreas?: readonly import("@/lib/screen-engine/types").PracticeArea[];
   selectedPracticeArea?: import("@/lib/screen-engine/types").PracticeArea;
+  canRequestQuestionPolicy?: boolean;
   /** Optional fictional opening used by the presentation toolbar. */
   initialDescription?: string;
   /** Explicitly authorized intake packs, supplied by the server-side firm resolver. */
@@ -317,7 +318,7 @@ export function ScreenEnginePublicWidget({
   demoContinuation,
   initialDescription = "",
   configuredPracticeAreas = [],
-  operationalPracticeAreas, selectedPracticeArea,
+  operationalPracticeAreas, selectedPracticeArea, canRequestQuestionPolicy = false,
 }: ScreenEnginePublicWidgetProps) {
   const previewBoundary = useContext(ScreenPreviewTransport);
   const policy = SCREEN_WIDGET_EXECUTION_POLICY[runtime];
@@ -536,13 +537,19 @@ export function ScreenEnginePublicWidget({
     }
 
     try {
-      const extracted = await extractInquiry(text, nextState);
+      const requestState = canRequestQuestionPolicy
+        ? { ...nextState, question_policy: "grounded_v1" as const }
+        : nextState;
+      const extracted = await extractInquiry(text, requestState);
       if (run !== extractionRun.current) return;
       if (runtime === "live" && extracted.mode !== "live") {
         setRetryTurn({ text });
         return;
       }
       if (extracted.mode === "live") {
+        if (canRequestQuestionPolicy && extracted.question_policy) {
+          nextState = { ...nextState, question_policy: extracted.question_policy };
+        }
         nextState = scoreState(applyIntakeInterpretation(mergeLlmResults(nextState, extracted.extracted), extracted.interpretation, text));
         if (metaWorkflow) nextState = scoreState(groundDemoConversationFacts(nextState, text));
         setState(nextState);
@@ -756,6 +763,7 @@ export function ScreenEnginePublicWidget({
         slot_evidence: finalState.slot_evidence,
         written_answers: finalState.written_answers,
         intake_reading: finalState.intake_reading,
+        ...(finalState.question_policy ? { question_policy: finalState.question_policy } : {}),
         family_enabled: finalState.family_enabled,
         family_only: finalState.family_only,
         raw: finalState.raw,

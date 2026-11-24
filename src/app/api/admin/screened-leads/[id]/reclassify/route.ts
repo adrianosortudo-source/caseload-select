@@ -125,6 +125,7 @@ export async function POST(
     slots?: Record<string, string | null>;
     written_answers?: Record<string, string>;
     intake_reading?: EngineState['intake_reading'];
+    question_policy?: EngineState['question_policy'];
     slot_meta?: EngineState['slot_meta'];
     slot_evidence?: EngineState['slot_evidence'];
     family_enabled?: boolean;
@@ -204,6 +205,7 @@ export async function POST(
     // facts were removed. Keep later confirmed answers and their provenance.
     const captured = sa.slots ?? {};
     state = { ...state, intake_reading: reading,
+      ...(sa.question_policy === 'grounded_v1' ? { question_policy: sa.question_policy } : {}),
       input: reading.originalOpening ?? row.raw_transcript ?? transcript,
       slots: { ...state.slots, ...captured }, slot_meta: { ...state.slot_meta, ...sa.slot_meta },
       slot_evidence: { ...state.slot_evidence, ...sa.slot_evidence } };

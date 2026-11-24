@@ -1,6 +1,7 @@
 import type { EngineState, SlotDefinition, DecisionGap } from './types';
 import { selectWrittenFollowUp } from './written-answers';
-import { SLOT_REGISTRY } from './slotRegistry';
+import { getSlotById, SLOT_REGISTRY } from './slotRegistry';
+import { groundedCoverage, neutralQuestion, priorityPending, priorityQuestion, questionPermitted } from './question-policy';
 
 const CORPORATE_DETAIL_SLOT_BY_CATEGORY: Readonly<Record<string, string>> = {
   'Money owed, supplier billing, or a broken agreement': 'corporate_dispute_problem_type',
@@ -381,7 +382,9 @@ function isResolved(state: EngineState, gap: DecisionGap): boolean {
 
 /** The visitor can cover a question without proving a menu value for scoring. */
 export function questionAddressed(state: EngineState, id: string): boolean {
-  return !!state.intake_reading?.coveredQuestions?.[id] || isUserAnswered(state, id);
+  if (state.intake_reading?.coveredQuestions?.[id] || isUserAnswered(state, id)) return true;
+  const slot = state.question_policy === 'grounded_v1' ? getSlotById(id) : undefined;
+  return !!(slot && groundedCoverage(state, slot));
 }
 
 function hasValue(state: EngineState, slotId: string): boolean {
@@ -750,6 +753,7 @@ function pickByExplicitOrder(state: EngineState): SlotDefinition | null {
     // exempted from group-dedup, and matter-specific resolvers won't
     // collide because each slot ID appears at most once in the order.
     if (slotIsAnswered(state, slot)) continue;
+    if (!questionPermitted(state, slot)) continue;
     return slot;
   }
   // Order exhausted: every listed slot is either answered or N/A. Fall
@@ -761,7 +765,10 @@ function pickByExplicitOrder(state: EngineState): SlotDefinition | null {
 
 export function selectNextSlot(state: EngineState): SlotDefinition | null {
   if (state.matter_type === 'out_of_scope') return null;
-  const clarification = !state.intake_reading && selectWrittenFollowUp(state);
+  if (priorityPending(state)) return priorityQuestion(state) ?? null;
+  const clarification = state.question_policy === 'grounded_v1'
+    ? neutralQuestion(state)
+    : !state.intake_reading && selectWrittenFollowUp(state);
   if (clarification) return clarification;
   if (state.matter_type === 'unknown') return null;
 
@@ -779,6 +786,7 @@ export function selectNextSlot(state: EngineState): SlotDefinition | null {
     if (!slotApplicableToSubtrack(state, slot)) return false;
     if (!slotApplicableToCorporateRouting(state, slot)) return false;
     if (slotIsAnswered(state, slot)) return false;
+    if (!questionPermitted(state, slot)) return false;
     if (state.matter_type !== 'family_general' && groupAlreadyAnswered(state, slot)) return false;
 
     if (state.advisory_subtrack === 'solo_setup' && slot.id === 'ownership_split_discussed') return false;
