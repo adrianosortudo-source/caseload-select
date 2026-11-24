@@ -300,7 +300,7 @@ function FreeTextAnswerCard({
 
 
 function contextWithReply(state: EngineState, reply: string): string {
-  const prior = state.intake_reading?.turns.map(turn => turn.text) ?? [];
+  const prior = state.intake_reading?.turns.filter(turn => state.question_policy !== 'grounded_v1' || !turn.skipped).map(turn => turn.text) ?? [];
   const other = Object.values(state.written_answers ?? {}).filter(text => !prior.includes(text));
   return [state.input, ...other, ...prior, reply].join("\n\n");
 }
@@ -641,7 +641,7 @@ export function ScreenEnginePublicWidget({
   async function answer(slotId: string, rawValue: string | string[], skipped = false) {
     if (!state || isReading) return;
     const value = Array.isArray(rawValue) ? rawValue.join(", ") : rawValue;
-    if (metaWorkflow && next?.slot?.id === slotId) {
+    if (metaWorkflow && !skipped && next?.slot?.id === slotId) {
       const reply = value.startsWith("other:") ? value.slice("other:".length).trim() : value;
       demoReplyHistory.current = [...demoReplyHistory.current, `Question: ${next.slot.question}\nAnswer: ${reply}`];
       demoUserEvidence.current = [...demoUserEvidence.current, reply];

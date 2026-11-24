@@ -31,6 +31,7 @@ export interface IntakeReadingState {
   turns: IntakeTurn[];
   currentAccount?: string;
   originalOpening?: string;
+  openingCorrected?: boolean;
   /** Exact visitor passages that already addressed an intake question. Not scored facts. */
   coveredQuestions?: Record<string, string>;
   /** An attempted enum mapping exceeded what the visitor actually said. */
@@ -150,12 +151,14 @@ export function applyIntakeInterpretation(
 ): EngineState {
   if (!reading || !latest.trim()) return state;
   const old = state.intake_reading;
-  const prior = [state.input, ...(old?.turns ?? []).map(turn => turn.text)].join('\n');
-  const conversation = prior + '\n' + latest;
+  const isSkip = skipped === true || (skipped === undefined && isStandaloneNonAnswer(latest));
+  const priorTurns = state.question_policy === 'grounded_v1'
+    ? (old?.turns ?? []).filter(turn => !turn.skipped) : old?.turns ?? [];
+  const prior = [state.input, ...priorTurns.map(turn => turn.text)].join('\n');
+  const conversation = state.question_policy === 'grounded_v1' && isSkip ? prior : prior + '\n' + latest;
   const superseded = reading.superseded_quote && prior.includes(reading.superseded_quote) ? reading.superseded_quote : null;
   const quotes = [...new Set(reading.current_excerpts.map(q => q.trim()))].filter(q =>
     q && conversation.includes(q) && (!superseded || !q.includes(superseded)));
-  const isSkip = skipped === true || (skipped === undefined && isStandaloneNonAnswer(latest));
   const correction = !!(slotId && superseded && prior.includes(superseded) && quotes.some(q => latest.includes(q))
     && (state.question_policy !== 'grounded_v1' || !isSkip));
   const goal = correction && reading.replacement_goal && latest.includes(reading.replacement_goal)
@@ -181,8 +184,16 @@ export function applyIntakeInterpretation(
   // A corrected fact does not withdraw unrelated work the visitor requested.
   const retainedRequests = correction ? (old?.questionReview?.requests ?? [])
     .filter(request => (!goal || !superseded!.includes(request.quote)) && prior.includes(request.quote)) : [];
+  const priorAccount = old?.currentAccount ?? state.input;
+  const safePriorAccount = state.question_policy === 'grounded_v1' ? priorAccount.split('\n').filter(line => {
+    const wasSkipped = turns.some(turn => turn.skipped && turn.text === line);
+    const wasSaid = priorTurns.some(turn => turn.text === line) || state.input.includes(line);
+    return !wasSkipped || wasSaid;
+  }).join('\n') : priorAccount;
   const sources = correction ? [...quotes, latest, ...retainedRequests.map(request => request.quote)] : [
-    old?.currentAccount ?? state.input, ...turns.slice(lastCorrection + 1).map(turn => turn.text), latest,
+    safePriorAccount, ...turns.slice(lastCorrection + 1)
+      .filter(turn => state.question_policy !== 'grounded_v1' || !turn.skipped).map(turn => turn.text),
+    ...(state.question_policy === 'grounded_v1' && isSkip ? [] : [latest]),
   ];
   const questionReview = state.question_policy === 'grounded_v1'
     ? groundQuestionReview(reading.question_review, sources,
@@ -190,9 +201,18 @@ export function applyIntakeInterpretation(
       slotId === 'written_goal', slotId && !isStandaloneNonAnswer(latest) ? latest : undefined)
     : undefined;
   if (questionReview?.nextIsRepeat && reading.next_slot) questionReview.nextRepeatSlot = reading.next_slot;
+  if (questionReview && state.question_policy === 'grounded_v1' && isSkip) {
+    questionReview.grades = { ...questionReview.grades };
+    for (const [id, grade] of Object.entries(questionReview.grades)) {
+      if (grade.status !== 'answered') continue;
+      if (old?.questionReview?.grades[id]) questionReview.grades[id] = old.questionReview.grades[id];
+      else delete questionReview.grades[id];
+    }
+  }
   let next: EngineState = { ...state, slots: { ...state.slots }, slot_meta: { ...state.slot_meta },
     slot_evidence: { ...state.slot_evidence }, written_answers: { ...state.written_answers },
     intake_reading: { turns, quoteOnlyOptions: old?.quoteOnlyOptions, currentAccount: active, originalOpening: old?.originalOpening ?? (acceptAccount ? state.input : undefined),
+      ...(state.question_policy === 'grounded_v1' ? { openingCorrected: (old?.openingCorrected ?? !!old?.turns.some(turn => turn.correction)) || !!(correction && superseded && state.input.includes(superseded)) } : {}),
       ...(questionReview ? { questionReview } : {}) } };
   const remove = (id: string) => {
     if (protect(id)) return;
@@ -269,6 +289,7 @@ export function applyIntakeInterpretation(
     }
   }
   for (const item of reading.covered_questions ?? []) {
+    if (state.question_policy === 'grounded_v1' && isSkip) continue;
     const quote = item.quote.trim();
     if (applicable(item.slot_id) && quote.length >= 3 && quote.length <= 1200
         && sources.some(source => source.includes(quote))

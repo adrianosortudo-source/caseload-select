@@ -28,6 +28,35 @@ function opening(input: string, matter: MatterType, reading: Partial<IntakeInter
 }
 
 describe('shared grounded question policy', () => {
+  it('does not treat a Skip marker as visitor evidence for the current or later question', () => {
+    const input = 'Please advise me on an agreement.';
+    const request = { quote: input, matter: 'contract_dispute' as const };
+    const initial = opening(input, 'contract_dispute', { question_review: { requests: [request], priority_quote: null, questions: [] } });
+    const bogus = { ...base, answers_question: true, covered_questions: [{ slot_id: 'amount_at_stake', quote: 'Not sure' }],
+      question_review: { requests: [request], priority_quote: null,
+        questions: [{ slot_id: 'amount_at_stake', status: 'answered' as const, quote: 'Not sure' }] } };
+    const skipped = applyIntakeInterpretation(initial, bogus, 'Not sure', 'amount_at_stake', 'How much is involved?', true);
+    expect(skipped.intake_reading?.coveredQuestions?.amount_at_stake).toBeUndefined();
+    expect(JSON.stringify(buildReport(skipped).resolved_facts)).not.toContain('Not sure');
+    const later = applyIntakeInterpretation(skipped, bogus, 'I would like a review.', 'written_goal', 'What do you need?', false);
+    expect(later.intake_reading?.coveredQuestions?.amount_at_stake).toBeUndefined();
+    expect(JSON.stringify(buildReport(later).resolved_facts)).not.toContain('Not sure');
+  });
+
+  it('labels the opening as corrected only if a passage in it was superseded', () => {
+    const input = 'I need advice about my lease.';
+    const request = { quote: input, matter: 'landlord_tenant' as const };
+    const initial = opening(input, 'landlord_tenant', { question_review: { requests: [request], priority_quote: null, questions: [] } });
+    const detail = 'I am the tenant.';
+    const expanded = applyIntakeInterpretation(initial, { ...base, current_excerpts: [input, detail],
+      question_review: { requests: [request], priority_quote: null, questions: [] } }, detail, 'written_goal', 'What is your role?', false);
+    expect(Object.keys(buildReport(expanded).resolved_facts)).toContain('Original enquiry');
+    expect(Object.keys(buildReport(expanded).resolved_facts)).not.toContain('Original enquiry (later corrected)');
+    const corrected = applyIntakeInterpretation(expanded, { ...base, superseded_quote: input,
+      current_excerpts: ['I need advice about the lease.'], question_review: { requests: [], priority_quote: null, questions: [] } },
+      'I need advice about the lease.', 'written_goal', 'What is the issue?', false);
+    expect(Object.keys(buildReport(corrected).resolved_facts)).toContain('Original enquiry (later corrected)');
+  });
   it.each(['contract_dispute', 'wrongful_dismissal', 'residential_purchase_sale', 'will_drafting'] as const)(
     'leaves inferred services, fees and risk analysis for lawyer review in %s', matter => {
       const input = 'I need advice about a document I received.';

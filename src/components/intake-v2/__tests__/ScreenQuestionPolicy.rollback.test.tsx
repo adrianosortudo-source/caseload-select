@@ -148,6 +148,9 @@ describe("Screen question policy rollback while a visitor uses the widget", () =
         body: { reply: expect.any(String), review_question: expect.any(String), question_policy: "grounded_v1" },
         returnedPolicy: "grounded_v1",
       });
+      if (acknowledgement.body.review_skipped === true) {
+        expect((String(acknowledgement.body.description).match(/Not sure/g) ?? []).length).toBe(1);
+      }
     }
 
     const savedJson = document.querySelector("#parity-submission")!.textContent!;

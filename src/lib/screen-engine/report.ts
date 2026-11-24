@@ -1000,7 +1000,7 @@ function writtenFacts(state: EngineState): ResolvedFact[] {
     value: turn.text, source: 'explicit_from_caller',
   }));
   if (state.intake_reading?.turns.length) turns.unshift({
-    label: state.intake_reading?.originalOpening ? 'Original enquiry (later corrected)' : 'Original enquiry',
+    label: (state.intake_reading?.openingCorrected ?? !!state.intake_reading?.originalOpening) ? 'Original enquiry (later corrected)' : 'Original enquiry',
     value: state.intake_reading?.originalOpening ?? state.input, source: 'explicit_from_caller',
   });
   const quoted = new Set(turns.map(turn => turn.value));
