@@ -1,4 +1,4 @@
-import { pendingIntakeQuestion } from './interpretation';
+import { isStandaloneNonAnswer, pendingIntakeQuestion } from './interpretation';
 import type { EngineState, LawyerReport, Band, ResolvedFact } from './types';
 import { computeBand, bandLabel, scoreFourAxes, buildAxisReasoning } from './band';
 import { selectNextSlot, getDecisionGap, isUserAnswered } from './selector';
@@ -995,11 +995,11 @@ function isReportableSlot(id: string): boolean {
 }
 
 function writtenFacts(state: EngineState): ResolvedFact[] {
-  const turns: ResolvedFact[] = (state.intake_reading?.turns ?? []).map(turn => ({
-    label: turn.correction ? 'Correction from the visitor' : turn.question ? `Answer to “${turn.question}”` : 'Additional detail from the visitor',
+  const turns: ResolvedFact[] = (state.intake_reading?.turns ?? []).filter(turn => !turn.skipped).map(turn => ({
+    label: turn.correction ? 'Correction from the visitor' : turn.question && turn.answersQuestion !== false ? `Answer to “${turn.question}”` : 'Additional detail from the visitor',
     value: turn.text, source: 'explicit_from_caller',
   }));
-  if (turns.length) turns.unshift({
+  if (state.intake_reading?.turns.length) turns.unshift({
     label: state.intake_reading?.originalOpening ? 'Original enquiry (later corrected)' : 'Original enquiry',
     value: state.intake_reading?.originalOpening ?? state.input, source: 'explicit_from_caller',
   });
@@ -1013,8 +1013,11 @@ function writtenFacts(state: EngineState): ResolvedFact[] {
   }
   const requests = state.question_policy === 'grounded_v1' ? state.intake_reading?.questionReview?.requests ?? [] : [];
   if (requests.length > 1) {
+    const displayedSources = [state.input, ...turns.map(turn => turn.value)];
     requests.forEach(({ quote }, index) => {
+      if (displayedSources.some(source => source.includes(quote))) return;
       turns.push({ label: `Work requested ${index + 1}`, value: quote, source: 'explicit_from_caller' });
+      displayedSources.push(quote);
     });
   }
   return turns.concat(Object.entries(state.written_answers ?? {}).map(([id, value]) => {
@@ -1639,8 +1642,18 @@ export function buildReport(state: EngineState): LawyerReport {
   // Show the source account even when the classifier identifies a specific
   // legal service. A service label cannot establish what the visitor wants.
   const latestTurn = state.intake_reading?.turns.slice(-1)[0];
+  const currentAccount = state.intake_reading?.currentAccount;
+  const filteredAccount = state.question_policy === 'grounded_v1' && currentAccount
+    ? currentAccount.split('\n').filter(line => !isStandaloneNonAnswer(line)).join('\n').trim() : currentAccount;
+  const account = filteredAccount || state.input;
+  const latestIsSubstantive = latestTurn && !isStandaloneNonAnswer(latestTurn.text)
+    && !account.includes(latestTurn.text);
+  const latestUncertainty = latestTurn?.skipped === false && isStandaloneNonAnswer(latestTurn.text) && latestTurn.question
+    ? ` Asked “${latestTurn.question}” they answered “${latestTurn.text}”.` : '';
   const visitorSnapshot = state.intake_reading
-    ? latestTurn
+    ? state.question_policy === 'grounded_v1'
+      ? `The visitor wrote: “${account}”${latestIsSubstantive ? ` They later wrote: “${latestTurn.text}”` : ''}${latestUncertainty}`
+      : latestTurn
       ? `The visitor later wrote: “${latestTurn.text}”`
       : `The visitor wrote: “${state.input}”`
     : undefined;
@@ -1683,6 +1696,10 @@ export function buildReport(state: EngineState): LawyerReport {
   }
   const bandResult = computeBand(state);
   const truthWarnings = validateReportFacts(state);
+  // The existing lists and fee tables assume a matter classification is a
+  // confirmed legal scope. The grounded intake records the visitor's words
+  // but has no validated evidence-to-service or fee mapping yet.
+  const requiresScopeReview = state.question_policy === 'grounded_v1';
 
   return {
     lead_id: state.lead_id,
@@ -1695,19 +1712,19 @@ export function buildReport(state: EngineState): LawyerReport {
     four_axis: scoreFourAxes(state),
     axis_reasoning: buildAxisReasoning(state),
     truth_warnings: truthWarnings,
-    likely_legal_services: buildLikelyServices(state),
-    fee_estimate: buildFeeEstimate(state),
-    why_it_matters: buildWhyItMatters(state, bandResult.band),
-    cross_sell_opportunities: buildCrossSell(state),
-    strategic_considerations: buildStrategicConsiderations(state),
+    likely_legal_services: requiresScopeReview ? [] : buildLikelyServices(state),
+    fee_estimate: requiresScopeReview ? 'Not assessed' : buildFeeEstimate(state),
+    why_it_matters: requiresScopeReview ? 'The firm can review the enquiry and confirm the scope of assistance.' : buildWhyItMatters(state, bandResult.band),
+    cross_sell_opportunities: requiresScopeReview ? [] : buildCrossSell(state),
+    strategic_considerations: requiresScopeReview ? [] : buildStrategicConsiderations(state),
     what_to_confirm: state.question_policy === 'grounded_v1' ? buildOpenQuestions(state) : buildWhatToConfirm(state),
-    call_openers: buildCallOpeners(state),
+    call_openers: requiresScopeReview ? [] : buildCallOpeners(state),
     best_next_question: buildBestNextQuestion(state),
     resolved_facts_v2: buildResolvedFactsV2(state),
     resolved_facts: buildResolvedFacts(state),
     inferred_signals: buildInferredSignals(state),
     open_questions: buildOpenQuestions(state),
-    risk_flags: buildRiskFlags(state),
+    risk_flags: requiresScopeReview ? [] : buildRiskFlags(state),
     contact_complete: isContactComplete({
       client_name: state.slots['client_name'],
       client_email: state.slots['client_email'],

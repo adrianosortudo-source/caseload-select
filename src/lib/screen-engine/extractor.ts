@@ -1050,6 +1050,14 @@ export function applySelectedPracticeArea(state: EngineState, selected: Practice
   return lane ? { ...state, ...classificationForMatterType(lane), matter_type_provenance: 'user_routing_answer' } : state;
 }
 
+/** Use the visitor's selected area as provisional context while the new
+ * interpreter examines the whole account. Apply before extracting evidence. */
+export function applySelectedPracticeAreaForReview(state: EngineState, selected: PracticeArea): EngineState {
+  if (selected === 'unknown' || (state.family_only && selected !== 'family')) return state;
+  if (state.practice_area === selected && state.matter_type !== 'unknown') return state;
+  return applySelectedPracticeArea({ ...state, matter_type: 'unknown' }, selected);
+}
+
 const ALL_CANONICAL_MATTER_TYPES: ReadonlyArray<MatterType> = [
   'business_setup_advisory',
   'shareholder_dispute',

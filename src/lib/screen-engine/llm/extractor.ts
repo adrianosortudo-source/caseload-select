@@ -50,9 +50,15 @@ const EXTENDED_REQUEST_TIMEOUT_MS = 45_000;
 export async function llmExtract(
   description: string,
   state: EngineState,
-  followUp?: { pendingSlotId: string; reply: string },
+  followUp?: { pendingSlotId: string; reply: string; question?: string; skipped?: boolean },
   demoProvider?: 'openai' | 'gemini',
+  reviewState?: EngineState,
+  firmCriteriaToken?: string,
 ): Promise<LlmExtractionResponse> {
+  if (state.question_policy === 'grounded_v1' && ((state.intake_reading?.questionReview?.requests.length ?? 0) > 50
+      || (state.intake_reading?.questionReview?.withdrawn?.length ?? 0) > 50)) {
+    return { extracted: {}, mode: 'error', reason: 'The enquiry has too many active requests for automatic review.' };
+  }
   const controller = new AbortController();
   const timeoutMs = followUp || state.family_enabled === true ? EXTENDED_REQUEST_TIMEOUT_MS : REQUEST_TIMEOUT_MS;
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
@@ -69,7 +75,21 @@ export async function llmExtract(
         family_enabled: state.family_enabled === true,
         already_extracted: state.slots,
         ...(state.question_policy ? { question_policy: state.question_policy } : {}),
+        ...(firmCriteriaToken && state.question_policy ? { firm_criteria_token: firmCriteriaToken } : {}),
+        ...(reviewState ? { review_context: { matter_type: reviewState.matter_type, already_extracted: reviewState.slots } } : {}),
+        ...(state.question_policy === 'grounded_v1' ? {
+          conversation: {
+            turns: state.intake_reading?.turns ?? [],
+            priorRequests: (state.intake_reading?.questionReview?.requests ?? [])
+              .map(({ quote, matter }) => ({ quote, matter })),
+            priorWithdrawals: (state.intake_reading?.questionReview?.withdrawn ?? [])
+              .map(({ request_quote, request_matter, withdrawal_quote }) => ({ request_quote, request_matter, withdrawal_quote })),
+            asked: state.questionHistory.map(id => ({ id, answer: state.slots[id] ?? null })),
+          },
+        } : {}),
         ...(followUp ? { pending_slot_id: followUp.pendingSlotId, reply: followUp.reply } : {}),
+        ...(state.question_policy === 'grounded_v1' && followUp?.question ? { review_question: followUp.question } : {}),
+        ...(state.question_policy === 'grounded_v1' && followUp?.skipped === true ? { review_skipped: true } : {}),
         ...(followUp && ['intake_detail_1', 'intake_detail_2'].includes(followUp.pendingSlotId)
           && state.intake_reading?.next?.slotId === followUp.pendingSlotId
           ? { pending_question: state.intake_reading.next.question } : {}),

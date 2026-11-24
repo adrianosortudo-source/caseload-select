@@ -139,12 +139,23 @@ describe("Screen question policy rollback while a visitor uses the widget", () =
     await act(async () => { fireEvent.click(screen.getByRole("button", { name: /^Continue$/i })); });
     expect(requests[1]).toMatchObject({ body: { reply, question_policy: "grounded_v1" }, returnedPolicy: "grounded_v1" });
     await completeEnquiry();
+    const settledRequests = requests.length;
+    const acknowledgedChoices = requests.slice(2);
+    expect(acknowledgedChoices.length).toBeGreaterThan(0);
+    expect(acknowledgedChoices.some(item => item.body.review_skipped === true)).toBe(true);
+    for (const acknowledgement of acknowledgedChoices) {
+      expect(acknowledgement).toMatchObject({
+        body: { reply: expect.any(String), review_question: expect.any(String), question_policy: "grounded_v1" },
+        returnedPolicy: "grounded_v1",
+      });
+    }
 
     const savedJson = document.querySelector("#parity-submission")!.textContent!;
     const savedHtml = (document.querySelector("#parity-brief") as HTMLIFrameElement).srcdoc;
     const report = JSON.parse(savedJson);
     expect(report.brief_html).toContain(opening);
     expect(report.brief_html).toContain(reply);
+    expect(report.brief_html).not.toContain('Not sure');
     expect(savedHtml).toContain(reply);
     expect(report.contact).toMatchObject({ name: "Alex Example", email: "alex@example.test" });
     vi.stubEnv("SCREEN_PARITY_QUESTION_POLICY", "grounded_v1");
@@ -153,16 +164,16 @@ describe("Screen question policy rollback while a visitor uses the widget", () =
     current.rerender(entry(comparison));
     expect(document.querySelector("#parity-submission")!.textContent).toBe(savedJson);
     expect((document.querySelector("#parity-brief") as HTMLIFrameElement).srcdoc).toBe(savedHtml);
-    expect(requests).toHaveLength(2);
+    expect(requests).toHaveLength(settledRequests);
 
     current.unmount();
     const later = render(entry(comparison));
     await act(async () => { startEnquiry(); });
-    expect(requests[2]).toMatchObject({ body: { question_policy: "grounded_v1" }, returnedPolicy: undefined });
+    expect(requests[settledRequests]).toMatchObject({ body: { question_policy: "grounded_v1" }, returnedPolicy: undefined });
     await prepareWrittenAnswer();
     await act(async () => { fireEvent.click(screen.getByRole("button", { name: /^Continue$/i })); });
-    expect(requests[3].body.question_policy).toBeUndefined();
-    expect(requests[3].returnedPolicy).toBeUndefined();
+    expect(requests[settledRequests + 1].body.question_policy).toBeUndefined();
+    expect(requests[settledRequests + 1].returnedPolicy).toBeUndefined();
     later.unmount();
   });
 

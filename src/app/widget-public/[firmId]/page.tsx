@@ -18,6 +18,7 @@ import { screenParityPreviewEnabled } from "@/lib/screen-parity-preview-enabled"
 import ScreenParityPreview from "@/components/intake-v2/ScreenParityPreview";
 import type { PreviewPracticeArea } from "@/lib/screen-preview-boundary";
 import "@/app/portal/[firmId]/triage/[leadId]/brief.css";
+import { mintScreenFirmContext } from "@/lib/screen-firm-context";
 import { ScreenEnginePublicWidget } from "@/components/intake-v2/ScreenEnginePublicWidget";
 import {
   resolveWidgetTheme,
@@ -87,6 +88,7 @@ export default async function PublicWidgetPage({ params, searchParams }: PagePro
         operationalPracticeAreas={operationalPracticeAreas}
         selectedPracticeArea={firmId === "fictional-screen-preview" ? area as PreviewPracticeArea : undefined}
         canRequestQuestionPolicy={firmId === "fictional-screen-preview"}
+        firmCriteriaToken={previewFirm ? "fictional-preview" : mintScreenFirmContext(firmId, process.env.SCREEN_INTAKE_CONTEXT_SECRET ?? "")}
       />
     </div>
   );

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { applyAnswer, getNextStep } from '../control';
-import { initialiseState, classificationForMatterType } from '../extractor';
+import { initialiseState, classificationForMatterType, applySelectedPracticeAreaForReview } from '../extractor';
 import { applyIntakeInterpretation, pendingIntakeQuestion, type IntakeInterpretation } from '../interpretation';
 import { groundedCoverage, priorityPending, questionPermitted } from '../question-policy';
 import { buildReport } from '../report';
@@ -28,6 +28,265 @@ function opening(input: string, matter: MatterType, reading: Partial<IntakeInter
 }
 
 describe('shared grounded question policy', () => {
+  it.each(['contract_dispute', 'wrongful_dismissal', 'residential_purchase_sale', 'will_drafting'] as const)(
+    'leaves inferred services, fees and risk analysis for lawyer review in %s', matter => {
+      const input = 'I need advice about a document I received.';
+      const reading: Partial<IntakeInterpretation> = { question_review: {
+        requests: [{ quote: input, matter }], priority_quote: null, questions: [],
+      } };
+      const report = buildReport(opening(input, matter, reading));
+      expect(report.likely_legal_services).toEqual([]);
+      expect(report.fee_estimate).toBe('Not assessed');
+      expect(report.risk_flags).toEqual([]);
+      expect(report.strategic_considerations).toEqual([]);
+      expect(report.cross_sell_opportunities).toEqual([]);
+      expect(report.call_openers).toEqual([]);
+      expect(buildReport(opening(input, matter, reading, false)).likely_legal_services.length).toBeGreaterThan(0);
+    },
+  );
+  it('records Skip separately from a chosen uncertainty and retains the question context', () => {
+    const input = 'I need advice on my agreement. I said it was signed.';
+    const request = 'I need advice on my agreement.';
+    const state = opening(input, 'contract_dispute', { question_review: {
+      requests: [{ quote: request, matter: 'contract_dispute' }], priority_quote: null, questions: [],
+    } });
+    const reply = 'Not sure';
+    const reading: IntakeInterpretation = { ...base, superseded_quote: 'I said it was signed.',
+      current_excerpts: [request, reply], question_review: {
+        requests: [{ quote: request, matter: 'contract_dispute' }], priority_quote: null, questions: [],
+      },
+    };
+    const skipped = applyIntakeInterpretation(state, reading, reply, 'written_goal', 'Was it signed?', true);
+    const uncertain = applyIntakeInterpretation(state, reading, reply, 'written_goal', 'Was it signed?', false);
+    expect(skipped.intake_reading?.turns[0].skipped).toBe(true);
+    expect(skipped.intake_reading?.turns[0].correction).toBe(false);
+    expect(buildReport(skipped).matter_snapshot).not.toContain('Not sure');
+    expect(uncertain.intake_reading?.turns[0].skipped).toBe(false);
+    expect(uncertain.intake_reading?.turns[0].correction).toBe(true);
+    expect(buildReport(uncertain).matter_snapshot).toContain('Was it signed?');
+    expect(buildReport(uncertain).matter_snapshot).toContain('Not sure');
+  });
+
+  it('does not erase prior answers or report Skip as a visitor statement', () => {
+    const input = 'Please review my agreement.';
+    const request = { quote: input, matter: 'contract_dispute' as const };
+    const state = opening(input, 'contract_dispute', { question_review: { requests: [request], priority_quote: null, questions: [] } });
+    const prior = { ...state, slots: { ...state.slots, written_timing: 'Not sure' },
+      slot_meta: { ...state.slot_meta, written_timing: { source: 'answered' as const, confidence: 1 } },
+      written_answers: { written_timing: 'Not sure' } };
+    const next = applyIntakeInterpretation(prior, { ...base, unsupported_slots: ['written_timing'],
+      question_review: { requests: [request], priority_quote: null, questions: [] },
+    }, 'Not sure', 'written_timing', 'When is the deadline?', true);
+    expect(next.slots.written_timing).toBe('Not sure');
+    expect(next.written_answers?.written_timing).toBe('Not sure');
+    const values = Object.values(buildReport(next).resolved_facts);
+    expect(values.filter(value => value === 'Not sure')).toHaveLength(1);
+  });
+  it('refreshes a grounded current account without an explicit superseded field', () => {
+    const input = 'I need advice about my lease. I am unsure whether it is signed.';
+    const request = 'I need advice about my lease.';
+    const state = opening(input, 'landlord_tenant', { question_review: {
+      requests: [{ quote: request, matter: 'landlord_tenant' }], priority_quote: null, questions: [],
+    } });
+    const reply = 'I checked and I signed it last week.';
+    const next = applyIntakeInterpretation(state, { ...base, matter: 'landlord_tenant',
+      current_excerpts: [request, reply], question_review: {
+        requests: [{ quote: request, matter: 'landlord_tenant' }], priority_quote: null, questions: [],
+      },
+    }, reply, 'written_goal', 'Can you clarify?');
+    expect(buildReport(next).matter_snapshot).toContain(reply);
+    expect(buildReport(next).matter_snapshot).not.toContain('unsure whether');
+    expect(JSON.stringify(buildReport(next).resolved_facts)).toContain(input);
+  });
+
+  it('keeps the prior account when the model omits an unresolved request', () => {
+    const input = 'I need advice about my lease. I am unsure whether it is signed.';
+    const request = 'I need advice about my lease.';
+    const state = opening(input, 'landlord_tenant', { question_review: {
+      requests: [{ quote: request, matter: 'landlord_tenant' }], priority_quote: null, questions: [],
+    } });
+    const reply = 'I checked and I signed it last week.';
+    const next = applyIntakeInterpretation(state, { ...base, current_excerpts: [reply],
+      question_review: { requests: [], priority_quote: null, questions: [] },
+    }, reply, 'written_goal');
+    expect(buildReport(next).matter_snapshot).toContain(input);
+    expect(buildReport(next).matter_snapshot).toContain(reply);
+    expect(next.intake_reading?.questionReview?.requests).toHaveLength(1);
+  });
+
+  it('keeps a withdrawn request inactive across turns until the visitor explicitly restores it', () => {
+    const input = 'Please review the purchase contract and advise on my will.';
+    const contract = 'review the purchase contract';
+    const will = 'advise on my will';
+    const requests = [{ quote: contract, matter: 'contract_dispute' as const }, { quote: will, matter: 'will_drafting' as const }];
+    const state = opening(input, 'contract_dispute', { question_review: { requests, priority_quote: null, questions: [] } });
+    const resolution = 'The contract review is finished.';
+    const closed = applyIntakeInterpretation(state, { ...base, question_review: { requests: [requests[1]], priority_quote: null, questions: [],
+      withdrawn_requests: [{ request_quote: contract, request_matter: 'contract_dispute', withdrawal_quote: resolution }] } }, resolution, 'written_goal');
+    const detail = 'The appointment is Tuesday.';
+    const later = applyIntakeInterpretation(closed, { ...base, question_review: { requests, priority_quote: null, questions: [] } }, detail, 'written_timing');
+    expect(later.intake_reading?.questionReview?.requests.map(item => item.quote)).toEqual([will]);
+    const returnToContract = 'I need the contract reviewed again.';
+    const restored = applyIntakeInterpretation(later, { ...base, question_review: { requests, priority_quote: null, questions: [],
+      reactivated_requests: [{ request_quote: contract, request_matter: 'contract_dispute', reactivation_quote: returnToContract }] } }, returnToContract, 'written_goal');
+    expect(restored.intake_reading?.questionReview?.requests.map(item => item.quote)).toContain(contract);
+  });
+  it('withdraws only the explicitly resolved request and keeps the other work and history', () => {
+    const input = 'Please review the purchase contract and advise on my will.';
+    const contract = 'review the purchase contract';
+    const will = 'advise on my will';
+    const requests = [{ quote: contract, matter: 'contract_dispute' as const }, { quote: will, matter: 'will_drafting' as const }];
+    const state = opening(input, 'contract_dispute', { question_review: { requests, priority_quote: null, questions: [] } });
+    const reply = 'The contract review is finished. I still need advice on my will.';
+    const next = applyIntakeInterpretation(state, { ...base, matter: 'will_drafting', question_review: {
+      requests: [requests[1]], priority_quote: null, questions: [],
+      withdrawn_requests: [{ request_quote: contract, request_matter: 'contract_dispute', withdrawal_quote: 'The contract review is finished.' }],
+    } }, reply, 'written_goal', 'Which request comes first?');
+    expect(next.intake_reading?.questionReview?.requests.map(request => request.quote)).toEqual([will]);
+    const facts = JSON.stringify(buildReport(next).resolved_facts);
+    expect(facts).toContain(input);
+    expect(facts).toContain(reply);
+  });
+
+  it('does not withdraw background or requests based on an uncited or unrelated correction', () => {
+    const input = 'Please review the purchase contract and advise on my will. The appointment is Monday.';
+    const requests = [{ quote: 'review the purchase contract', matter: 'contract_dispute' as const },
+      { quote: 'advise on my will', matter: 'will_drafting' as const }];
+    const state = opening(input, 'contract_dispute', { question_review: { requests, priority_quote: null, questions: [] } });
+    const reply = 'The appointment is Tuesday.';
+    const next = applyIntakeInterpretation(state, { ...base, superseded_quote: 'The appointment is Monday.',
+      current_excerpts: ['Please review the purchase contract and advise on my will.', reply], question_review: {
+        requests, priority_quote: null, questions: [],
+        withdrawn_requests: [{ request_quote: requests[0].quote, request_matter: 'contract_dispute', withdrawal_quote: 'The contract is finished.' }],
+      },
+    }, reply, 'written_timing', 'When is the appointment?');
+    expect(next.intake_reading?.questionReview?.requests).toHaveLength(2);
+    expect(buildReport(next).matter_snapshot).toContain(reply);
+  });
+
+  it('keeps the other matter when separate requests share the same citation', () => {
+    const input = 'I need help with both the will and the apartment lease.';
+    const requests = [{ quote: input, matter: 'will_drafting' as const }, { quote: input, matter: 'landlord_tenant' as const }];
+    const state = opening(input, 'will_drafting', { question_review: { requests, priority_quote: null, questions: [] } });
+    const reply = 'The will issue is settled, but I still need help with the lease.';
+    const next = applyIntakeInterpretation(state, { ...base, matter: 'landlord_tenant', question_review: {
+      requests: [requests[1]], priority_quote: null, questions: [],
+      withdrawn_requests: [{ request_quote: input, request_matter: 'will_drafting', withdrawal_quote: 'The will issue is settled' }],
+    } }, reply, 'written_goal');
+    expect(next.intake_reading?.questionReview?.requests).toEqual([requests[1]]);
+    expect(JSON.stringify(buildReport(next).resolved_facts)).toContain(input);
+  });
+  it('keeps prior corrections and omits a bare skip from the headline', () => {
+    const input = 'I need a contract reviewed. The appointment is Monday.';
+    const state = opening(input, 'contract_dispute', { question_review: {
+      requests: [{ quote: 'I need a contract reviewed.', matter: 'contract_dispute' }], priority_quote: null, questions: [],
+    } });
+    const first = applyIntakeInterpretation(state, { ...base, superseded_quote: 'The appointment is Monday.',
+      current_excerpts: ['I need a contract reviewed.', 'The appointment is Thursday.'],
+      question_review: { requests: [{ quote: 'I need a contract reviewed.', matter: 'contract_dispute' }], priority_quote: null, questions: [] },
+    }, 'The appointment is Thursday.', 'written_timing');
+    const skipped = applyIntakeInterpretation(first, { ...base, superseded_quote: 'The appointment is Thursday.',
+      current_excerpts: ['I need a contract reviewed.', 'Not sure'],
+      question_review: { requests: [{ quote: 'I need a contract reviewed.', matter: 'contract_dispute' }], priority_quote: null, questions: [] },
+    }, 'Not sure', 'written_goal', 'What outcome do you want?');
+    expect(skipped.intake_reading?.currentAccount).toContain('The appointment is Thursday.');
+    expect(buildReport(skipped).matter_snapshot).toContain('The appointment is Thursday.');
+    expect(buildReport(skipped).matter_snapshot).not.toContain('Not sure');
+    const older = { ...skipped, intake_reading: { ...skipped.intake_reading!, currentAccount: 'I need a contract reviewed.\nI am not sure whether it was signed.\nNot sure' } };
+    expect(buildReport(older).matter_snapshot).toContain('I am not sure whether it was signed.');
+    expect(buildReport(older).matter_snapshot).not.toContain('\nNot sure');
+  });
+  it('suppresses an equivalent question after an uncertain reply without inventing an answer', () => {
+    const input = 'I want help reviewing a proposed agreement.';
+    const initial = opening(input, 'contract_dispute', { question_review: {
+      requests: [{ quote: input, matter: 'contract_dispute' }], priority_quote: null, questions: [],
+    } });
+    const skipped = applyAnswer(initial, 'written_timing', 'Not sure');
+    const next = applyIntakeInterpretation(skipped, { ...base, matter: 'contract_dispute',
+      next_slot: 'contract_review_timeline', next_question: 'When would you like this reviewed?',
+      question_review: { requests: [{ quote: input, matter: 'contract_dispute' }], priority_quote: null,
+        next_is_repeat: true, questions: [{ slot_id: 'contract_review_timeline', status: 'already_asked', quote: 'Not sure' }] },
+    }, 'Not sure', 'written_timing', 'When do you need an answer?');
+    expect(questionPermitted(next, getSlotById('contract_review_timeline')!)).toBe(false);
+    expect(pendingIntakeQuestion(next)).toBeUndefined();
+    expect(next.slots.contract_review_timeline).toBeUndefined();
+  });
+
+  it('does not fall back to a proposed repeat when its catalogue grade conflicts', () => {
+    const input = 'I want help reviewing an agreement.';
+    const state = opening(input, 'contract_dispute', { question_review: {
+      requests: [{ quote: input, matter: 'contract_dispute' }], priority_quote: null, questions: [],
+    } });
+    const skipped = applyAnswer(state, 'written_timing', 'Not sure');
+    const next = applyIntakeInterpretation(skipped, { ...base, matter: 'contract_dispute',
+      next_slot: 'contract_review_timeline', next_question: 'When would you like this reviewed?',
+      question_review: { requests: [{ quote: input, matter: 'contract_dispute' }], priority_quote: null,
+        next_is_repeat: true, questions: [{ slot_id: 'contract_review_timeline', status: 'missing', quote: input }] },
+    }, 'Not sure', 'written_timing', 'When do you need an answer?');
+    expect(questionPermitted(next, getSlotById('contract_review_timeline')!)).toBe(false);
+    expect(getNextStep(next).slot?.id).not.toBe('contract_review_timeline');
+  });
+
+  it('merges an explicitly linked duplicate while retaining an unlinked second request', () => {
+    const input = 'Please review the agreement and also advise on the building lease.';
+    const first = 'review the agreement';
+    const overlap = 'Please review the agreement';
+    const second = 'advise on the building lease';
+    const state = opening(input, 'corporate_general', { question_review: {
+      requests: [{ quote: first, matter: 'corporate_general' },
+        { quote: overlap, matter: 'contract_dispute', same_as_quote: first },
+        { quote: second, matter: 'commercial_real_estate' }], priority_quote: null, questions: [],
+    } });
+    expect(state.intake_reading?.questionReview?.requests.map(request => request.quote)).toEqual([first, second]);
+    expect(priorityPending(state)).toBe(true);
+  });
+  it('keeps the current account as the brief headline when a visitor skips a follow-up', () => {
+    const input = 'I need advice about a supplier contract that ends next month.';
+    const state = opening(input, 'contract_dispute', { question_review: {
+      requests: [{ quote: 'advice about a supplier contract', matter: 'contract_dispute' }], priority_quote: null, questions: [],
+    } });
+    const answered = applyAnswer(state, 'written_timing', 'Not sure');
+    const next = applyIntakeInterpretation(answered, { ...base, question_review: {
+      requests: [{ quote: 'advice about a supplier contract', matter: 'contract_dispute' }], priority_quote: null, questions: [],
+    } }, 'Not sure', 'written_timing', 'When do you need advice?');
+    expect(buildReport(next).matter_snapshot).toContain(input);
+    expect(buildReport(next).matter_snapshot).not.toContain('Not sure');
+  });
+
+  it('avoids repeating identical request citations already present in the account', () => {
+    const input = 'Please help me with the employment offer and the property agreement.';
+    const requests = [{ quote: input, matter: 'employment_general' as const }, { quote: input, matter: 'real_estate_general' as const }];
+    const state = opening(input, 'employment_general', { question_review: { requests, priority_quote: null, questions: [] } });
+    const next = applyIntakeInterpretation(applyAnswer(state, 'written_goal', 'Not sure'), {
+      ...base, question_review: { requests, priority_quote: null, questions: [] },
+    }, 'Not sure', 'written_goal', 'Which should be addressed first?');
+    expect(next.intake_reading?.questionReview?.requests).toHaveLength(2);
+    const facts = buildReport(next).resolved_facts;
+    expect(Object.values(facts).filter(value => value === input)).toHaveLength(1);
+  });
+  it('uses the selected practice area when the opening classifier follows an unrelated word', () => {
+    const state = initialiseState('The company ended my role after seven years. They want a response to the offer next Friday.');
+    const selected = applySelectedPracticeAreaForReview(state, 'employment');
+    expect(selected.practice_area).toBe('employment');
+    expect(selected.matter_type).toBe('employment_general');
+  });
+
+  it('retains separately identified matters in one citation after a factual correction and an uncertain priority', () => {
+    const input = 'I need help with both my parenting arrangements and my business buyout. The deadline is Monday.';
+    const citation = 'I need help with both my parenting arrangements and my business buyout.';
+    const requests = [{ quote: citation, matter: 'family_general' as const }, { quote: citation, matter: 'corporate_general' as const }];
+    const state = opening(input, 'family_general', { question_review: { requests, priority_quote: null, questions: [] } });
+    expect(state.intake_reading?.questionReview?.requests).toHaveLength(2);
+    const reply = 'The deadline is Tuesday, not Monday.';
+    const corrected = applyIntakeInterpretation(state, { ...base, answers_question: true,
+      superseded_quote: 'The deadline is Monday.', current_excerpts: [citation, reply],
+      question_review: { requests: [], priority_quote: null, questions: [] },
+    }, reply, 'written_timing', 'When is the deadline?');
+    expect(corrected.intake_reading?.questionReview?.requests).toHaveLength(2);
+    expect(priorityPending(corrected)).toBe(true);
+    expect(JSON.stringify(buildReport(corrected))).toContain(citation);
+    expect(JSON.stringify(buildReport(corrected))).toContain(reply);
+  });
   it('rejects a nonpayment question without evidence for nonpayment and preserves the prior protocol', () => {
     const input = 'The parties disagree about whether the agreement was signed.';
     const reading: Partial<IntakeInterpretation> = {
