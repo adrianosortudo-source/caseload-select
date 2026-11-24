@@ -7,7 +7,7 @@ import { DecisionCard } from "@/components/intake-v2/DecisionCard";
 import type { ScreenItem } from "@/components/intake-v2/types";
 import { applyIntakeInterpretation } from "@/lib/screen-engine/interpretation";
 import { extractPreviewInquiry, type ScreenPreviewBoundary } from "@/lib/screen-preview-boundary";
-import { applySelectedPracticeArea, initialiseState } from "@/lib/screen-engine/extractor";
+import { applySelectedPracticeArea, applySelectedPracticeAreaForReview, initialiseState } from "@/lib/screen-engine/extractor";
 import { runEvidencePass } from "@/lib/screen-engine/slotEvidence";
 import { computeBand } from "@/lib/screen-engine/band";
 import { computeCoreCompleteness, getDecisionGap } from "@/lib/screen-engine/selector";
@@ -162,6 +162,7 @@ export interface ScreenEnginePublicWidgetProps {
   configuredPracticeAreas?: readonly import("@/lib/screen-engine/types").PracticeArea[];
   selectedPracticeArea?: import("@/lib/screen-engine/types").PracticeArea;
   canRequestQuestionPolicy?: boolean;
+  firmCriteriaToken?: string;
   /** Optional fictional opening used by the presentation toolbar. */
   initialDescription?: string;
   /** Explicitly authorized intake packs, supplied by the server-side firm resolver. */
@@ -318,12 +319,16 @@ export function ScreenEnginePublicWidget({
   demoContinuation,
   initialDescription = "",
   configuredPracticeAreas = [],
-  operationalPracticeAreas, selectedPracticeArea, canRequestQuestionPolicy = false,
+  operationalPracticeAreas, selectedPracticeArea, canRequestQuestionPolicy = false, firmCriteriaToken,
 }: ScreenEnginePublicWidgetProps) {
   const previewBoundary = useContext(ScreenPreviewTransport);
   const policy = SCREEN_WIDGET_EXECUTION_POLICY[runtime];
   const isDemo = policy.isGuidedDemo;
-  const extractInquiry = previewBoundary && !previewBoundary.comparison ? extractPreviewInquiry : llmExtract;
+  const criteriaToken = firmCriteriaToken ?? (canRequestQuestionPolicy ? "fictional-preview" : undefined);
+  const extractInquiry = (description: string, state: EngineState, followUp?: { pendingSlotId: string; reply: string; question?: string; skipped?: boolean }) =>
+    previewBoundary && !previewBoundary.comparison
+      ? extractPreviewInquiry(description, state, followUp, undefined, criteriaToken)
+      : llmExtract(description, state, followUp, undefined, undefined, criteriaToken);
   const metaWorkflow = isDemo && demoContinuation?.workflow === "meta";
   const [stage, setStage] = useState<Stage>("kickoff");
   const [pendingDemoReview, setPendingDemoReview] = useState(false);
@@ -331,7 +336,7 @@ export function ScreenEnginePublicWidget({
   const [state, setState] = useState<EngineState | null>(null);
   const [history, setHistory] = useState<EngineState[]>([]);
   const [isReading, setIsReading] = useState(false);
-  const [retryTurn, setRetryTurn] = useState<{ text: string; slotId?: string } | null>(null);
+  const [retryTurn, setRetryTurn] = useState<{ text: string; slotId?: string; choice?: boolean; skipped?: boolean } | null>(null);
   const [readingAnswer, setReadingAnswer] = useState(false);
   const [answerFeedback, setAnswerFeedback] = useState<string | null>(null);
   const [persistStatus, setPersistStatus] = useState<string | null>(null);
@@ -519,7 +524,15 @@ export function ScreenEnginePublicWidget({
     let nextState = initialiseState(text);
     if (isDemo) nextState = prepareFamilyDemoState(nextState, configuredPracticeAreas);
     else if (operationalPracticeAreas) nextState = configureFirmPracticeAreas(nextState, operationalPracticeAreas);
+    const selectedBase = nextState;
     if (selectedPracticeArea) nextState = applySelectedPracticeArea(nextState, selectedPracticeArea);
+    let reviewState = selectedPracticeArea && canRequestQuestionPolicy
+      ? applySelectedPracticeAreaForReview(selectedBase, selectedPracticeArea)
+      : nextState;
+    reviewState = runEvidencePass(text, reviewState);
+    if (metaWorkflow) reviewState = groundDemoConversationFacts(reviewState, text);
+    else if (reviewState.family_enabled) reviewState = groundFamilyConversationFacts(reviewState, text);
+    reviewState = scoreState(reviewState);
     nextState = runEvidencePass(text, nextState);
     if (metaWorkflow) nextState = groundDemoConversationFacts(nextState, text);
     else if (nextState.family_enabled) nextState = groundFamilyConversationFacts(nextState, text);
@@ -540,15 +553,17 @@ export function ScreenEnginePublicWidget({
       const requestState = canRequestQuestionPolicy
         ? { ...nextState, question_policy: "grounded_v1" as const }
         : nextState;
-      const extracted = await extractInquiry(text, requestState);
+      const extracted = previewBoundary && !previewBoundary.comparison
+        ? await extractPreviewInquiry(text, requestState, undefined, canRequestQuestionPolicy ? reviewState : undefined, criteriaToken)
+        : await llmExtract(text, requestState, undefined, undefined, canRequestQuestionPolicy ? reviewState : undefined, criteriaToken);
       if (run !== extractionRun.current) return;
-      if (runtime === "live" && extracted.mode !== "live") {
+      if (runtime === "live" && (extracted.mode !== "live" || (extracted.question_policy && !extracted.interpretation))) {
         setRetryTurn({ text });
         return;
       }
       if (extracted.mode === "live") {
         if (canRequestQuestionPolicy && extracted.question_policy) {
-          nextState = { ...nextState, question_policy: extracted.question_policy };
+          nextState = { ...reviewState, question_policy: extracted.question_policy };
         }
         nextState = scoreState(applyIntakeInterpretation(mergeLlmResults(nextState, extracted.extracted), extracted.interpretation, text));
         if (metaWorkflow) nextState = scoreState(groundDemoConversationFacts(nextState, text));
@@ -590,13 +605,13 @@ export function ScreenEnginePublicWidget({
     if (policy.allowsExtraction && (runtime === "live" || updated.matter_type === "unknown")) {
       setIsReading(true);
       try {
-        const result = await extractInquiry(contextWithReply(state, text), updated, { pendingSlotId: "__clarify__", reply: text });
+        const result = await extractInquiry(contextWithReply(state, text), updated, { pendingSlotId: "__clarify__", reply: text, question: currentItem?.question });
         if (run !== extractionRun.current) return;
-        if (runtime === "live" && result.mode !== "live") {
+        if (runtime === "live" && (result.mode !== "live" || (state.question_policy && !result.interpretation))) {
           setRetryTurn({ text, slotId: "__clarify__" });
           return;
         }
-        if (result.mode === "live") updated = applyIntakeInterpretation(mergeLlmResults(updated, result.extracted), result.interpretation, text, "__clarify__");
+        if (result.mode === "live") updated = applyIntakeInterpretation(mergeLlmResults(updated, result.extracted), result.interpretation, text, "__clarify__", currentItem?.question, false);
       } catch {
         if (run !== extractionRun.current) return;
         if (runtime === "live") {
@@ -623,7 +638,7 @@ export function ScreenEnginePublicWidget({
     setState(scoreState(nextState));
   }
 
-  async function answer(slotId: string, rawValue: string | string[]) {
+  async function answer(slotId: string, rawValue: string | string[], skipped = false) {
     if (!state || isReading) return;
     const value = Array.isArray(rawValue) ? rawValue.join(", ") : rawValue;
     if (metaWorkflow && next?.slot?.id === slotId) {
@@ -633,8 +648,34 @@ export function ScreenEnginePublicWidget({
     }
     setAnswerFeedback(null);
     if (!value.startsWith("other:")) {
+      const updated = skipped && state.question_policy === "grounded_v1"
+        ? { ...state, questionHistory: [...state.questionHistory, slotId] }
+        : policy.usesFixtureEngine ? answerDemoState(state, slotId, value) : applyAnswer(state, slotId, value);
+      if (state.question_policy === "grounded_v1" && policy.allowsExtraction && next?.slot?.id === slotId) {
+        const question = currentItem?.question ?? next.slot.question;
+        const run = ++extractionRun.current;
+        setRetryTurn(null);
+        setReadingAnswer(true);
+        setIsReading(true);
+        try {
+          const result = await extractInquiry(contextWithReply(state, value), state, { pendingSlotId: slotId, reply: value, question, skipped });
+          if (run !== extractionRun.current) return;
+          if (result.mode !== "live" || !result.interpretation) {
+            setRetryTurn({ text: value, slotId, choice: true, skipped });
+            return;
+          }
+          setHistory((items) => [...items, state]);
+          const merged = skipped ? updated : mergeLlmResults(updated, result.extracted);
+          mutate(applyIntakeInterpretation(merged, result.interpretation, value, slotId, question, skipped));
+        } catch {
+          if (run === extractionRun.current) setRetryTurn({ text: value, slotId, choice: true, skipped });
+        } finally {
+          if (run === extractionRun.current) setIsReading(false);
+        }
+        return;
+      }
       setHistory((items) => [...items, state]);
-      mutate(policy.usesFixtureEngine ? answerDemoState(state, slotId, value) : applyAnswer(state, slotId, value));
+      mutate(updated);
       return;
     }
     const text = value.slice("other:".length).trim();
@@ -646,7 +687,7 @@ export function ScreenEnginePublicWidget({
       setHistory((items) => [...items, state]);
       const grounded = updated.family_enabled ? groundFamilyConversationFacts(updated, text) : updated;
       const prepared = metaWorkflow ? groundFamilyOrderReplies(grounded, demoUserEvidence.current) : grounded;
-      mutate(applyIntakeInterpretation(prepared, reading, text, slotId));
+      mutate(applyIntakeInterpretation(prepared, reading, text, slotId, currentItem?.question ?? asked.question, false));
     };
     const selectedWrittenAnswer = !metaWorkflow || writtenChoiceFor.current === slotId;
     writtenChoiceFor.current = null;
@@ -669,9 +710,9 @@ export function ScreenEnginePublicWidget({
       const context = metaWorkflow
         ? [state.input, ...demoReplyHistory.current].join("\n\n")
         : contextWithReply(state, text);
-      const result = await extractInquiry(context, state, { pendingSlotId: slotId, reply: text });
+      const result = await extractInquiry(context, state, { pendingSlotId: slotId, reply: text, question: currentItem?.question ?? asked.question });
       if (run !== extractionRun.current) return;
-      if (runtime === "live" && (result.mode !== "live" || (result.mapping_mode && result.mapping_mode !== "live"))) {
+      if (runtime === "live" && (result.mode !== "live" || (state.question_policy && !result.interpretation) || (result.mapping_mode && result.mapping_mode !== "live"))) {
         setRetryTurn({ text, slotId });
         return;
       }
@@ -731,7 +772,7 @@ export function ScreenEnginePublicWidget({
 
   function skip() {
     if (!next?.slot) return;
-    answer(next.slot.id, "Not sure");
+    answer(next.slot.id, "Not sure", true);
   }
 
   async function persist(finalState: EngineState) {
@@ -857,7 +898,7 @@ export function ScreenEnginePublicWidget({
     : undefined;
 
   if (retryTurn) {
-    const { text, slotId } = retryTurn;
+    const { text, slotId, choice, skipped } = retryTurn;
     return <Shell totalScreens={1} currentScreen={0} roundLabel={roundLabel} layout={layout} reportHeight={reportEmbeddedHeight}>
       <section className="w-full space-y-4 py-6">
         <h2 className="text-2xl font-extrabold">Please try that answer again</h2>
@@ -865,7 +906,7 @@ export function ScreenEnginePublicWidget({
         <p className="whitespace-pre-wrap break-words border border-[#c8c3bb] p-3">{text}</p>
         <button className="min-h-12 bg-[#1e2f58] px-5 py-2 font-bold text-white" type="button" onClick={() => {
           if (slotId === "__clarify__") void submitClarify(text);
-          else if (slotId) void answer(slotId, "other:" + text);
+          else if (slotId) void answer(slotId, choice ? text : "other:" + text, skipped);
           else void runStart(text);
         }}>Try again</button>
       </section>

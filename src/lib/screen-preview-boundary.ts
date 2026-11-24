@@ -40,11 +40,29 @@ export function redactPreviewState(state: EngineState): EngineState {
   const slots = Object.fromEntries(Object.entries(state.slots)
     .filter(([id]) => !contactIds.has(id))
     .map(([id, value]) => [id, typeof value === "string" ? redactContact(value, contact) : value]));
-  return { ...state, input: redactContact(state.input, contact), slots };
+  return { ...state, input: redactContact(state.input, contact), slots,
+    ...(state.intake_reading ? { intake_reading: { ...state.intake_reading,
+      turns: state.intake_reading.turns.map(turn => ({ ...turn,
+        text: redactContact(turn.text, contact),
+        ...(turn.question ? { question: redactContact(turn.question, contact) } : {}),
+      })),
+      ...(state.intake_reading.questionReview ? { questionReview: { ...state.intake_reading.questionReview,
+        requests: state.intake_reading.questionReview.requests.map(request => ({ ...request,
+          quote: redactContact(request.quote, contact),
+          ...(request.same_as_quote ? { same_as_quote: redactContact(request.same_as_quote, contact) } : {}),
+        })),
+        ...(state.intake_reading.questionReview.withdrawn ? { withdrawn: state.intake_reading.questionReview.withdrawn.map(item => ({ ...item,
+          request_quote: redactContact(item.request_quote, contact), withdrawal_quote: redactContact(item.withdrawal_quote, contact),
+        })) } : {}),
+      } } : {}),
+    } } : {}),
+  };
 }
 
 /** Use the same operational endpoint, provider and schema as the real widget. */
-export function extractPreviewInquiry(description: string, state: EngineState, followUp?: { pendingSlotId: string; reply: string }) {
+export function extractPreviewInquiry(description: string, state: EngineState, followUp?: { pendingSlotId: string; reply: string; question?: string; skipped?: boolean }, reviewState?: EngineState, firmCriteriaToken?: string) {
   return llmExtract(redactPreviewText(description, state), redactPreviewState(state),
-    followUp && { ...followUp, reply: redactPreviewText(followUp.reply, state) });
+    followUp && { ...followUp, reply: redactPreviewText(followUp.reply, state),
+      ...(followUp.question ? { question: redactPreviewText(followUp.question, state) } : {}) },
+    undefined, reviewState && redactPreviewState(reviewState), firmCriteriaToken);
 }

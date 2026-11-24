@@ -1,13 +1,16 @@
 import { ALL_MATTER_TYPES, catalogueQuestionApplies, getSlotById, SLOT_REGISTRY } from './slotRegistry';
 import type { EngineState, MatterType, SlotDefinition } from './types';
 
-type QuestionStatus = 'missing' | 'answered' | 'disputed' | 'irrelevant';
+type QuestionStatus = 'missing' | 'answered' | 'disputed' | 'irrelevant' | 'already_asked';
 
 export interface QuestionReview {
-  requests: { quote: string; matter: MatterType }[];
+  requests: { quote: string; matter: MatterType; same_as_quote?: string | null }[];
   priority_quote: string | null;
   preferred_request_quote?: string | null;
   custom_basis_quote?: string | null;
+  next_is_repeat?: boolean;
+  withdrawn_requests?: { request_quote: string; request_matter: MatterType; withdrawal_quote: string }[];
+  reactivated_requests?: { request_quote: string; request_matter: MatterType; reactivation_quote: string }[];
   questions: { slot_id: string; status: QuestionStatus; quote: string }[];
 }
 
@@ -16,6 +19,9 @@ export interface GroundedQuestionReview {
   priority?: QuestionReview['requests'][number];
   grades: Record<string, QuestionReview['questions'][number]>;
   customBasis?: string;
+  nextIsRepeat?: boolean;
+  nextRepeatSlot?: string;
+  withdrawn?: { request_quote: string; request_matter: MatterType; withdrawal_quote: string }[];
 }
 
 function text(value: unknown): string | null {
@@ -54,9 +60,10 @@ export function parseQuestionReview(value: unknown): QuestionReview | undefined 
   if (!Array.isArray(review.requests) || !Array.isArray(review.questions)) return;
   const requests = review.requests.slice(0, 8).flatMap(item => {
     const quote = text(item?.quote);
-    return quote && ALL_MATTER_TYPES.includes(item.matter) ? [{ quote, matter: item.matter }] : [];
+    return quote && ALL_MATTER_TYPES.includes(item.matter) ? [{ quote, matter: item.matter,
+      ...(text(item.same_as_quote) ? { same_as_quote: text(item.same_as_quote) } : {}) }] : [];
   });
-  const statuses: readonly QuestionStatus[] = ['missing', 'answered', 'disputed', 'irrelevant'];
+  const statuses: readonly QuestionStatus[] = ['missing', 'answered', 'disputed', 'irrelevant', 'already_asked'];
   const questions = review.questions.slice(0, 120).flatMap(item => {
     const quote = text(item?.quote);
     return quote && typeof item.slot_id === 'string' && statuses.includes(item.status)
@@ -67,6 +74,19 @@ export function parseQuestionReview(value: unknown): QuestionReview | undefined 
     priority_quote: text(review.priority_quote),
     preferred_request_quote: text(review.preferred_request_quote),
     custom_basis_quote: text(review.custom_basis_quote),
+    next_is_repeat: review.next_is_repeat === true,
+    withdrawn_requests: Array.isArray(review.withdrawn_requests) ? review.withdrawn_requests.slice(0, 8).flatMap(item => {
+      const request = text(item?.request_quote);
+      const withdrawal = text(item?.withdrawal_quote);
+      return request && withdrawal && ALL_MATTER_TYPES.includes(item.request_matter)
+        ? [{ request_quote: request, request_matter: item.request_matter, withdrawal_quote: withdrawal }] : [];
+    }) : [],
+    reactivated_requests: Array.isArray(review.reactivated_requests) ? review.reactivated_requests.slice(0, 8).flatMap(item => {
+      const request = text(item?.request_quote);
+      const reactivation = text(item?.reactivation_quote);
+      return request && reactivation && ALL_MATTER_TYPES.includes(item.request_matter)
+        ? [{ request_quote: request, request_matter: item.request_matter, reactivation_quote: reactivation }] : [];
+    }) : [],
     questions,
   };
 }
@@ -77,15 +97,40 @@ export function groundQuestionReview(
   sources: readonly string[],
   previous?: GroundedQuestionReview,
   replyingAboutPriority = false,
+  latestReply?: string,
 ): GroundedQuestionReview | undefined {
   if (!review) return previous;
   const grounded = (quote: string | null | undefined): quote is string =>
     !!quote && sources.some(source => source.includes(quote));
   const requests: QuestionReview['requests'] = [];
+  const newWithdrawals = (review.withdrawn_requests ?? []).filter(item =>
+    latestReply?.includes(item.withdrawal_quote) && previous?.requests.some(request =>
+      request.quote === item.request_quote && request.matter === item.request_matter));
+  const reactivated = new Set((review.reactivated_requests ?? []).filter(item =>
+    latestReply?.includes(item.reactivation_quote) && previous?.withdrawn?.some(old =>
+      old.request_quote === item.request_quote && old.request_matter === item.request_matter))
+    .map(item => `${item.request_matter}\u0000${item.request_quote}`));
+  const withdrawnByKey = new Map([...previous?.withdrawn ?? [], ...newWithdrawals]
+    .map(item => [`${item.request_matter}\u0000${item.request_quote}`, item]));
+  for (const key of reactivated) withdrawnByKey.delete(key);
+  const withdrawn = new Set(withdrawnByKey.keys());
   const offered = review.requests.filter(request => grounded(request.quote));
+  // The model may identify overlapping quotations as the same requested work.
+  // Only merge an explicitly linked duplicate when its canonical request is
+  // present and grounded in the visitor's account. Unlinked requests survive.
+  const duplicateCandidates = new Set(offered.filter(candidate => candidate.same_as_quote &&
+    offered.some(other => other !== candidate && other.quote === candidate.same_as_quote && !other.same_as_quote)));
+  const duplicateKeys = new Set([...duplicateCandidates].filter(candidate => !offered.some(other =>
+    !duplicateCandidates.has(other) && other.matter === candidate.matter && other.quote === candidate.quote))
+    .map(candidate => `${candidate.matter}\u0000${candidate.quote}`));
   for (const candidate of [ ...offered, ...previous?.requests ?? [] ]) {
-    if (!grounded(candidate.quote)) continue;
-    if (requests.some(item => item.quote.includes(candidate.quote) || candidate.quote.includes(item.quote))) continue;
+    if (!grounded(candidate.quote) || withdrawn.has(`${candidate.matter}\u0000${candidate.quote}`)) continue;
+    if (duplicateCandidates.has(candidate) || duplicateKeys.has(`${candidate.matter}\u0000${candidate.quote}`)) continue;
+    // Distinct matters can be expressed in the same phrase. Keep both when
+    // the interpreter identifies different work so an uncertain priority
+    // cannot silently remove a request from the brief.
+    if (requests.some(item => item.matter === candidate.matter &&
+      (item.quote.includes(candidate.quote) || candidate.quote.includes(item.quote)))) continue;
     requests.push(candidate);
   }
   const selection = review.priority_quote;
@@ -98,7 +143,7 @@ export function groundQuestionReview(
     })
     ? resolveRequest(requests, review.preferred_request_quote, selection)
     : undefined;
-  const priority = selected ?? requests.find(item => item.quote === previous?.priority?.quote);
+  const priority = selected ?? requests.find(item => item.quote === previous?.priority?.quote && item.matter === previous.priority.matter);
   const grades: GroundedQuestionReview['grades'] = {};
   for (const grade of [ ...Object.values(previous?.grades ?? {}), ...review.questions ]) {
     if (!grounded(grade.quote)) continue;
@@ -108,8 +153,9 @@ export function groundQuestionReview(
     grades[grade.slot_id] = grade;
   }
   return {
-    requests, priority, grades,
+    requests, priority, grades, withdrawn: [...withdrawnByKey.values()],
     customBasis: grounded(review.custom_basis_quote) ? review.custom_basis_quote : undefined,
+    nextIsRepeat: review.next_is_repeat === true,
   };
 }
 
@@ -197,6 +243,7 @@ export function questionPermitted(state: EngineState, slot: SlotDefinition): boo
   if (!catalogueQuestionApplies(state, slot) || state.questionHistory.includes(slot.id) || priorityPending(state)) return false;
   if (groundedCoverage(state, slot) || state.intake_reading?.coveredQuestions?.[slot.id]) return false;
   const reading = state.intake_reading;
+  if (reading?.questionReview?.nextIsRepeat && reading.questionReview.nextRepeatSlot === slot.id) return false;
   const grade = reading?.questionReview?.grades[slot.id];
   if (grade && grade.status !== 'missing') return false;
   if (firmQuestions.has(slot.id)) return true;
@@ -238,7 +285,7 @@ export function customQuestionPermitted(state: EngineState, question: string): b
   if (state.question_policy !== 'grounded_v1') return true;
   if (solicitsContactDetails(question)) return false;
   const review = state.intake_reading?.questionReview;
-  if (!review?.customBasis || priorityPending(state) || !authoredTextAllowed(state, question, review.customBasis)) return false;
+  if (!review?.customBasis || review.nextIsRepeat || priorityPending(state) || !authoredTextAllowed(state, question, review.customBasis)) return false;
   const directTopic = [
     ['existing_will', /\b(?:do|did) (?:you|they|he|she) (?:currently )?have (?:an? |any )?will\b|\bis there (?:an? |any )?will\b/iu],
     ['spouse', /\b(?:what is your marital status|are you married|do you have a spouse)\b/iu],
