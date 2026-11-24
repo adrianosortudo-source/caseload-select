@@ -11,6 +11,7 @@ type Props = {
   channel: "website" | "sms" | "whatsapp" | "instagram" | "facebook";
   comparison: boolean;
   externalReport: boolean;
+  canRequestQuestionPolicy?: boolean;
   operationalPracticeAreas?: readonly PreviewPracticeArea[];
   children?: ReactNode;
 };
@@ -50,7 +51,7 @@ function VisibleBrief({ html }: { html: string }) {
     }} />;
 }
 
-export default function ScreenParityPreview({ practiceArea, channel, comparison, externalReport, operationalPracticeAreas, children }: Props) {
+export default function ScreenParityPreview({ practiceArea, channel, comparison, externalReport, canRequestQuestionPolicy, operationalPracticeAreas, children }: Props) {
   const root = useRef<HTMLElement>(null);
   const submittedOpening = useRef(false);
   const [handoff, setHandoff] = useState({ opening: "", phone: "", start: false });
@@ -118,7 +119,8 @@ export default function ScreenParityPreview({ practiceArea, channel, comparison,
     {children ?? (channel === "website" || channel === "sms"
       ? <ScreenEnginePublicWidget firmId="fictional-screen-preview" firmName="Example Law Firm" runtime="live"
           layout="contained" reportEmbeddedHeight={false} initialDescription={handoff.opening}
-          operationalPracticeAreas={operationalPracticeAreas} selectedPracticeArea={practiceArea} />
+          operationalPracticeAreas={operationalPracticeAreas} selectedPracticeArea={practiceArea}
+          canRequestQuestionPolicy={canRequestQuestionPolicy} />
       : <ScreenParityMessaging practiceArea={practiceArea} channel={channel} comparison={comparison}
           opening={handoff.opening} onReport={onMessagingReport} />)}
     </ScreenPreviewTransport.Provider>

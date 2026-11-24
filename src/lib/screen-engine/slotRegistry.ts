@@ -1,4 +1,4 @@
-import type { MatterType, SlotDefinition } from './types';
+import type { EngineState, MatterType, SlotDefinition } from './types';
 
 /**
  * Every contact slot (client_name / client_phone / client_email /
@@ -1076,6 +1076,7 @@ export const SLOT_REGISTRY: SlotDefinition[] = [
     },
   },
   {
+    question_premise: 'ownership',
     id: 'shareholder_agreement',
     question: 'Do you have a shareholder agreement or any ownership documents?',
     input_type: 'single_select',
@@ -1248,6 +1249,7 @@ export const SLOT_REGISTRY: SlotDefinition[] = [
 
   {
     id: 'amount_at_stake',
+    question_premise: 'financial',
     question: 'About how much money is involved?',
     input_type: 'single_select',
     options: [
@@ -1273,6 +1275,7 @@ export const SLOT_REGISTRY: SlotDefinition[] = [
     },
   },
   {
+    question_premise: 'payment',
     id: 'invoice_exists',
     question: 'Do you have an invoice, bill, or statement showing what is owed?',
     input_type: 'single_select',
@@ -1295,6 +1298,7 @@ export const SLOT_REGISTRY: SlotDefinition[] = [
     },
   },
   {
+    question_premise: 'payment',
     id: 'payment_status',
     question: 'Has any of the amount been paid?',
     input_type: 'single_select',
@@ -1348,6 +1352,7 @@ export const SLOT_REGISTRY: SlotDefinition[] = [
     },
   },
   {
+    question_premise: 'payment',
     id: 'dispute_reason',
     question: 'What is the other side saying about why they are not paying?',
     input_type: 'single_select',
@@ -1692,6 +1697,7 @@ export const SLOT_REGISTRY: SlotDefinition[] = [
     priority: 43,
   },
   {
+    question_premise: 'irregularity',
     id: 'evidence_of_irregularity',
     question: 'Do you have any records, statements, or documents showing the irregularity?',
     input_type: 'single_select',
@@ -2027,6 +2033,8 @@ export const SLOT_REGISTRY: SlotDefinition[] = [
     priority: 20,
   },
   {
+    question_premise: 'closing',
+    question_coverage: 'closing_date',
     id: 'residential_closing_timeline',
     question: 'When is the closing?',
     input_type: 'single_select',
@@ -2049,6 +2057,7 @@ export const SLOT_REGISTRY: SlotDefinition[] = [
     priority: 21,
   },
   {
+    question_coverage: 'financing',
     id: 'residential_mortgage_situation',
     question: 'Where are you with financing?',
     input_type: 'single_select',
@@ -2096,6 +2105,7 @@ export const SLOT_REGISTRY: SlotDefinition[] = [
   // ─── REAL ESTATE LITIGATION ──────────────────────────────────────────────
 
   {
+    question_premise: 'dispute',
     id: 'litigation_subject',
     question: 'What is the dispute about?',
     input_type: 'single_select',
@@ -2130,6 +2140,7 @@ export const SLOT_REGISTRY: SlotDefinition[] = [
     },
   },
   {
+    question_premise: 'dispute',
     id: 'litigation_role',
     question: 'What is your role in the dispute?',
     input_type: 'single_select',
@@ -2301,6 +2312,7 @@ export const SLOT_REGISTRY: SlotDefinition[] = [
     },
   },
   {
+    question_premise: 'dispute',
     id: 'tenancy_issue',
     question: 'What is the dispute about?',
     input_type: 'single_select',
@@ -2415,6 +2427,7 @@ export const SLOT_REGISTRY: SlotDefinition[] = [
     priority: 2,
   },
   {
+    question_premise: 'payment',
     id: 'lien_amount',
     question: 'How much is owed?',
     input_type: 'single_select',
@@ -2435,6 +2448,7 @@ export const SLOT_REGISTRY: SlotDefinition[] = [
     priority: 3,
   },
   {
+    question_premise: 'construction',
     id: 'lien_last_supply',
     question: 'When did you last supply work or materials to the project?',
     input_type: 'single_select',
@@ -2962,6 +2976,7 @@ export const SLOT_REGISTRY: SlotDefinition[] = [
 
   // ─── EMPLOYMENT — wrongful_dismissal ────────────────────────────────
   {
+    question_premise: 'dismissal',
     id: 'dismissal_reason_given',
     question: 'What reason did your employer give for the dismissal?',
     input_type: 'single_select',
@@ -3040,6 +3055,7 @@ export const SLOT_REGISTRY: SlotDefinition[] = [
 
   // ─── EMPLOYMENT — severance_review ──────────────────────────────────
   {
+    question_premise: 'severance',
     id: 'severance_offer_amount',
     question: 'How does the severance offer compare to your tenure?',
     input_type: 'single_select',
@@ -3180,6 +3196,7 @@ export const SLOT_REGISTRY: SlotDefinition[] = [
 
   // ─── EMPLOYMENT — wage_recovery ─────────────────────────────────────
   {
+    question_premise: 'payment',
     id: 'wages_owed_band',
     question: 'Roughly how much is owed?',
     input_type: 'single_select',
@@ -3200,6 +3217,7 @@ export const SLOT_REGISTRY: SlotDefinition[] = [
     priority: 10,
   },
   {
+    question_premise: 'payment',
     id: 'wages_type',
     question: 'What kind of pay is owed?',
     input_type: 'single_select',
@@ -3355,6 +3373,7 @@ export const SLOT_REGISTRY: SlotDefinition[] = [
 
   // ─── ESTATES — will_drafting ────────────────────────────────────────
   {
+    question_coverage: 'spouse',
     id: 'marital_status',
     question: 'What is your marital status?',
     input_type: 'single_select',
@@ -3375,6 +3394,7 @@ export const SLOT_REGISTRY: SlotDefinition[] = [
     priority: 10,
   },
   {
+    question_coverage: 'dependants',
     id: 'children_count',
     question: 'Do you have children or dependants to provide for?',
     input_type: 'single_select',
@@ -3414,6 +3434,7 @@ export const SLOT_REGISTRY: SlotDefinition[] = [
     priority: 12,
   },
   {
+    question_coverage: 'existing_will',
     id: 'existing_will_status',
     question: 'Do you currently have a will?',
     input_type: 'single_select',
@@ -3516,6 +3537,7 @@ export const SLOT_REGISTRY: SlotDefinition[] = [
 
   // ─── ESTATES — probate ──────────────────────────────────────────────
   {
+    question_coverage: 'relationship',
     id: 'relationship_to_deceased',
     question: 'What was your relationship to the person who passed?',
     input_type: 'single_select',
@@ -3536,6 +3558,7 @@ export const SLOT_REGISTRY: SlotDefinition[] = [
     priority: 10,
   },
   {
+    question_coverage: 'existing_will',
     id: 'will_status_probate',
     question: 'Is there a will?',
     input_type: 'single_select',
@@ -3596,6 +3619,7 @@ export const SLOT_REGISTRY: SlotDefinition[] = [
 
   // ─── ESTATES — estate_dispute ───────────────────────────────────────
   {
+    question_premise: 'dispute',
     id: 'estate_dispute_type',
     question: 'What kind of dispute is this?',
     input_type: 'single_select',
@@ -3621,6 +3645,7 @@ export const SLOT_REGISTRY: SlotDefinition[] = [
     priority: 10,
   },
   {
+    question_premise: 'dispute',
     id: 'estate_dispute_role',
     question: 'What is your role in the dispute?',
     input_type: 'single_select',
@@ -3692,6 +3717,7 @@ export const SLOT_REGISTRY: SlotDefinition[] = [
     decision_value: 0, abstraction_level: 'concrete', required: true, priority: 10,
   },
   {
+    question_coverage: 'dependants',
     id: 'family_children', question: 'Are children or parenting arrangements part of this matter?', input_type: 'single_select',
     options: [{ value: 'Yes', label: 'Yes' }, { value: 'No', label: 'No' }, { value: 'Not sure', label: 'Not sure' }],
     applies_to: ['family_general'], tier: 'core', question_group: 'generic', resolves: 'none',
@@ -3722,4 +3748,49 @@ export function getSlotById(id: string): SlotDefinition | undefined {
 
 export function getSlotsForMatter(matterType: string): SlotDefinition[] {
   return SLOT_REGISTRY.filter(s => s.applies_to.includes(matterType as never));
+}
+
+const CORPORATE_DETAIL_SLOT_BY_CATEGORY: Readonly<Record<string, string>> = {
+  'Money owed, supplier billing, or a broken agreement': 'corporate_dispute_problem_type',
+  'A partner, co-owner, or internal company concern': 'corporate_internal_problem_type',
+  'Contracts or ongoing legal support': 'corporate_support_problem_type',
+};
+const CORPORATE_DETAIL_SLOT_IDS = new Set(
+  Object.values(CORPORATE_DETAIL_SLOT_BY_CATEGORY),
+);
+
+/**
+ * Corporate routing is deliberately progressive. The compatibility slot
+ * corporate_problem_type remains in the registry for extraction, stored
+ * states, and reports, but interactive selection uses one four-choice
+ * category followed by only the relevant two- or three-choice detail slot.
+ */
+export function slotApplicableToCorporateRouting(
+  state: EngineState,
+  slot: SlotDefinition,
+): boolean {
+  if (state.matter_type !== 'corporate_general') return true;
+  if (slot.id === 'corporate_problem_type') return false;
+
+  if (!CORPORATE_DETAIL_SLOT_IDS.has(slot.id)) return true;
+
+  const category = state.slots['corporate_help_category'];
+  return typeof category === 'string' &&
+    CORPORATE_DETAIL_SLOT_BY_CATEGORY[category] === slot.id;
+}
+
+export function slotApplicableToSubtrack(state: EngineState, slot: SlotDefinition): boolean {
+  if (!slot.applies_to_subtrack) return true;
+  if (state.matter_type !== 'business_setup_advisory') return true;
+  const sub = state.advisory_subtrack;
+  if (sub === 'unknown') return true;
+  return slot.applies_to_subtrack.includes(sub);
+}
+
+export function catalogueQuestionApplies(state: EngineState, slot: SlotDefinition): boolean {
+  if (!slot.applies_to.includes(state.matter_type) || !slotApplicableToSubtrack(state, slot)
+      || !slotApplicableToCorporateRouting(state, slot)) return false;
+  if (slot.id === 'ownership_split_discussed' && state.advisory_subtrack === 'solo_setup') return false;
+  return slot.id !== 'gca_specific_document'
+    || state.slots['gca_engagement_shape'] === 'A specific contract reviewed or drafted';
 }

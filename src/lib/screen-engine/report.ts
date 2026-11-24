@@ -3,6 +3,7 @@ import type { EngineState, LawyerReport, Band, ResolvedFact } from './types';
 import { computeBand, bandLabel, scoreFourAxes, buildAxisReasoning } from './band';
 import { selectNextSlot, getDecisionGap, isUserAnswered } from './selector';
 import { SLOT_REGISTRY } from './slotRegistry';
+import { questionPermitted, priorityPending } from './question-policy';
 import { isContactComplete } from './contact-doctrine';
 
 // ─── Provenance helpers ───────────────────────────────────────────────────
@@ -1010,6 +1011,12 @@ function writtenFacts(state: EngineState): ResolvedFact[] {
     turns.push({ label: `Visitor’s words · ${subject}`, value: quote, source: 'explicit_from_caller' });
     quoted.add(quote);
   }
+  const requests = state.question_policy === 'grounded_v1' ? state.intake_reading?.questionReview?.requests ?? [] : [];
+  if (requests.length > 1) {
+    requests.forEach(({ quote }, index) => {
+      turns.push({ label: `Work requested ${index + 1}`, value: quote, source: 'explicit_from_caller' });
+    });
+  }
   return turns.concat(Object.entries(state.written_answers ?? {}).map(([id, value]) => {
     const question = SLOT_REGISTRY.find(slot => slot.id === id)?.question;
     const round = id.slice('__clarify__'.length);
@@ -1437,6 +1444,10 @@ function buildOpenQuestions(state: EngineState): string[] {
   const questions: string[] = [...routingConfirm];
   const next = pendingIntakeQuestion(state) ?? selectNextSlot(state);
   if (next) questions.push(next.question);
+  if (state.question_policy === 'grounded_v1') {
+    if (priorityPending(state)) questions.push('Confirm which request the visitor wants to address first.');
+    return [...new Set(questions)];
+  }
 
   const gap = getDecisionGap(state);
   const gapQuestions: Partial<Record<string, string>> = {
@@ -1636,24 +1647,36 @@ export function buildReport(state: EngineState): LawyerReport {
   if (state.intake_reading?.currentAccount) {
     state = { ...state, input: state.intake_reading.currentAccount };
   }
-  if (state.matter_type === 'family_general') {
+  const familyIntake = state.matter_type === 'family_general';
+  const requests = state.intake_reading?.questionReview?.requests ?? [];
+  const pendingPriority = priorityPending(state);
+  const routingReview = state.question_policy === 'grounded_v1' &&
+    (pendingPriority || (requests.length === 0 && matterClassificationInferred(state)));
+  if (familyIntake || routingReview) {
     // Legacy report fields are required by existing storage readers. These
     // zero values are compatibility sentinels, not scores; renderers must
     // suppress them when intake_only is true.
     const blankAxis = () => ({ score: 0, reasons: [] as string[] });
-    const familyQuestions = SLOT_REGISTRY.filter(slot => slot.applies_to.includes('family_general') && slot.tier !== 'contact' && !state.intake_reading?.coveredQuestions?.[slot.id] && !isUserAnswered(state, slot.id)).map(slot => slot.question);
-    const next = pendingIntakeQuestion(state)?.question ?? familyQuestions[0] ?? '';
+    const familyQuestions = SLOT_REGISTRY.filter(slot => slot.applies_to.includes('family_general') && slot.tier !== 'contact'
+      && !state.intake_reading?.coveredQuestions?.[slot.id] && !isUserAnswered(state, slot.id)
+      && questionPermitted(state, slot)).map(slot => slot.question);
+    const reviewQuestions = routingReview
+      ? pendingPriority ? ['Which request would you like the firm to address first?']
+        : ['What would you like the firm to help you resolve?']
+      : familyQuestions;
+    const next = routingReview ? reviewQuestions[0] : pendingIntakeQuestion(state)?.question ?? reviewQuestions[0] ?? '';
     return {
       intake_only: true, lead_id: state.lead_id, submitted_at: state.submitted_at,
+      ...(routingReview ? { routing_review_required: true as const } : {}),
       matter_snapshot: visitorSnapshot ?? `Family law intake. Person's original description: ${state.input}`, lawyer_time_priority: 'Firm review required', band: 'C',
       band_reasoning_bullets: [], confidence_calibration: 'Not assessed',
       four_axis: { value: 0, complexity: 0, urgency: 0, readiness: 0, readinessAnswered: false },
       axis_reasoning: { value: blankAxis(), complexity: blankAxis(), urgency: blankAxis(), readiness: blankAxis(), readinessAnswered: false },
-      truth_warnings: matterClassificationInferred(state) ? ['Family law classification was inferred and needs confirmation.'] : [],
+      truth_warnings: familyIntake && matterClassificationInferred(state) ? ['Family law classification was inferred and needs confirmation.'] : [],
       likely_legal_services: [], fee_estimate: 'Not assessed', why_it_matters: 'The firm will review the intake.',
-      cross_sell_opportunities: [], strategic_considerations: [], what_to_confirm: familyQuestions,
+      cross_sell_opportunities: [], strategic_considerations: [], what_to_confirm: reviewQuestions,
       call_openers: [], best_next_question: next, resolved_facts_v2: buildResolvedFactsV2(state),
-      resolved_facts: buildResolvedFacts(state), inferred_signals: [], open_questions: familyQuestions, risk_flags: [],
+      resolved_facts: buildResolvedFacts(state), inferred_signals: [], open_questions: reviewQuestions, risk_flags: [],
       contact_complete: isContactComplete({ client_name: state.slots.client_name, client_email: state.slots.client_email, client_phone: state.slots.client_phone }),
       advisory_subtrack: state.advisory_subtrack, matter_type_provenance: state.matter_type_provenance ?? 'unknown', lead_intent: state.lead_intent ?? 'unknown',
     };
@@ -1677,7 +1700,7 @@ export function buildReport(state: EngineState): LawyerReport {
     why_it_matters: buildWhyItMatters(state, bandResult.band),
     cross_sell_opportunities: buildCrossSell(state),
     strategic_considerations: buildStrategicConsiderations(state),
-    what_to_confirm: buildWhatToConfirm(state),
+    what_to_confirm: state.question_policy === 'grounded_v1' ? buildOpenQuestions(state) : buildWhatToConfirm(state),
     call_openers: buildCallOpeners(state),
     best_next_question: buildBestNextQuestion(state),
     resolved_facts_v2: buildResolvedFactsV2(state),

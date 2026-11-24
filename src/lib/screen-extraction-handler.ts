@@ -8,6 +8,7 @@ import { checkRateLimit, ipFromRequest, rateLimitHeaders } from "@/lib/rate-limi
 import { familyNegativeIsGrounded } from "@/lib/screen-engine/llm/extractor";
 import { SLOT_REGISTRY } from "@/lib/screen-engine/slotRegistry";
 import { llmMapOptionReply } from "@/lib/llm-option-map";
+import { admitScreenQuestionPolicy } from "@/lib/screen-question-policy-admission";
 import type { MatterType } from "@/lib/screen-engine/types";
 
 interface ExtractRequest {
@@ -18,6 +19,7 @@ interface ExtractRequest {
   pending_slot_id?: string;
   pending_question?: string;
   reply?: string;
+  question_policy?: unknown;
 }
 
 // Reject oversized descriptions explicitly before forwarding the complete accepted text.
@@ -49,17 +51,19 @@ export async function handleScreenExtraction(req: Request, provider: IntakeProvi
     return NextResponse.json({ error: "description too long" }, { status: 413 });
   }
 
+  const hasFollowUp = body.pending_slot_id !== undefined || body.reply !== undefined;
+  const questionPolicy = surface === undefined ? admitScreenQuestionPolicy(body.question_policy, hasFollowUp) : undefined;
   const state = {
     ...initialiseState(description),
     matter_type: body.matter_type ?? "unknown",
     family_enabled: body.family_enabled === true,
     slots: body.already_extracted ?? {},
+    ...(questionPolicy ? { question_policy: questionPolicy } : {}),
   };
 
   const slot = typeof body.pending_slot_id === "string" ? SLOT_REGISTRY.find((item) => item.id === body.pending_slot_id) : undefined;
   const reply = typeof body.reply === "string" ? body.reply.trim() : "";
   const clarification = body.pending_slot_id === "__clarify__";
-  const hasFollowUp = body.pending_slot_id !== undefined || body.reply !== undefined;
   const dynamicSlot = slot?.id === "intake_detail_1" || slot?.id === "intake_detail_2";
   const question = dynamicSlot && typeof body.pending_question === "string" ? body.pending_question.trim() : undefined;
   if (body.pending_question !== undefined && (!question || question.length > 260 || /[<>\n\r]|https?:\/\//i.test(question))) {
@@ -85,5 +89,6 @@ export async function handleScreenExtraction(req: Request, provider: IntakeProvi
   const mapped_answer = slot && value && compositeNegativeGrounded && slot.options?.some((option) => option.value === value)
     ? { slotId: slot.id, value } : undefined;
   const model = provider === "openai" ? channel?.model ?? intakeModel() : "gemini-2.5-flash";
-  return NextResponse.json({ ...result, provider, model, ...(mapped ? { mapping_mode: mapped.mode } : {}), ...(mapped_answer ? { mapped_answer } : {}) });
+  return NextResponse.json({ ...result, provider, model, ...(questionPolicy ? { question_policy: questionPolicy } : {}),
+    ...(mapped ? { mapping_mode: mapped.mode } : {}), ...(mapped_answer ? { mapped_answer } : {}) });
 }

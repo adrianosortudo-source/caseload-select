@@ -1,4 +1,4 @@
-import { addInterpretationSchema, interpretationContext, interpretationInstructions, type InterpretationTurn } from './intake-interpretation-prompt';
+import { addInterpretationSchema, interpretationContext, interpretationInstructions, questionReviewInstructions, type InterpretationTurn } from './intake-interpretation-prompt';
 import { readIntakeInterpretation, type IntakeInterpretation } from './screen-engine/interpretation';
 import { createIntakeJsonGenerator, isTransientGenerationError, hasGenerationKey, intakeModel, operationalIntakeProvider, type IntakeOpenAIChannel } from './ai/intake-generation';
 import type { EngineState, MatterType } from './screen-engine/types';
@@ -64,7 +64,8 @@ export async function llmExtractServer(
   }
 
   const baseSchema = buildResponseSchema(slots);
-  const responseSchema = interpret ? addInterpretationSchema(baseSchema) : baseSchema;
+  const reviewQuestions = interpret && state.question_policy === 'grounded_v1';
+  const responseSchema = interpret ? addInterpretationSchema(baseSchema, reviewQuestions) : baseSchema;
   const basePrompt = buildSystemPrompt();
   const systemPrompt = provider === 'openai'
     ? basePrompt + '\nFor legal status, report only what the caller expressly confirms. Plans to sign or file later do not establish whether anything was previously signed or filed. Leave signed_release null unless the caller explicitly reports signing or not signing. An absence answer covering multiple documents requires explicit confirmation for every document. A missing court order alone leaves the agreement status unknown.'
@@ -76,7 +77,9 @@ export async function llmExtractServer(
     provider,
     model: provider === 'openai' ? openAI?.model ?? intakeModel() : MODEL,
     name: 'screen_extraction',
-    instructions: interpret ? systemPrompt + '\n' + interpretationInstructions : systemPrompt,
+    instructions: interpret
+      ? [systemPrompt, interpretationInstructions, ...(reviewQuestions ? [questionReviewInstructions] : [])].join('\n')
+      : systemPrompt,
     schema: responseSchema,
     temperature: TEMPERATURE,
     maxOutputTokens: 4096,

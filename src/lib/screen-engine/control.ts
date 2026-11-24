@@ -15,6 +15,7 @@ import {
 import { deriveAdvisorySpecificTask, runEvidencePass } from './slotEvidence';
 import { familyNegativeIsGrounded } from './llm/extractor';
 import { intakeFollowUp } from './interpretation';
+import { neutralQuestion, priorityPending, priorityQuestion } from './question-policy';
 import { interpretWrittenAnswer, refineWrittenRoute, selectWrittenFollowUp } from './written-answers';
 import { buildClosingMessage } from './closing';
 import { getOptionDisplayLabel } from './i18n/display';
@@ -1241,6 +1242,12 @@ export function getNextStep(state: EngineState): NextStep {
   }
 
   const followUp = intakeFollowUp(state);
+  if (!state.insightShown && priorityPending(state)) {
+    const priority = priorityQuestion(state);
+    return priority
+      ? { type: 'continue', slot: priority }
+      : { type: 'present_insight', bridgeText: getBridgeText(state) };
+  }
   if (followUp) return { type: 'continue', slot: followUp };
 
   if (state.insightShown) {
@@ -1258,7 +1265,9 @@ export function getNextStep(state: EngineState): NextStep {
   }
 
   if (state.matter_type === 'unknown') {
-    const clarification = !state.intake_reading && selectWrittenFollowUp(state);
+    const clarification = state.question_policy === 'grounded_v1'
+      ? neutralQuestion(state)
+      : !state.intake_reading && selectWrittenFollowUp(state);
     if (clarification) return { type: 'continue', slot: clarification };
     // Structured clarify step (DR-112, extends DR-071). `reason` and
     // `options` let a surface render a warm, correctly-acknowledged menu;
