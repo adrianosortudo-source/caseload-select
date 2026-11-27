@@ -7,12 +7,12 @@
  *
  *   - Caller phone + caller name → gate passes → screened_leads insert.
  *   - Caller phone only (blocked caller-ID name OR Voice AI failed to
- *     capture name) → gate fails on `missing=name` → unconfirmed_inquiry.
+ *     capture name) remains reachable and enters the lawyer queue with an
+ *     explicit missing-name evidence flag.
  *
- * The stretch goal of SMS-back follow-up to the caller's number is out
- * of scope for this iteration; voice falls into the same single-shot
- * unconfirmed_inquiries path as a misconfigured Meta channel until SMS
- * follow-up is wired (separate doctrine task).
+ * Calls that cannot yet be screened are preserved in voice recovery, where
+ * operators can record consented SMS/WhatsApp follow-up and later promote a
+ * genuinely screened matter without manufacturing missing evidence.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -27,12 +27,12 @@ const captured: { inserts: CapturedInsert[] } = { inserts: [] };
 
 vi.mock('@/lib/supabase-admin', () => {
   const makeChain = (table: string) => ({
-    select: (_cols: string) => makeChain(table),
-    eq: (_field: string, _v: unknown) => makeChain(table),
+    select: () => makeChain(table),
+    eq: () => makeChain(table),
     // call_id dedup chain (launch audit H1): returns no match via the
     // null maybeSingle below, so every call processes as a first delivery.
-    gte: (_field: string, _v: unknown) => makeChain(table),
-    limit: (_n: number) => makeChain(table),
+    gte: () => makeChain(table),
+    limit: () => makeChain(table),
     maybeSingle: () =>
       Promise.resolve(
         table === 'intake_firms'
@@ -43,7 +43,7 @@ vi.mock('@/lib/supabase-admin', () => {
     insert: (payload: Record<string, unknown>) => {
       captured.inserts.push({ table, payload });
       return {
-        select: (_cols: string) => ({
+        select: () => ({
           single: () =>
             Promise.resolve({
               data: {
@@ -60,7 +60,23 @@ vi.mock('@/lib/supabase-admin', () => {
     },
   });
   return {
-    supabaseAdmin: { from: (table: string) => makeChain(table) },
+    supabaseAdmin: {
+      from: (table: string) => makeChain(table),
+      rpc: (name: string) => ({
+        single: () => Promise.resolve({
+          data: name === 'claim_voice_call_event_processing'
+            ? {
+                claim_state: 'acquired',
+                lease_token: '11111111-2222-4333-8444-555555555555',
+                lease_expires_at: new Date(Date.now() + 120_000).toISOString(),
+                attempt_count: 1,
+                receipt_outcome: null,
+              }
+            : true,
+          error: null,
+        }),
+      }),
+    },
   };
 });
 
