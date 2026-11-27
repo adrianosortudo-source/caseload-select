@@ -1,16 +1,11 @@
 /**
  * voice-capture - shared browser audio helpers for the intake recorder.
  *
- * Used by both VoiceInput.tsx (inline mic inside the widget) and
- * RecordHandoff.tsx (the top-level first-party recorder reached via the iOS
- * handoff). Keeping one implementation means the WAV transcode and MIME
- * selection cannot drift between the two surfaces.
- *
- * The transcriber (Gemini, via /api/transcribe) does not accept the audio/webm
- * or audio/mp4 that MediaRecorder produces, so the recording is decoded and
- * re-encoded as 16 kHz mono WAV in the browser. The browser already has a
- * decoder for whatever it just recorded, so this needs no library.
+ * VoiceInput records in the browser's supported format, then converts the
+ * recording to 16 kHz mono WAV before posting to the transcription route.
  */
+
+import { transcriptionConsentVersion } from "@/lib/ai/transcription-consent";
 
 // Target format for the transcriber: 16 kHz mono is the speech-recognition
 // sweet spot (small payload, no quality loss for voice) and WAV is a format
@@ -113,6 +108,7 @@ function encodeWav(samples: Float32Array, sampleRate: number): Blob {
  */
 export async function transcribeRecording(
   blob: Blob,
+  transcriptionOffer?: string,
 ): Promise<{ ok: true; text: string } | { ok: false; error: string }> {
   let wav: Blob;
   try {
@@ -130,7 +126,11 @@ export async function transcribeRecording(
   try {
     const fd = new FormData();
     fd.append("audio", wav, "kickoff.wav");
-    const res = await fetch("/api/transcribe", { method: "POST", body: fd });
+    const headers = transcriptionOffer ? {
+      "x-caseload-transcription-consent": transcriptionConsentVersion,
+      "x-caseload-transcription-offer": transcriptionOffer,
+    } : undefined;
+    const res = await fetch("/api/transcribe", { method: "POST", body: fd, headers });
     const data = (await res.json()) as { ok: boolean; text?: string; error?: string };
     if (!data.ok) return { ok: false, error: data.error ?? "Transcription failed." };
     if (!data.text) return { ok: false, error: "Transcript came back empty." };

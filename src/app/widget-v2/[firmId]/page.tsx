@@ -10,6 +10,9 @@
 
 import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 import { IntakeControllerV2 } from "@/components/intake-v2/IntakeControllerV2";
+import { offerWidgetTranscription } from "@/lib/ai/transcription-offer";
+
+export const dynamic = "force-dynamic";
 
 interface PageProps {
   params: Promise<{ firmId: string }>;
@@ -20,7 +23,7 @@ export default async function WidgetV2Page({ params }: PageProps) {
 
   const { data: firm } = await supabase
     .from("intake_firms")
-    .select("name")
+    .select("id, name")
     .eq("id", firmId)
     .single();
 
@@ -34,5 +37,5 @@ export default async function WidgetV2Page({ params }: PageProps) {
     );
   }
 
-  return <IntakeControllerV2 firmId={firmId} firmName={firm.name as string} />;
+  return <IntakeControllerV2 firmId={firm.id} firmName={firm.name as string} transcriptionOffer={offerWidgetTranscription(firm.id)} />;
 }

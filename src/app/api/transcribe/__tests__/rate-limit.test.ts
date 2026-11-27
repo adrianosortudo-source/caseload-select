@@ -14,6 +14,8 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { offerWidgetTranscription } from "@/lib/ai/transcription-offer";
+import { transcriptionConsentVersion } from "@/lib/ai/transcription-consent";
 
 const mocks = vi.hoisted(() => ({
   checkRateLimit: vi.fn(),
@@ -41,11 +43,12 @@ function geminiResponse(text: string): Response {
   );
 }
 
-function makeAudioRequest(): Request {
+function makeAudioRequest(headers?: HeadersInit): Request {
   const form = new FormData();
   form.append("audio", new Blob([new Uint8Array(2048)], { type: "audio/wav" }), "kickoff.wav");
   return new Request("https://app.caseloadselect.ca/api/transcribe", {
     method: "POST",
+    headers,
     body: form,
   });
 }
@@ -115,16 +118,28 @@ describe("/api/transcribe rate limiting", () => {
 });
 
 describe("/api/transcribe direct OpenAI project", () => {
+  const firm = "11111111-1111-4111-8111-111111111111";
+  const otherFirm = "22222222-2222-4222-8222-222222222222";
+  const choose = (token: string) => ({
+    "x-caseload-transcription-consent": transcriptionConsentVersion,
+    "x-caseload-transcription-offer": token,
+  });
+
+  beforeEach(() => {
+    vi.stubEnv("SCREEN_TRANSCRIPTION_AI_PROVIDER", "openai");
+    vi.stubEnv("SCREEN_TRANSCRIPTION_OPENAI_FIRM_IDS", firm);
+    vi.stubEnv("SCREEN_TRANSCRIPTION_SIGNING_SECRET", "six words for an offline fictional widget signature");
+    vi.stubEnv("CASELOAD_OPENAI_API_KEY", "fixture-project-key");
+  });
+
   afterEach(() => vi.unstubAllEnvs());
 
   it("submits the audio bytes in their original language and trims the returned text", async () => {
-    vi.stubEnv("SCREEN_TRANSCRIPTION_AI_PROVIDER", "openai");
-    vi.stubEnv("CASELOAD_OPENAI_API_KEY", "fixture-project-key");
     const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) =>
       Response.json({ text: "  Bonjour  " }),
     );
     global.fetch = fetchMock;
-    const res = await POST(makeAudioRequest());
+    const res = await POST(makeAudioRequest(choose(offerWidgetTranscription(firm)!)));
     expect(await res.json()).toEqual({ ok: true, text: "Bonjour" });
     const [url, init] = fetchMock.mock.calls[0];
     expect(url).toBe("https://api.openai.com/v1/audio/transcriptions");
@@ -137,13 +152,37 @@ describe("/api/transcribe direct OpenAI project", () => {
     expect(sent.has("language")).toBe(false);
   });
 
-  it("stops before any upload when the selected project's key is missing", async () => {
-    vi.stubEnv("SCREEN_TRANSCRIPTION_AI_PROVIDER", "openai");
+  it("keeps existing uploads on Gemini when a widget does not affirm the offer", async () => {
+    const fetchMock = vi.fn(async () => geminiResponse("bonjour"));
+    global.fetch = fetchMock;
+    expect((await POST(makeAudioRequest())).status).toBe(200);
+    expect(fetchMock.mock.calls[0]).toEqual([expect.stringContaining("generativelanguage.googleapis.com"), expect.anything()]);
+  });
+
+  it("ignores unsigned firm claims and rejects expired, incomplete or unenrolled offers before uploading", async () => {
+    global.fetch = vi.fn();
+    expect(offerWidgetTranscription(otherFirm)).toBeUndefined();
+    const offer = offerWidgetTranscription(firm)!;
+    for (const headers of [
+      { "x-caseload-transcription-consent": transcriptionConsentVersion },
+      { "x-caseload-transcription-offer": offer },
+      choose(offer.replace(firm, otherFirm)),
+      choose(offerWidgetTranscription(firm, Date.now() - 31 * 60 * 1000)!),
+    ]) {
+      expect((await POST(makeAudioRequest(headers as HeadersInit))).status).toBe(409);
+    }
+    vi.stubEnv("SCREEN_TRANSCRIPTION_OPENAI_FIRM_IDS", otherFirm);
+    expect((await POST(makeAudioRequest(choose(offer)))).status).toBe(409);
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it("stops before any upload if the project key is withdrawn during recording", async () => {
+    const offer = offerWidgetTranscription(firm)!;
     vi.stubEnv("CASELOAD_OPENAI_API_KEY", "");
     const fetchMock = vi.fn();
     global.fetch = fetchMock;
-    const res = await POST(makeAudioRequest());
-    expect(res.status).toBe(500);
+    const res = await POST(makeAudioRequest(choose(offer)));
+    expect(res.status).toBe(409);
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });

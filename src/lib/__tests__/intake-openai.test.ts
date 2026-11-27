@@ -64,10 +64,9 @@ describe("SCREEN provider routing", () => {
 
 describe("Firm Assist answer routing", () => {
   it("uses only the supplied firm context and returns the generation model", async () => {
-    vi.stubEnv("FIRM_ASSIST_ANSWER_AI_PROVIDER", "openai");
     vi.stubEnv("FIRM_ASSIST_OPENAI_MODEL", "fixture-model");
     const fetchMock = stubResponse({ intent: "informational", answer_html: "<p>Open on Mondays.</p>", source_page_ids: ["hours"] });
-    const r = await generateAnswer("When is the office open?", "Test Firm", [{ page_id: "hours", heading: "Hours", chunk_text: "Open on Mondays." }]);
+    const r = await generateAnswer("When is the office open?", "Test Firm", [{ page_id: "hours", heading: "Hours", chunk_text: "Open on Mondays." }], "openai");
     expect(r).toMatchObject({ mode: "live", model: "fixture-model", response: { source_page_ids: ["hours"] } });
     const sent = JSON.parse(String(fetchMock.mock.calls[0][1]?.body));
     expect(sent.input).toContain("page_id=hours");
@@ -75,8 +74,7 @@ describe("Firm Assist answer routing", () => {
   });
 
   it("rejects an unrecognized answer intent", async () => {
-    vi.stubEnv("FIRM_ASSIST_ANSWER_AI_PROVIDER", "openai");
     stubResponse({ intent: "invented", answer_html: "test", source_page_ids: [] });
-    expect(await generateAnswer("Test?", "Test Firm", [])).toEqual({ mode: "error", reason: "invalid_response_shape" });
+    expect(await generateAnswer("Test?", "Test Firm", [], "openai")).toEqual({ mode: "error", reason: "invalid_response_shape" });
   });
 });

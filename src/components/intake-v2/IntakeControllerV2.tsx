@@ -113,6 +113,7 @@ export interface AnswerLogEntry {
 interface Props {
   firmId: string;
   firmName?: string;
+  transcriptionOffer?: string;
   /** Public website mode removes OTP and keeps the lead-facing flow shorter. */
   mode?: "standard" | "publicWebsite";
   /** Fired after every /api/screen response with the engine's latest scoring state. */
@@ -133,7 +134,7 @@ interface Props {
 // Component
 // ─────────────────────────────────────────────────────────────────────────────
 
-export function IntakeControllerV2({ firmId, firmName, mode = "standard", onScoreUpdate, onAnswerLogged, onStepChange, kickoffSeed }: Props) {
+export function IntakeControllerV2({ firmId, firmName, transcriptionOffer, mode = "standard", onScoreUpdate, onAnswerLogged, onStepChange, kickoffSeed }: Props) {
   const isPublicWebsite = mode === "publicWebsite";
   // Core state
   const [step, setStep] = useState<Step>("kickoff");
@@ -642,6 +643,7 @@ export function IntakeControllerV2({ firmId, firmName, mode = "standard", onScor
           submitLabel="Continue"
           minChars={10}
           enableVoice={true}
+          transcriptionOffer={transcriptionOffer}
         />
       </Shell>
     );
